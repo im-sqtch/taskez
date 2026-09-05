@@ -2,18 +2,20 @@ import { Bell, Search } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { useAuthStore } from '@/store/authStore'
-import { useDataStore } from '@/store/dataStore'
+import { usePendingInvites } from '@/store/contactsStore'
+import { useWorkspaceNotifications } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
 import { greeting } from '@/lib/utils'
 
 export function DashboardHeader() {
   const user = useAuthStore((s) => s.currentUser())
-  const notifications = useDataStore((s) => s.notifications)
+  const notifications = useWorkspaceNotifications()
+  const pendingInvites = usePendingInvites(user?.id)
   const openSearch = useUiStore((s) => s.openSearch)
   const openNotifications = useUiStore((s) => s.openNotifications)
   const navigate = useNavigate()
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = notifications.filter((n) => !n.read).length + pendingInvites.length
   const firstName = user?.name.split(' ')[0] ?? ''
 
   return (

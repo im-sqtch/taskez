@@ -19,9 +19,9 @@ export function UsagePickerPage() {
   const seedIfEmpty = useDataStore((s) => s.seedIfEmpty)
   const navigate = useNavigate()
 
-  function handleContinue() {
-    setUsageMode(selected)
-    seedIfEmpty()
+  async function handleContinue() {
+    void setUsageMode(selected)
+    await seedIfEmpty()
     navigate('/dashboard')
   }
 

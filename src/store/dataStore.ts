@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { v4 as uuid } from 'uuid'
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
+import { fireAndForget, supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/store/authStore'
 import { WIDGET_CATALOG, WIDGET_TYPES } from '@/lib/widgetCatalog'
 import type {
   ChatMessage,
@@ -17,140 +20,151 @@ import type {
 } from '@/types'
 
 const now = () => new Date().toISOString()
-const daysFromNow = (n: number) => {
-  const d = new Date()
-  d.setDate(d.getDate() + n)
-  return d.toISOString()
-}
-const minutesAgo = (n: number) => {
-  const d = new Date()
-  d.setMinutes(d.getMinutes() - n)
-  return d.toISOString()
+
+// ============================================================
+// Mapeamento linha do Postgres (snake_case) <-> tipos do app (camelCase)
+// ============================================================
+
+interface WorkspaceRow {
+  id: string
+  name: string
+  color: string
+  created_by: string
+  created_at: string
 }
 
-const DEFAULT_WORKSPACE_ID = 'ws-1'
-const WORKSPACE_COLORS = ['#7C5CFF', '#3B9EFF', '#34D399', '#F5A524', '#F5455C', '#FF7CE0']
+interface TeamMemberRow {
+  id: string
+  workspace_id: string
+  name: string
+  role: string
+  avatar_color: string
+  status: TeamMember['status']
+  workload: number
+  linked_user_id: string | null
+  created_at: string
+}
+
+interface ProjectRow {
+  id: string
+  workspace_id: string
+  name: string
+  description: string | null
+  color: string
+  icon: string | null
+  status: Project['status']
+  due_date: string | null
+  member_ids: string[]
+  created_at: string
+}
+
+interface TaskRow {
+  id: string
+  workspace_id: string
+  project_id: string | null
+  title: string
+  description: string | null
+  status: TaskStatus
+  priority: Priority
+  due_date: string | null
+  assignee_id: string | null
+  subtasks: Subtask[]
+  comments: Task['comments']
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+}
+
+function mapWorkspace(row: WorkspaceRow): Workspace {
+  return { id: row.id, name: row.name, color: row.color, createdAt: row.created_at }
+}
+
+function mapTeamMember(row: TeamMemberRow, currentUserId: string | null): TeamMember {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    role: row.role,
+    avatarColor: row.avatar_color,
+    status: row.status,
+    workload: row.workload,
+    linkedUserId: row.linked_user_id ?? undefined,
+    isSelf: row.linked_user_id !== null && row.linked_user_id === currentUserId,
+  }
+}
+
+function mapProject(row: ProjectRow): Project {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    description: row.description ?? undefined,
+    color: row.color,
+    icon: row.icon ?? undefined,
+    status: row.status,
+    dueDate: row.due_date ?? undefined,
+    memberIds: row.member_ids ?? [],
+    createdAt: row.created_at,
+  }
+}
+
+function mapTask(row: TaskRow): Task {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    title: row.title,
+    description: row.description ?? undefined,
+    status: row.status,
+    priority: row.priority,
+    projectId: row.project_id ?? undefined,
+    dueDate: row.due_date ?? undefined,
+    assigneeId: row.assignee_id ?? undefined,
+    subtasks: row.subtasks ?? [],
+    comments: row.comments ?? [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    completedAt: row.completed_at ?? undefined,
+  }
+}
+
+function projectPatchToRow(patch: Partial<Project>): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
+  if (patch.name !== undefined) row.name = patch.name
+  if (patch.description !== undefined) row.description = patch.description ?? null
+  if (patch.color !== undefined) row.color = patch.color
+  if (patch.icon !== undefined) row.icon = patch.icon ?? null
+  if (patch.status !== undefined) row.status = patch.status
+  if (patch.dueDate !== undefined) row.due_date = patch.dueDate ?? null
+  if (patch.memberIds !== undefined) row.member_ids = patch.memberIds
+  return row
+}
+
+function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
+  if (patch.title !== undefined) row.title = patch.title
+  if (patch.description !== undefined) row.description = patch.description ?? null
+  if (patch.status !== undefined) row.status = patch.status
+  if (patch.priority !== undefined) row.priority = patch.priority
+  if (patch.projectId !== undefined) row.project_id = patch.projectId ?? null
+  if (patch.dueDate !== undefined) row.due_date = patch.dueDate ?? null
+  if (patch.assigneeId !== undefined) row.assignee_id = patch.assigneeId ?? null
+  if (patch.subtasks !== undefined) row.subtasks = patch.subtasks
+  if (patch.comments !== undefined) row.comments = patch.comments
+  if (patch.completedAt !== undefined) row.completed_at = patch.completedAt ?? null
+  return row
+}
 
 function getSelfMember(team: TeamMember[]): TeamMember | undefined {
   return team.find((m) => m.isSelf)
 }
 
-function seedWorkspaces(): Workspace[] {
-  return [{ id: DEFAULT_WORKSPACE_ID, name: 'TaskEz HQ', color: WORKSPACE_COLORS[0]!, createdAt: now() }]
-}
-
-function seedProjects(): Project[] {
-  return [
-    {
-      id: 'proj-1',
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      name: 'Rebranding Aurora',
-      description: 'Nova identidade visual e site institucional.',
-      color: '#7C5CFF',
-      status: 'active',
-      dueDate: daysFromNow(12),
-      memberIds: ['team-1', 'team-2'],
-      createdAt: now(),
-    },
-    {
-      id: 'proj-2',
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      name: 'App Mobile Fintech',
-      description: 'MVP do aplicativo de carteira digital.',
-      color: '#3B9EFF',
-      status: 'active',
-      dueDate: daysFromNow(5),
-      memberIds: ['team-1', 'team-3'],
-      createdAt: now(),
-    },
-    {
-      id: 'proj-3',
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      name: 'Campanha Q3',
-      description: 'Planejamento de marketing do terceiro trimestre.',
-      color: '#34D399',
-      status: 'completed',
-      dueDate: daysFromNow(-3),
-      memberIds: ['team-2'],
-      createdAt: now(),
-    },
-  ]
-}
-
-function seedTasks(): Task[] {
-  const mk = (
-    title: string,
-    status: TaskStatus,
-    priority: Priority,
-    projectId?: string,
-    due?: number,
-    subtasks: string[] = [],
-  ): Task => ({
-    id: uuid(),
-    workspaceId: DEFAULT_WORKSPACE_ID,
-    title,
-    status,
-    priority,
-    projectId,
-    dueDate: due !== undefined ? daysFromNow(due) : undefined,
-    subtasks: subtasks.map((t) => ({ id: uuid(), title: t, done: Math.random() > 0.6 })),
-    comments: [],
-    createdAt: now(),
-    updatedAt: now(),
-    completedAt: status === 'done' ? now() : undefined,
-  })
-
-  return [
-    mk('Definir paleta de cores', 'done', 'medium', 'proj-1', -2, ['Pesquisar referências', 'Validar acessibilidade']),
-    mk('Wireframes da home', 'in_progress', 'high', 'proj-1', 1, ['Desktop', 'Mobile']),
-    mk('Revisar copy do site', 'todo', 'low', 'proj-1', 6),
-    mk('Configurar autenticação', 'in_progress', 'urgent', 'proj-2', 0, ['OAuth', 'Recuperação de senha']),
-    mk('Tela de onboarding', 'todo', 'high', 'proj-2', 3),
-    mk('Testes de carga', 'todo', 'medium', 'proj-2', 8),
-    mk('Relatório final Q3', 'done', 'medium', 'proj-3', -5),
-    mk('Organizar mesa de trabalho', 'todo', 'low', undefined, 2),
-    mk('Ligar para o contador', 'todo', 'medium', undefined, 0),
-  ]
-}
-
-function seedTeam(): TeamMember[] {
-  return [
-    { id: 'team-1', workspaceId: DEFAULT_WORKSPACE_ID, name: 'Você', role: 'Product Designer', avatarColor: '#7C5CFF', status: 'online', workload: 68, isSelf: true },
-    { id: 'team-2', workspaceId: DEFAULT_WORKSPACE_ID, name: 'Marina Alves', role: 'UI Designer', avatarColor: '#F5A524', status: 'online', workload: 82 },
-    { id: 'team-3', workspaceId: DEFAULT_WORKSPACE_ID, name: 'Rafael Souza', role: 'Dev Frontend', avatarColor: '#3B9EFF', status: 'away', workload: 45 },
-    { id: 'team-4', workspaceId: DEFAULT_WORKSPACE_ID, name: 'Bianca Lima', role: 'Dev Backend', avatarColor: '#34D399', status: 'offline', workload: 30 },
-  ]
-}
-
+// Notificações continuam só locais por enquanto (fora do escopo desta migração).
 function seedNotifications(): Notification[] {
-  return [
-    {
-      id: uuid(),
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      title: 'Bem-vindo ao TaskEz',
-      body: 'Monte seu dashboard do jeito que quiser.',
-      read: true,
-      createdAt: now(),
-      type: 'system',
-    },
-  ]
+  return []
 }
 
-// A partir daqui, notificações reais são geradas pelas próprias actions (tarefa
-// concluída, delegada, comentada; membro convidado; arquivo enviado; mensagem no
-// chat; workspace criado) — não são mais só dados de exemplo fixos.
-function makeNotification(workspaceId: string, type: Notification['type'], title: string, body: string): Notification {
+function makeNotification(workspaceId: string | undefined, type: Notification['type'], title: string, body: string): Notification {
   return { id: uuid(), workspaceId, title, body, read: false, createdAt: now(), type }
-}
-
-function seedChatMessages(): ChatMessage[] {
-  return [
-    { id: uuid(), projectId: 'proj-1', authorId: 'team-2', text: 'Pessoal, já defini a paleta final. Dá uma olhada quando puder!', createdAt: minutesAgo(180) },
-    { id: uuid(), projectId: 'proj-1', authorId: 'team-1', text: 'Ficou ótima! Já posso seguir com os wireframes usando essas cores.', createdAt: minutesAgo(170) },
-    { id: uuid(), projectId: 'proj-1', authorId: 'team-2', text: 'Combinado. Te aviso quando o moodboard estiver pronto.', createdAt: minutesAgo(160) },
-    { id: uuid(), projectId: 'proj-2', authorId: 'team-3', text: 'Consegui subir o fluxo de OAuth em homologação.', createdAt: minutesAgo(90) },
-    { id: uuid(), projectId: 'proj-2', authorId: 'team-1', text: 'Show! Vou testar o login social ainda hoje.', createdAt: minutesAgo(80) },
-  ]
 }
 
 export function defaultLayout(): DashboardLayout {
@@ -191,7 +205,7 @@ function normalizeLayout(layout: DashboardLayout): DashboardLayout {
 }
 
 interface DataState {
-  seeded: boolean
+  loading: boolean
   profileSizeMigrated: boolean
   workspaces: Workspace[]
   currentWorkspaceId: string
@@ -203,7 +217,8 @@ interface DataState {
   files: ProjectFile[]
   layout: DashboardLayout
 
-  seedIfEmpty: () => void
+  seedIfEmpty: () => Promise<void>
+  resetWorkspaceData: () => void
   migrateProfileSizeIfNeeded: () => void
 
   // Workspaces
@@ -211,6 +226,9 @@ interface DataState {
   switchWorkspace: (id: string) => void
   renameWorkspace: (id: string, name: string) => void
   deleteWorkspace: (id: string) => void
+
+  // Equipe do workspace
+  addTeamMember: (data: { name: string; role: string; avatarColor: string; linkedUserId?: string }) => void
 
   // Projects
   addProject: (data: Omit<Project, 'id' | 'workspaceId' | 'createdAt'>) => string
@@ -234,6 +252,10 @@ interface DataState {
   // Notifications
   markNotificationRead: (id: string) => void
   markAllNotificationsRead: () => void
+  // Ponto de entrada público para outras stores (ex.: contactsStore) gerarem uma
+  // notificação sem duplicar a lógica de criação — usado para eventos de conta que
+  // não pertencem a nenhum workspace específico (ex.: contato aceitou convite).
+  addNotification: (type: Notification['type'], title: string, body: string, workspaceId?: string) => void
 
   // Dashboard layout
   setLayout: (layout: DashboardLayout) => void
@@ -243,13 +265,91 @@ interface DataState {
   reorderWidgets: (orderedIds: string[]) => void
 }
 
+let realtimeChannel: RealtimeChannel | null = null
+
+function teardownRealtime() {
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel)
+    realtimeChannel = null
+  }
+}
+
+function setupRealtime() {
+  teardownRealtime()
+  realtimeChannel = supabase
+    .channel('taskez-workspace-data')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'workspaces' }, (payload) => {
+      const p = payload as RealtimePostgresChangesPayload<WorkspaceRow>
+      if (p.eventType === 'DELETE') {
+        const oldId = (p.old as { id?: string }).id
+        if (!oldId) return
+        useDataStore.setState((state) => ({ workspaces: state.workspaces.filter((w) => w.id !== oldId) }))
+        return
+      }
+      const workspace = mapWorkspace(p.new as WorkspaceRow)
+      useDataStore.setState((state) => {
+        const exists = state.workspaces.some((w) => w.id === workspace.id)
+        return { workspaces: exists ? state.workspaces.map((w) => (w.id === workspace.id ? workspace : w)) : [...state.workspaces, workspace] }
+      })
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'workspace_members' }, () => {
+      // Composição do workspace mudou (fui adicionado/removido) — mais simples e
+      // seguro refazer o carregamento completo do que reconciliar incrementalmente.
+      void useDataStore.getState().seedIfEmpty()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, (payload) => {
+      const p = payload as RealtimePostgresChangesPayload<TeamMemberRow>
+      const currentUserId = useAuthStore.getState().currentUserId
+      if (p.eventType === 'DELETE') {
+        const oldId = (p.old as { id?: string }).id
+        if (!oldId) return
+        useDataStore.setState((state) => ({ team: state.team.filter((m) => m.id !== oldId) }))
+        return
+      }
+      const member = mapTeamMember(p.new as TeamMemberRow, currentUserId)
+      useDataStore.setState((state) => {
+        const exists = state.team.some((m) => m.id === member.id)
+        return { team: exists ? state.team.map((m) => (m.id === member.id ? member : m)) : [...state.team, member] }
+      })
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
+      const p = payload as RealtimePostgresChangesPayload<ProjectRow>
+      if (p.eventType === 'DELETE') {
+        const oldId = (p.old as { id?: string }).id
+        if (!oldId) return
+        useDataStore.setState((state) => ({ projects: state.projects.filter((pr) => pr.id !== oldId) }))
+        return
+      }
+      const project = mapProject(p.new as ProjectRow)
+      useDataStore.setState((state) => {
+        const exists = state.projects.some((pr) => pr.id === project.id)
+        return { projects: exists ? state.projects.map((pr) => (pr.id === project.id ? project : pr)) : [...state.projects, project] }
+      })
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+      const p = payload as RealtimePostgresChangesPayload<TaskRow>
+      if (p.eventType === 'DELETE') {
+        const oldId = (p.old as { id?: string }).id
+        if (!oldId) return
+        useDataStore.setState((state) => ({ tasks: state.tasks.filter((t) => t.id !== oldId) }))
+        return
+      }
+      const task = mapTask(p.new as TaskRow)
+      useDataStore.setState((state) => {
+        const exists = state.tasks.some((t) => t.id === task.id)
+        return { tasks: exists ? state.tasks.map((t) => (t.id === task.id ? task : t)) : [...state.tasks, task] }
+      })
+    })
+    .subscribe()
+}
+
 export const useDataStore = create<DataState>()(
   persist(
     (set, get) => ({
-      seeded: false,
+      loading: false,
       profileSizeMigrated: false,
       workspaces: [],
-      currentWorkspaceId: DEFAULT_WORKSPACE_ID,
+      currentWorkspaceId: '',
       projects: [],
       tasks: [],
       team: [],
@@ -258,20 +358,91 @@ export const useDataStore = create<DataState>()(
       files: [],
       layout: defaultLayout(),
 
-      seedIfEmpty: () => {
-        if (get().seeded) return
+      // Carrega os workspaces do usuário logado a partir do Supabase. Se ele nunca
+      // teve nenhum, cria o primeiro (com ele mesmo na equipe) — tudo já gravado no
+      // backend, pronto para convidar colaboradores reais depois.
+      seedIfEmpty: async () => {
+        if (get().loading) return
+        const userId = useAuthStore.getState().currentUserId
+        if (!userId) return
+        set({ loading: true })
+
+        const { data: memberRows } = await supabase
+          .from('workspace_members')
+          .select('workspace_id, workspaces(*)')
+          .eq('user_id', userId)
+
+        const workspaceRows = (memberRows ?? [])
+          .map((r) => r.workspaces as unknown as WorkspaceRow | null)
+          .filter((w): w is WorkspaceRow => Boolean(w))
+
+        if (workspaceRows.length > 0) {
+          const workspaces = workspaceRows.map(mapWorkspace)
+          const workspaceIds = workspaces.map((w) => w.id)
+          const [{ data: teamRows }, { data: projectRows }, { data: taskRows }] = await Promise.all([
+            supabase.from('team_members').select('*').in('workspace_id', workspaceIds),
+            supabase.from('projects').select('*').in('workspace_id', workspaceIds),
+            supabase.from('tasks').select('*').in('workspace_id', workspaceIds),
+          ])
+          set((state) => ({
+            loading: false,
+            workspaces,
+            currentWorkspaceId: state.currentWorkspaceId && workspaceIds.includes(state.currentWorkspaceId) ? state.currentWorkspaceId : workspaces[0]!.id,
+            team: (teamRows ?? []).map((r) => mapTeamMember(r as TeamMemberRow, userId)),
+            projects: (projectRows ?? []).map((r) => mapProject(r as ProjectRow)),
+            tasks: (taskRows ?? []).map((r) => mapTask(r as TaskRow)),
+          }))
+          setupRealtime()
+          return
+        }
+
+        // Primeira vez deste usuário: cria um workspace padrão e coloca ele mesmo na equipe.
+        const profile = useAuthStore.getState().profile
+        const workspaceId = uuid()
+        const workspace: Workspace = { id: workspaceId, name: 'Meu workspace', color: '#7C5CFF', createdAt: now() }
+        const selfMember: TeamMember = {
+          id: uuid(),
+          workspaceId,
+          name: 'Você',
+          role: 'Organizador(a)',
+          avatarColor: profile?.avatarColor ?? '#7C5CFF',
+          status: 'online',
+          workload: 0,
+          linkedUserId: userId,
+          isSelf: true,
+        }
         set({
-          seeded: true,
-          profileSizeMigrated: true,
-          workspaces: seedWorkspaces(),
-          currentWorkspaceId: DEFAULT_WORKSPACE_ID,
-          projects: seedProjects(),
-          tasks: seedTasks(),
-          team: seedTeam(),
-          notifications: seedNotifications(),
-          chatMessages: seedChatMessages(),
-          files: [],
-          layout: defaultLayout(),
+          loading: false,
+          workspaces: [workspace],
+          currentWorkspaceId: workspaceId,
+          team: [selfMember],
+          projects: [],
+          tasks: [],
+        })
+        await supabase.from('workspaces').insert({ id: workspaceId, name: workspace.name, color: workspace.color, created_by: userId })
+        await supabase.from('workspace_members').insert({ workspace_id: workspaceId, user_id: userId, role: 'owner' })
+        await supabase.from('team_members').insert({
+          id: selfMember.id,
+          workspace_id: workspaceId,
+          name: selfMember.name,
+          role: selfMember.role,
+          avatar_color: selfMember.avatarColor,
+          status: selfMember.status,
+          workload: selfMember.workload,
+          linked_user_id: userId,
+        })
+        setupRealtime()
+      },
+
+      resetWorkspaceData: () => {
+        teardownRealtime()
+        set({
+          loading: false,
+          workspaces: [],
+          currentWorkspaceId: '',
+          projects: [],
+          tasks: [],
+          team: [],
         })
       },
 
@@ -294,27 +465,50 @@ export const useDataStore = create<DataState>()(
 
       addWorkspace: (name, color) => {
         const id = uuid()
-        set((state) => {
-          const currentTeam = state.team.filter((m) => m.workspaceId === state.currentWorkspaceId)
-          const copiedTeam: TeamMember[] = currentTeam.map((m) => ({ ...m, id: uuid(), workspaceId: id }))
-          return {
-            workspaces: [...state.workspaces, { id, name: name.trim(), color, createdAt: now() }],
-            team: [...state.team, ...copiedTeam],
-            currentWorkspaceId: id,
-            notifications: [
-              ...state.notifications,
-              makeNotification(id, 'workspace', 'Workspace criado', `"${name.trim()}" está pronto para uso.`),
-            ],
-          }
-        })
+        const userId = useAuthStore.getState().currentUserId
+        const profile = useAuthStore.getState().profile
+        const selfMember: TeamMember = {
+          id: uuid(),
+          workspaceId: id,
+          name: 'Você',
+          role: 'Organizador(a)',
+          avatarColor: profile?.avatarColor ?? '#7C5CFF',
+          status: 'online',
+          workload: 0,
+          linkedUserId: userId ?? undefined,
+          isSelf: true,
+        }
+        set((state) => ({
+          workspaces: [...state.workspaces, { id, name: name.trim(), color, createdAt: now() }],
+          team: [...state.team, selfMember],
+          currentWorkspaceId: id,
+        }))
+        if (userId) {
+          void (async () => {
+            await supabase.from('workspaces').insert({ id, name: name.trim(), color, created_by: userId })
+            await supabase.from('workspace_members').insert({ workspace_id: id, user_id: userId, role: 'owner' })
+            await supabase.from('team_members').insert({
+              id: selfMember.id,
+              workspace_id: id,
+              name: selfMember.name,
+              role: selfMember.role,
+              avatar_color: selfMember.avatarColor,
+              status: selfMember.status,
+              workload: selfMember.workload,
+              linked_user_id: userId,
+            })
+          })()
+        }
         return id
       },
       switchWorkspace: (id) => set({ currentWorkspaceId: id }),
-      renameWorkspace: (id, name) =>
+      renameWorkspace: (id, name) => {
         set((state) => ({
           workspaces: state.workspaces.map((w) => (w.id === id ? { ...w, name: name.trim() } : w)),
-        })),
-      deleteWorkspace: (id) =>
+        }))
+        fireAndForget(supabase.from('workspaces').update({ name: name.trim() }).eq('id', id))
+      },
+      deleteWorkspace: (id) => {
         set((state) => {
           if (state.workspaces.length <= 1) return state
           const projectIds = new Set(state.projects.filter((p) => p.workspaceId === id).map((p) => p.id))
@@ -332,13 +526,76 @@ export const useDataStore = create<DataState>()(
             chatMessages: state.chatMessages.filter((m) => !projectIds.has(m.projectId)),
             files: state.files.filter((f) => !projectIds.has(f.projectId)),
           }
-        }),
+        })
+        // Exclusão em cascata (workspace_members/team_members/projects/tasks) já é
+        // resolvida pelas foreign keys "on delete cascade" no banco.
+        fireAndForget(supabase.from('workspaces').delete().eq('id', id))
+      },
+
+      addTeamMember: (data) => {
+        const id = uuid()
+        const workspaceId = get().currentWorkspaceId
+        const currentUserId = useAuthStore.getState().currentUserId
+        set((state) => ({
+          team: [
+            ...state.team,
+            {
+              id,
+              workspaceId,
+              name: data.name,
+              role: data.role,
+              avatarColor: data.avatarColor,
+              status: 'offline',
+              workload: 0,
+              linkedUserId: data.linkedUserId,
+              isSelf: data.linkedUserId !== undefined && data.linkedUserId === currentUserId,
+            },
+          ],
+          notifications: [
+            ...state.notifications,
+            makeNotification(workspaceId, 'team', 'Novo membro na equipe', `${data.name} entrou na equipe do workspace.`),
+          ],
+        }))
+        fireAndForget(
+          supabase.from('team_members').insert({
+            id,
+            workspace_id: workspaceId,
+            name: data.name,
+            role: data.role,
+            avatar_color: data.avatarColor,
+            status: 'offline',
+            workload: 0,
+            linked_user_id: data.linkedUserId ?? null,
+          }),
+        )
+        // Se é um contato real, garante acesso de fato ao workspace (RLS depende disso).
+        if (data.linkedUserId) {
+          fireAndForget(
+            supabase.from('workspace_members').upsert({ workspace_id: workspaceId, user_id: data.linkedUserId }, { onConflict: 'workspace_id,user_id' }),
+          )
+        }
+      },
 
       addProject: (data) => {
         const id = uuid()
+        const workspaceId = get().currentWorkspaceId
         set((state) => ({
-          projects: [...state.projects, { ...data, id, workspaceId: state.currentWorkspaceId, createdAt: now() }],
+          projects: [...state.projects, { ...data, id, workspaceId, createdAt: now() }],
+          notifications: [...state.notifications, makeNotification(workspaceId, 'project', 'Projeto criado', `"${data.name}" foi criado.`)],
         }))
+        fireAndForget(
+          supabase.from('projects').insert({
+            id,
+            workspace_id: workspaceId,
+            name: data.name,
+            description: data.description ?? null,
+            color: data.color,
+            icon: data.icon ?? null,
+            status: data.status,
+            due_date: data.dueDate ?? null,
+            member_ids: data.memberIds,
+          }),
+        )
         return id
       },
       updateProject: (id, patch) =>
@@ -358,18 +615,34 @@ export const useDataStore = create<DataState>()(
               }
             }
           }
+          // Só avisa "projeto atualizado" quando algo além dos membros mudou — a
+          // entrada/saída de alguém já tem sua própria notificação mais específica.
+          const hasNonMemberChange = Object.keys(patch).some((key) => key !== 'memberIds')
+          if (project && hasNonMemberChange) {
+            const displayName = patch.name ?? project.name
+            notifications.push(makeNotification(project.workspaceId, 'project', 'Projeto atualizado', `"${displayName}" foi atualizado.`))
+          }
+          fireAndForget(supabase.from('projects').update(projectPatchToRow(patch)).eq('id', id))
           return {
             projects: state.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
             notifications,
           }
         }),
-      deleteProject: (id) =>
-        set((state) => ({
-          projects: state.projects.filter((p) => p.id !== id),
-          tasks: state.tasks.map((t) => (t.projectId === id ? { ...t, projectId: undefined } : t)),
-          chatMessages: state.chatMessages.filter((m) => m.projectId !== id),
-          files: state.files.filter((f) => f.projectId !== id),
-        })),
+      deleteProject: (id) => {
+        set((state) => {
+          const project = state.projects.find((p) => p.id === id)
+          return {
+            projects: state.projects.filter((p) => p.id !== id),
+            tasks: state.tasks.map((t) => (t.projectId === id ? { ...t, projectId: undefined } : t)),
+            chatMessages: state.chatMessages.filter((m) => m.projectId !== id),
+            files: state.files.filter((f) => f.projectId !== id),
+            notifications: project
+              ? [...state.notifications, makeNotification(project.workspaceId, 'project', 'Projeto excluído', `"${project.name}" foi excluído.`)]
+              : state.notifications,
+          }
+        })
+        fireAndForget(supabase.from('projects').delete().eq('id', id))
+      },
       addChatMessage: (projectId, authorId, text) =>
         set((state) => {
           const project = state.projects.find((p) => p.id === projectId)
@@ -391,38 +664,65 @@ export const useDataStore = create<DataState>()(
               : state.notifications,
           }
         }),
-      removeFile: (id) => set((state) => ({ files: state.files.filter((f) => f.id !== id) })),
+      removeFile: (id) =>
+        set((state) => {
+          const file = state.files.find((f) => f.id === id)
+          const project = file ? state.projects.find((p) => p.id === file.projectId) : undefined
+          return {
+            files: state.files.filter((f) => f.id !== id),
+            notifications:
+              file && project
+                ? [...state.notifications, makeNotification(project.workspaceId, 'project', 'Arquivo excluído', `"${file.name}" foi excluído de "${project.name}".`)]
+                : state.notifications,
+          }
+        }),
 
       addTask: (data) => {
         const id = uuid()
+        const workspaceId = get().currentWorkspaceId
+        const task: Task = {
+          id,
+          workspaceId,
+          title: data.title,
+          description: data.description,
+          status: data.status ?? 'todo',
+          priority: data.priority ?? 'medium',
+          projectId: data.projectId,
+          dueDate: data.dueDate,
+          assigneeId: data.assigneeId,
+          subtasks: data.subtasks ?? [],
+          comments: data.comments ?? [],
+          createdAt: now(),
+          updatedAt: now(),
+        }
         set((state) => {
-          const task: Task = {
-            id,
-            workspaceId: state.currentWorkspaceId,
-            title: data.title,
-            description: data.description,
-            status: data.status ?? 'todo',
-            priority: data.priority ?? 'medium',
-            projectId: data.projectId,
-            dueDate: data.dueDate,
-            assigneeId: data.assigneeId,
-            subtasks: data.subtasks ?? [],
-            comments: data.comments ?? [],
-            createdAt: now(),
-            updatedAt: now(),
-          }
-          const selfId = getSelfMember(state.team.filter((m) => m.workspaceId === state.currentWorkspaceId))?.id
+          const selfId = getSelfMember(state.team.filter((m) => m.workspaceId === workspaceId))?.id
           const member = task.assigneeId && task.assigneeId !== selfId ? state.team.find((m) => m.id === task.assigneeId) : undefined
           return {
             tasks: [...state.tasks, task],
             notifications: member
-              ? [...state.notifications, makeNotification(state.currentWorkspaceId, 'task', 'Tarefa delegada', `"${task.title}" foi delegada para ${member.name}.`)]
+              ? [...state.notifications, makeNotification(workspaceId, 'task', 'Tarefa delegada', `"${task.title}" foi delegada para ${member.name}.`)]
               : state.notifications,
           }
         })
+        fireAndForget(
+          supabase.from('tasks').insert({
+            id,
+            workspace_id: workspaceId,
+            title: task.title,
+            description: task.description ?? null,
+            status: task.status,
+            priority: task.priority,
+            project_id: task.projectId ?? null,
+            due_date: task.dueDate ?? null,
+            assignee_id: task.assigneeId ?? null,
+            subtasks: task.subtasks,
+            comments: task.comments,
+          }),
+        )
         return id
       },
-      updateTask: (id, patch) =>
+      updateTask: (id, patch) => {
         set((state) => {
           const existing = state.tasks.find((t) => t.id === id)
           const notifications = [...state.notifications]
@@ -439,83 +739,90 @@ export const useDataStore = create<DataState>()(
             tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: now() } : t)),
             notifications,
           }
-        }),
-      deleteTask: (id) => set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) })),
-      toggleTaskStatus: (id) =>
-        set((state) => {
-          const task = state.tasks.find((t) => t.id === id)
-          if (!task) return {}
-          const becomingDone = task.status !== 'done'
-          const status: TaskStatus = becomingDone ? 'done' : 'todo'
-          return {
-            tasks: state.tasks.map((t) =>
-              t.id === id ? { ...t, status, completedAt: status === 'done' ? now() : undefined, updatedAt: now() } : t,
-            ),
-            notifications: becomingDone
+        })
+        fireAndForget(supabase.from('tasks').update({ ...taskPatchToRow(patch), updated_at: now() }).eq('id', id))
+      },
+      deleteTask: (id) => {
+        set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) }))
+        fireAndForget(supabase.from('tasks').delete().eq('id', id))
+      },
+      toggleTaskStatus: (id) => {
+        const task = get().tasks.find((t) => t.id === id)
+        if (!task) return
+        const becomingDone = task.status !== 'done'
+        const status: TaskStatus = becomingDone ? 'done' : 'todo'
+        const completedAt = status === 'done' ? now() : undefined
+        set((state) => ({
+          tasks: state.tasks.map((t) => (t.id === id ? { ...t, status, completedAt, updatedAt: now() } : t)),
+          notifications: becomingDone
+            ? [...state.notifications, makeNotification(task.workspaceId, 'task', 'Tarefa concluída', `"${task.title}" foi concluída.`)]
+            : state.notifications,
+        }))
+        fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
+      },
+      setTaskStatus: (id, status) => {
+        const task = get().tasks.find((t) => t.id === id)
+        const becomingDone = !!task && task.status !== 'done' && status === 'done'
+        const completedAt = status === 'done' ? now() : undefined
+        set((state) => ({
+          tasks: state.tasks.map((t) => (t.id === id ? { ...t, status, completedAt, updatedAt: now() } : t)),
+          notifications:
+            becomingDone && task
               ? [...state.notifications, makeNotification(task.workspaceId, 'task', 'Tarefa concluída', `"${task.title}" foi concluída.`)]
               : state.notifications,
-          }
-        }),
-      setTaskStatus: (id, status) =>
-        set((state) => {
-          const task = state.tasks.find((t) => t.id === id)
-          const becomingDone = !!task && task.status !== 'done' && status === 'done'
-          return {
-            tasks: state.tasks.map((t) =>
-              t.id === id
-                ? { ...t, status, completedAt: status === 'done' ? now() : undefined, updatedAt: now() }
-                : t,
-            ),
-            notifications:
-              becomingDone && task
-                ? [...state.notifications, makeNotification(task.workspaceId, 'task', 'Tarefa concluída', `"${task.title}" foi concluída.`)]
-                : state.notifications,
-          }
-        }),
-      addSubtask: (taskId, title) =>
+        }))
+        fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
+      },
+      addSubtask: (taskId, title) => {
+        let nextSubtasks: Subtask[] = []
         set((state) => ({
-          tasks: state.tasks.map((t) =>
-            t.id === taskId
-              ? { ...t, subtasks: [...t.subtasks, { id: uuid(), title, done: false } as Subtask], updatedAt: now() }
-              : t,
-          ),
-        })),
-      toggleSubtask: (taskId, subtaskId) =>
+          tasks: state.tasks.map((t) => {
+            if (t.id !== taskId) return t
+            nextSubtasks = [...t.subtasks, { id: uuid(), title, done: false }]
+            return { ...t, subtasks: nextSubtasks, updatedAt: now() }
+          }),
+        }))
+        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, updated_at: now() }).eq('id', taskId))
+      },
+      toggleSubtask: (taskId, subtaskId) => {
+        let nextSubtasks: Subtask[] = []
         set((state) => ({
-          tasks: state.tasks.map((t) =>
-            t.id === taskId
-              ? {
-                  ...t,
-                  subtasks: t.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s)),
-                  updatedAt: now(),
-                }
-              : t,
-          ),
-        })),
-      removeSubtask: (taskId, subtaskId) =>
+          tasks: state.tasks.map((t) => {
+            if (t.id !== taskId) return t
+            nextSubtasks = t.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s))
+            return { ...t, subtasks: nextSubtasks, updatedAt: now() }
+          }),
+        }))
+        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, updated_at: now() }).eq('id', taskId))
+      },
+      removeSubtask: (taskId, subtaskId) => {
+        let nextSubtasks: Subtask[] = []
         set((state) => ({
-          tasks: state.tasks.map((t) =>
-            t.id === taskId ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subtaskId) } : t,
-          ),
-        })),
-      addComment: (taskId, authorId, text) =>
+          tasks: state.tasks.map((t) => {
+            if (t.id !== taskId) return t
+            nextSubtasks = t.subtasks.filter((s) => s.id !== subtaskId)
+            return { ...t, subtasks: nextSubtasks }
+          }),
+        }))
+        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks }).eq('id', taskId))
+      },
+      addComment: (taskId, authorId, text) => {
+        let nextComments: Task['comments'] = []
         set((state) => {
           const task = state.tasks.find((t) => t.id === taskId)
           return {
-            tasks: state.tasks.map((t) =>
-              t.id === taskId
-                ? {
-                    ...t,
-                    comments: [...t.comments, { id: uuid(), authorId, text, createdAt: now() }],
-                    updatedAt: now(),
-                  }
-                : t,
-            ),
+            tasks: state.tasks.map((t) => {
+              if (t.id !== taskId) return t
+              nextComments = [...t.comments, { id: uuid(), authorId, text, createdAt: now() }]
+              return { ...t, comments: nextComments, updatedAt: now() }
+            }),
             notifications: task
               ? [...state.notifications, makeNotification(task.workspaceId, 'task', 'Novo comentário', `Comentário em "${task.title}".`)]
               : state.notifications,
           }
-        }),
+        })
+        fireAndForget(supabase.from('tasks').update({ comments: nextComments, updated_at: now() }).eq('id', taskId))
+      },
 
       markNotificationRead: (id) =>
         set((state) => ({
@@ -524,8 +831,12 @@ export const useDataStore = create<DataState>()(
       markAllNotificationsRead: () =>
         set((state) => ({
           notifications: state.notifications.map((n) =>
-            n.workspaceId === state.currentWorkspaceId ? { ...n, read: true } : n,
+            n.workspaceId === state.currentWorkspaceId || n.workspaceId === undefined ? { ...n, read: true } : n,
           ),
+        })),
+      addNotification: (type, title, body, workspaceId) =>
+        set((state) => ({
+          notifications: [...state.notifications, makeNotification(workspaceId, type, title, body)],
         })),
 
       setLayout: (layout) => set({ layout }),
@@ -558,11 +869,20 @@ export const useDataStore = create<DataState>()(
     }),
     {
       name: 'taskez-data',
+      // Só o que é genuinamente local (não colaborativo) é persistido — workspaces,
+      // equipe, projetos e tarefas agora vivem no Supabase e são recarregados via
+      // `seedIfEmpty()` a cada sessão.
+      partialize: (state) => ({
+        profileSizeMigrated: state.profileSizeMigrated,
+        notifications: state.notifications,
+        chatMessages: state.chatMessages,
+        files: state.files,
+        layout: state.layout,
+      }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
-        // Seguro rodar em toda hidratação: só recalcula com base no catálogo atual,
-        // sem depender de flags (idempotente, ao contrário de migrateProfileSizeIfNeeded).
         state.layout = normalizeLayout(state.layout)
+        if (state.notifications.length === 0) state.notifications = seedNotifications()
       },
     },
   ),
@@ -592,7 +912,7 @@ export function useWorkspaceTeam() {
 export function useWorkspaceNotifications() {
   const notifications = useDataStore((s) => s.notifications)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
-  return notifications.filter((n) => n.workspaceId === currentWorkspaceId)
+  return notifications.filter((n) => n.workspaceId === currentWorkspaceId || n.workspaceId === undefined)
 }
 
 export function useCurrentWorkspace() {

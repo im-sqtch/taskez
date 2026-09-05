@@ -19,11 +19,11 @@ export function SignupPage() {
   const nameValid = name.trim().length >= 2
   const canSubmit = emailValid && passwordValid && nameValid
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setTouched(true)
     if (!canSubmit) return
-    const result = signup(name, email, password)
+    const result = await signup(name, email, password)
     if (!result.ok) {
       setError(result.error)
       return

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn } from '@/lib/utils'
-import { useDataStore } from '@/store/dataStore'
+import { useDataStore, useWorkspaceTeam } from '@/store/dataStore'
 import { useAuthStore } from '@/store/authStore'
 import type { Project } from '@/types'
 
@@ -21,7 +21,7 @@ const COLORS = ['#7C5CFF', '#3B9EFF', '#34D399', '#F5A524', '#F5455C', '#FF7CE0'
 export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectFormSheetProps) {
   const addProject = useDataStore((s) => s.addProject)
   const updateProject = useDataStore((s) => s.updateProject)
-  const team = useDataStore((s) => s.team)
+  const team = useWorkspaceTeam()
   const currentUser = useAuthStore((s) => s.currentUser())
 
   const [name, setName] = useState('')
@@ -36,7 +36,11 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
     setDescription(project?.description ?? '')
     setColor(project?.color ?? COLORS[0]!)
     setDueDate(project?.dueDate ? project.dueDate.slice(0, 10) : '')
-    setMemberIds(project?.memberIds ?? (currentUser ? ['team-1'] : []))
+    const selfId = team.find((m) => m.isSelf)?.id
+    setMemberIds(project?.memberIds ?? (currentUser && selfId ? [selfId] : []))
+    // `team` de propósito fora das deps: useWorkspaceTeam() devolve um array novo a
+    // cada render, e incluí-lo aqui resetaria a seleção do usuário a cada re-render
+    // enquanto o sheet está aberto.
   }, [open, project, currentUser])
 
   function toggleMember(memberId: string) {

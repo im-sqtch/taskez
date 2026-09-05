@@ -1,91 +1,147 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { v4 as uuid } from 'uuid'
-import { simpleHash } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+import { useDataStore } from '@/store/dataStore'
+import { useContactsStore } from '@/store/contactsStore'
 import type { UsageMode, User } from '@/types'
 
-interface AuthState {
-  users: User[]
-  currentUserId: string | null
-  hasSeenOnboarding: boolean
-  signup: (name: string, email: string, password: string) => { ok: true } | { ok: false; error: string }
-  login: (email: string, password: string) => { ok: true } | { ok: false; error: string }
-  logout: () => void
-  setUsageMode: (mode: UsageMode) => void
-  updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor'>>) => void
-  completeOnboarding: () => void
-  deleteAccount: () => void
-  currentUser: () => User | undefined
+interface ProfileRow {
+  id: string
+  name: string
+  email: string
+  avatar_color: string
+  usage_mode: UsageMode
+  created_at: string
+}
+
+function mapProfile(row: ProfileRow): User {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    avatarColor: row.avatar_color,
+    usageMode: row.usage_mode,
+    createdAt: row.created_at,
+  }
+}
+
+async function fetchProfile(userId: string): Promise<User | null> {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
+  if (error || !data) return null
+  return mapProfile(data)
 }
 
 const AVATAR_COLORS = ['#7C5CFF', '#34D399', '#F5A524', '#F5455C', '#3B9EFF', '#FF7CE0']
 
+function translateAuthError(message: string): string {
+  if (message.includes('already registered')) return 'Já existe uma conta com este e-mail.'
+  if (message.includes('Invalid login credentials')) return 'E-mail ou senha incorretos.'
+  if (message.includes('Password should be at least')) return 'A senha precisa ter ao menos 6 caracteres.'
+  return message
+}
+
+interface AuthState {
+  currentUserId: string | null
+  profile: User | null
+  authReady: boolean
+  hasSeenOnboarding: boolean
+
+  signup: (name: string, email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  logout: () => Promise<void>
+  setUsageMode: (mode: UsageMode) => Promise<void>
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor'>>) => Promise<void>
+  completeOnboarding: () => void
+  deleteAccount: () => Promise<void>
+  currentUser: () => User | undefined
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      users: [],
       currentUserId: null,
+      profile: null,
+      authReady: false,
       hasSeenOnboarding: false,
 
-      signup: (name, email, password) => {
+      signup: async (name, email, password) => {
         const normalizedEmail = email.trim().toLowerCase()
-        if (get().users.some((u) => u.email === normalizedEmail)) {
-          return { ok: false, error: 'Já existe uma conta com este e-mail.' }
-        }
-        const user: User = {
-          id: uuid(),
-          name: name.trim(),
+        const avatarColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]!
+        const { data, error } = await supabase.auth.signUp({
           email: normalizedEmail,
-          passwordHash: simpleHash(password),
-          avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]!,
-          usageMode: 'personal',
-          createdAt: new Date().toISOString(),
+          password,
+          options: { data: { name: name.trim(), avatar_color: avatarColor } },
+        })
+        if (error) return { ok: false, error: translateAuthError(error.message) }
+        if (data.user) {
+          const profile = await fetchProfile(data.user.id)
+          set({ currentUserId: data.user.id, profile })
         }
-        set((state) => ({ users: [...state.users, user], currentUserId: user.id }))
         return { ok: true }
       },
 
-      login: (email, password) => {
+      login: async (email, password) => {
         const normalizedEmail = email.trim().toLowerCase()
-        const user = get().users.find((u) => u.email === normalizedEmail)
-        if (!user || user.passwordHash !== simpleHash(password)) {
-          return { ok: false, error: 'E-mail ou senha incorretos.' }
+        const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
+        if (error) return { ok: false, error: translateAuthError(error.message) }
+        if (data.user) {
+          const profile = await fetchProfile(data.user.id)
+          set({ currentUserId: data.user.id, profile })
         }
-        set({ currentUserId: user.id })
         return { ok: true }
       },
 
-      logout: () => set({ currentUserId: null }),
-
-      setUsageMode: (mode) => {
-        const id = get().currentUserId
-        if (!id) return
-        set((state) => ({
-          users: state.users.map((u) => (u.id === id ? { ...u, usageMode: mode } : u)),
-        }))
+      logout: async () => {
+        await supabase.auth.signOut()
+        set({ currentUserId: null, profile: null })
       },
 
-      updateProfile: (patch) => {
+      setUsageMode: async (mode) => {
         const id = get().currentUserId
         if (!id) return
-        set((state) => ({
-          users: state.users.map((u) => (u.id === id ? { ...u, ...patch } : u)),
-        }))
+        set((state) => ({ profile: state.profile ? { ...state.profile, usageMode: mode } : state.profile }))
+        await supabase.from('profiles').update({ usage_mode: mode }).eq('id', id)
+      },
+
+      updateProfile: async (patch) => {
+        const id = get().currentUserId
+        if (!id) return
+        set((state) => ({ profile: state.profile ? { ...state.profile, ...patch } : state.profile }))
+        const updates: Record<string, string> = {}
+        if (patch.name !== undefined) updates.name = patch.name
+        if (patch.avatarColor !== undefined) updates.avatar_color = patch.avatarColor
+        await supabase.from('profiles').update(updates).eq('id', id)
       },
 
       completeOnboarding: () => set({ hasSeenOnboarding: true }),
 
-      deleteAccount: () => {
-        const id = get().currentUserId
-        if (!id) return
-        set((state) => ({
-          users: state.users.filter((u) => u.id !== id),
-          currentUserId: null,
-        }))
+      // Apagar a conta de verdade (auth.users) exige privilégio de service role,
+      // que não existe no client — por ora isso desloga o dispositivo; remoção
+      // definitiva fica para um fluxo futuro via Edge Function.
+      deleteAccount: async () => {
+        await supabase.auth.signOut()
+        set({ currentUserId: null, profile: null })
       },
 
-      currentUser: () => get().users.find((u) => u.id === get().currentUserId),
+      currentUser: () => get().profile ?? undefined,
     }),
-    { name: 'taskez-auth' },
+    {
+      name: 'taskez-auth',
+      partialize: (state) => ({ hasSeenOnboarding: state.hasSeenOnboarding }),
+    },
   ),
 )
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  const userId = session?.user?.id ?? null
+  if (!userId) {
+    useAuthStore.setState({ currentUserId: null, profile: null, authReady: true })
+    useDataStore.getState().resetWorkspaceData()
+    useContactsStore.setState({ contacts: [] })
+    return
+  }
+  fetchProfile(userId).then((profile) => {
+    useAuthStore.setState({ currentUserId: userId, profile, authReady: true })
+  })
+  void useContactsStore.getState().fetchContacts()
+})

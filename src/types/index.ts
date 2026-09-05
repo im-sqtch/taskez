@@ -59,6 +59,17 @@ export interface TeamMember {
   // dentro do roster daquele workspace — evita depender de um id fixo tipo 'team-1',
   // que deixou de ser único quando cada workspace passou a ter seu próprio roster.
   isSelf?: boolean
+  // Presente quando este membro veio de um contato aceito (conta real do sistema),
+  // referenciando o User correspondente — distingue de colegas fictícios de seed.
+  linkedUserId?: string
+}
+
+export interface Contact {
+  id: string
+  fromUserId: string
+  toUserId: string
+  status: 'pending' | 'accepted'
+  createdAt: string
 }
 
 export interface Workspace {
@@ -89,7 +100,9 @@ export interface ProjectFile {
 
 export interface Notification {
   id: string
-  workspaceId: string
+  // Ausente para notificações de conta (ex.: contato aceitou convite) — não pertencem
+  // a nenhum workspace específico, então aparecem independentemente de qual está ativo.
+  workspaceId?: string
   title: string
   body: string
   read: boolean
@@ -126,7 +139,6 @@ export interface User {
   id: string
   name: string
   email: string
-  passwordHash: string
   avatarColor: string
   usageMode: UsageMode
   createdAt: string

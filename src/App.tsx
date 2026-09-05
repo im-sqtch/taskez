@@ -42,10 +42,16 @@ function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const theme = useThemeStore((s) => s.theme)
+  const authReady = useAuthStore((s) => s.authReady)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
+
+  // Aguarda a sessão do Supabase ser restaurada (assíncrono) antes de decidir para
+  // onde navegar — sem isso, um usuário já logado piscaria a tela de login por um
+  // instante a cada recarregamento da página.
+  if (!authReady) return null
 
   return (
     <BrowserRouter>

@@ -42,13 +42,3 @@ export function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
-
-// Hash simples apenas para simular credenciais no armazenamento local (não é um app com backend/rede).
-export function simpleHash(text: string) {
-  let hash = 0
-  for (let i = 0; i < text.length; i++) {
-    hash = (hash << 5) - hash + text.charCodeAt(i)
-    hash |= 0
-  }
-  return hash.toString(36)
-}

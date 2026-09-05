@@ -1,11 +1,16 @@
-import { ChevronRight, Flame, Layers, ListChecks, Settings, TrendingUp, Users } from 'lucide-react'
+import { ChevronRight, Flame, Layers, ListChecks, Settings, TrendingUp, UserPlus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AddContactSheet } from '@/components/profile/AddContactSheet'
+import { AddTeamMemberSheet } from '@/components/profile/AddTeamMemberSheet'
 import { WorkspaceSwitcherSheet } from '@/components/workspace/WorkspaceSwitcherSheet'
 import { Avatar } from '@/components/ui/Avatar'
+import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { computeStats } from '@/lib/stats'
 import { useAuthStore } from '@/store/authStore'
+import { useAcceptedContacts } from '@/store/contactsStore'
 import { useCurrentWorkspace, useWorkspaceTasks, useWorkspaceTeam } from '@/store/dataStore'
 
 const usageModeLabels = { personal: 'Uso pessoal', team: 'Equipe', client: 'Clientes' }
@@ -14,9 +19,12 @@ export function ProfilePage() {
   const user = useAuthStore((s) => s.currentUser())
   const tasks = useWorkspaceTasks()
   const team = useWorkspaceTeam()
+  const contacts = useAcceptedContacts(user?.id)
   const currentWorkspace = useCurrentWorkspace()
   const navigate = useNavigate()
   const [workspaceSheetOpen, setWorkspaceSheetOpen] = useState(false)
+  const [addMemberOpen, setAddMemberOpen] = useState(false)
+  const [addContactOpen, setAddContactOpen] = useState(false)
 
   if (!user) return null
   const stats = computeStats(tasks)
@@ -62,7 +70,7 @@ export function ProfilePage() {
       <div className="flex flex-col gap-3 px-5">
         <div className="flex items-center gap-2 px-1">
           <Users size={15} className="text-text-faint" />
-          <p className="text-sm font-bold text-text">Equipe</p>
+          <p className="text-sm font-bold text-text">Equipe da Workspace</p>
         </div>
         <Card className="flex flex-col gap-3">
           {team.map((m) => (
@@ -78,6 +86,34 @@ export function ProfilePage() {
             </div>
           ))}
         </Card>
+        <Button variant="secondary" size="sm" icon={<UserPlus size={15} />} onClick={() => setAddMemberOpen(true)} className="self-start">
+          Adicionar membro da equipe
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-3 px-5">
+        <div className="flex items-center gap-2 px-1">
+          <UserPlus size={15} className="text-text-faint" />
+          <p className="text-sm font-bold text-text">Meus contatos</p>
+        </div>
+        <Card className="flex flex-col gap-3">
+          {contacts.length === 0 ? (
+            <EmptyState icon={<UserPlus size={20} />} title="Nenhum contato ainda" description="Adicione pessoas pelo e-mail para trazê-las às suas equipes." />
+          ) : (
+            contacts.map(({ contact, user: contactUser }) => (
+              <div key={contact.id} className="flex items-center gap-3">
+                <Avatar name={contactUser.name} color={contactUser.avatarColor} size="sm" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-text">{contactUser.name}</p>
+                  <p className="text-xs text-text-faint">{contactUser.email}</p>
+                </div>
+              </div>
+            ))
+          )}
+        </Card>
+        <Button variant="secondary" size="sm" icon={<UserPlus size={15} />} onClick={() => setAddContactOpen(true)} className="self-start">
+          Adicionar contato
+        </Button>
       </div>
 
       <button
@@ -108,6 +144,8 @@ export function ProfilePage() {
       </button>
 
       <WorkspaceSwitcherSheet open={workspaceSheetOpen} onClose={() => setWorkspaceSheetOpen(false)} />
+      <AddTeamMemberSheet open={addMemberOpen} onClose={() => setAddMemberOpen(false)} />
+      <AddContactSheet open={addContactOpen} onClose={() => setAddContactOpen(false)} />
     </div>
   )
 }

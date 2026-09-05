@@ -58,10 +58,11 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
     if (!name.trim()) return
     if (editing) {
       renameWorkspace(editing.id, name.trim())
+      setView('list')
     } else {
       addWorkspace(name.trim(), color)
+      onClose()
     }
-    setView('list')
   }
 
   if (view === 'form') {
@@ -111,14 +112,23 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
           const isCurrent = w.id === currentWorkspaceId
           const projectCount = projects.filter((p) => p.workspaceId === w.id).length
           return (
-            <button
+            <div
               key={w.id}
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 switchWorkspace(w.id)
                 onClose()
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  switchWorkspace(w.id)
+                  onClose()
+                }
+              }}
               className={cn(
-                'flex items-center gap-3 rounded-xl border p-3 text-left transition-colors',
+                'flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-left transition-colors',
                 isCurrent ? 'border-accent bg-accent-soft' : 'border-transparent bg-surface',
               )}
             >
@@ -140,7 +150,7 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
                   <Trash2 size={14} />
                 </button>
               )}
-            </button>
+            </div>
           )
         })}
 

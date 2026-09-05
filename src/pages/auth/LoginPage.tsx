@@ -12,9 +12,9 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const result = login(email, password)
+    const result = await login(email, password)
     if (!result.ok) {
       setError(result.error)
       return
