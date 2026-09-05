@@ -3,11 +3,12 @@ import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { formatBytes, formatDate } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useDataStore } from '@/store/dataStore'
 import type { ProjectFile } from '@/types'
 
-const MAX_FILE_SIZE = 3 * 1024 * 1024 // 3MB — arquivos ficam salvos no localStorage do navegador
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB — arquivos ficam no Supabase Storage
 
 function iconFor(type: string) {
   if (type.startsWith('image/')) return Image
@@ -16,6 +17,7 @@ function iconFor(type: string) {
 }
 
 export function ProjectFiles({ projectId }: { projectId: string }) {
+  const project = useDataStore((s) => s.projects.find((p) => p.id === projectId))
   const allFiles = useDataStore((s) => s.files)
   const addFile = useDataStore((s) => s.addFile)
   const removeFile = useDataStore((s) => s.removeFile)
@@ -23,15 +25,16 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
   const files = allFiles
     .filter((f) => f.projectId === projectId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
-    if (!file || !currentUser) return
+    if (!file || !currentUser || !project) return
 
     if (file.size > MAX_FILE_SIZE) {
       setError(`"${file.name}" tem ${formatBytes(file.size)}. O limite é ${formatBytes(MAX_FILE_SIZE)} por arquivo.`)
@@ -40,23 +43,34 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
 
     setError(null)
     setUploading(true)
-    const reader = new FileReader()
-    reader.onload = () => {
-      addFile({
-        projectId,
-        name: file.name,
-        size: file.size,
-        type: file.type || 'application/octet-stream',
-        dataUrl: reader.result as string,
-        uploadedBy: currentUser.id,
-      })
+    const storagePath = `${project.workspaceId}/${projectId}/${crypto.randomUUID()}-${file.name}`
+    const { error: uploadError } = await supabase.storage.from('project-files').upload(storagePath, file)
+    if (uploadError) {
+      setError('Não foi possível enviar esse arquivo.')
       setUploading(false)
+      return
     }
-    reader.onerror = () => {
-      setError('Não foi possível ler esse arquivo.')
-      setUploading(false)
+    addFile({
+      workspaceId: project.workspaceId,
+      projectId,
+      name: file.name,
+      size: file.size,
+      type: file.type || 'application/octet-stream',
+      storagePath,
+      uploadedBy: currentUser.id,
+    })
+    setUploading(false)
+  }
+
+  async function handleDownload(file: ProjectFile) {
+    setDownloadingId(file.id)
+    const { data, error: signError } = await supabase.storage.from('project-files').createSignedUrl(file.storagePath, 60)
+    setDownloadingId(null)
+    if (signError || !data) {
+      setError('Não foi possível baixar esse arquivo.')
+      return
     }
-    reader.readAsDataURL(file)
+    window.open(data.signedUrl, '_blank')
   }
 
   function handleRemove(file: ProjectFile) {
@@ -76,7 +90,7 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
       >
         {uploading ? 'Enviando...' : 'Enviar arquivo'}
       </Button>
-      <p className="text-xs text-text-faint">Até {formatBytes(MAX_FILE_SIZE)} por arquivo, salvo neste dispositivo.</p>
+      <p className="text-xs text-text-faint">Até {formatBytes(MAX_FILE_SIZE)} por arquivo, visível para toda a equipe do workspace.</p>
       {error && <p className="text-xs font-medium text-danger">{error}</p>}
 
       {files.length === 0 ? (
@@ -96,14 +110,14 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
                     {formatBytes(file.size)} · {formatDate(file.createdAt)}
                   </p>
                 </div>
-                <a
-                  href={file.dataUrl}
-                  download={file.name}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-accent"
+                <button
+                  onClick={() => handleDownload(file)}
+                  disabled={downloadingId === file.id}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-accent disabled:opacity-40"
                   aria-label={`Baixar ${file.name}`}
                 >
                   <Download size={16} />
-                </a>
+                </button>
                 <button
                   onClick={() => handleRemove(file)}
                   className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-danger"

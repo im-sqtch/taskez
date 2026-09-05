@@ -108,6 +108,68 @@ function mapProject(row: ProjectRow): Project {
   }
 }
 
+interface ChatMessageRow {
+  id: string
+  workspace_id: string
+  project_id: string
+  author_id: string
+  text: string
+  created_at: string
+}
+
+interface NotificationRow {
+  id: string
+  user_id: string
+  workspace_id: string | null
+  type: Notification['type']
+  title: string
+  body: string
+  read: boolean
+  created_at: string
+}
+
+interface ProjectFileRow {
+  id: string
+  workspace_id: string
+  project_id: string
+  name: string
+  size: number
+  type: string
+  storage_path: string
+  uploaded_by: string
+  created_at: string
+}
+
+function mapChatMessage(row: ChatMessageRow): ChatMessage {
+  return { id: row.id, projectId: row.project_id, authorId: row.author_id, text: row.text, createdAt: row.created_at }
+}
+
+function mapNotification(row: NotificationRow): Notification {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id ?? undefined,
+    type: row.type,
+    title: row.title,
+    body: row.body,
+    read: row.read,
+    createdAt: row.created_at,
+  }
+}
+
+function mapProjectFile(row: ProjectFileRow): ProjectFile {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    projectId: row.project_id,
+    name: row.name,
+    size: row.size,
+    type: row.type,
+    storagePath: row.storage_path,
+    uploadedBy: row.uploaded_by,
+    createdAt: row.created_at,
+  }
+}
+
 function mapTask(row: TaskRow): Task {
   return {
     id: row.id,
@@ -158,13 +220,25 @@ function getSelfMember(team: TeamMember[]): TeamMember | undefined {
   return team.find((m) => m.isSelf)
 }
 
-// Notificações continuam só locais por enquanto (fora do escopo desta migração).
-function seedNotifications(): Notification[] {
-  return []
-}
-
-function makeNotification(workspaceId: string | undefined, type: Notification['type'], title: string, body: string): Notification {
-  return { id: uuid(), workspaceId, title, body, read: false, createdAt: now(), type }
+// Notificações são sempre por destinatário. Para eventos de workspace (tarefa
+// delegada, projeto criado etc.) o destinatário é o próprio usuário que executou
+// a ação — isso sincroniza o "feed de atividade" entre os dispositivos dele. Já
+// persiste no Supabase aqui mesmo para não precisar repetir isso em cada chamador.
+function makeNotification(userId: string, workspaceId: string | undefined, type: Notification['type'], title: string, body: string): Notification {
+  const notification: Notification = { id: uuid(), workspaceId, title, body, read: false, createdAt: now(), type }
+  fireAndForget(
+    supabase.from('notifications').insert({
+      id: notification.id,
+      user_id: userId,
+      workspace_id: notification.workspaceId ?? null,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      read: notification.read,
+      created_at: notification.createdAt,
+    }),
+  )
+  return notification
 }
 
 export function defaultLayout(): DashboardLayout {
@@ -340,6 +414,52 @@ function setupRealtime() {
         return { tasks: exists ? state.tasks.map((t) => (t.id === task.id ? task : t)) : [...state.tasks, task] }
       })
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, (payload) => {
+      const p = payload as RealtimePostgresChangesPayload<ChatMessageRow>
+      if (p.eventType === 'DELETE') {
+        const oldId = (p.old as { id?: string }).id
+        if (!oldId) return
+        useDataStore.setState((state) => ({ chatMessages: state.chatMessages.filter((m) => m.id !== oldId) }))
+        return
+      }
+      const message = mapChatMessage(p.new as ChatMessageRow)
+      useDataStore.setState((state) => {
+        const exists = state.chatMessages.some((m) => m.id === message.id)
+        return { chatMessages: exists ? state.chatMessages.map((m) => (m.id === message.id ? message : m)) : [...state.chatMessages, message] }
+      })
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'files' }, (payload) => {
+      const p = payload as RealtimePostgresChangesPayload<ProjectFileRow>
+      if (p.eventType === 'DELETE') {
+        const oldId = (p.old as { id?: string }).id
+        if (!oldId) return
+        useDataStore.setState((state) => ({ files: state.files.filter((f) => f.id !== oldId) }))
+        return
+      }
+      const file = mapProjectFile(p.new as ProjectFileRow)
+      useDataStore.setState((state) => {
+        const exists = state.files.some((f) => f.id === file.id)
+        return { files: exists ? state.files.map((f) => (f.id === file.id ? file : f)) : [...state.files, file] }
+      })
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (payload) => {
+      const p = payload as RealtimePostgresChangesPayload<NotificationRow>
+      if (p.eventType === 'DELETE') {
+        const oldId = (p.old as { id?: string }).id
+        if (!oldId) return
+        useDataStore.setState((state) => ({ notifications: state.notifications.filter((n) => n.id !== oldId) }))
+        return
+      }
+      const notification = mapNotification(p.new as NotificationRow)
+      useDataStore.setState((state) => {
+        const exists = state.notifications.some((n) => n.id === notification.id)
+        return {
+          notifications: exists
+            ? state.notifications.map((n) => (n.id === notification.id ? notification : n))
+            : [...state.notifications, notification],
+        }
+      })
+    })
     .subscribe()
 }
 
@@ -379,11 +499,17 @@ export const useDataStore = create<DataState>()(
         if (workspaceRows.length > 0) {
           const workspaces = workspaceRows.map(mapWorkspace)
           const workspaceIds = workspaces.map((w) => w.id)
-          const [{ data: teamRows }, { data: projectRows }, { data: taskRows }] = await Promise.all([
-            supabase.from('team_members').select('*').in('workspace_id', workspaceIds),
-            supabase.from('projects').select('*').in('workspace_id', workspaceIds),
-            supabase.from('tasks').select('*').in('workspace_id', workspaceIds),
-          ])
+          const [{ data: teamRows }, { data: projectRows }, { data: taskRows }, { data: chatRows }, { data: fileRows }, { data: notificationRows }] =
+            await Promise.all([
+              supabase.from('team_members').select('*').in('workspace_id', workspaceIds),
+              supabase.from('projects').select('*').in('workspace_id', workspaceIds),
+              supabase.from('tasks').select('*').in('workspace_id', workspaceIds),
+              supabase.from('chat_messages').select('*').in('workspace_id', workspaceIds),
+              supabase.from('files').select('*').in('workspace_id', workspaceIds),
+              // Sem filtro de workspace: RLS já restringe a `user_id = auth.uid()`,
+              // e notificações de conta (contato aceito etc.) não têm workspace_id.
+              supabase.from('notifications').select('*').order('created_at', { ascending: true }),
+            ])
           set((state) => ({
             loading: false,
             workspaces,
@@ -391,6 +517,9 @@ export const useDataStore = create<DataState>()(
             team: (teamRows ?? []).map((r) => mapTeamMember(r as TeamMemberRow, userId)),
             projects: (projectRows ?? []).map((r) => mapProject(r as ProjectRow)),
             tasks: (taskRows ?? []).map((r) => mapTask(r as TaskRow)),
+            chatMessages: (chatRows ?? []).map((r) => mapChatMessage(r as ChatMessageRow)),
+            files: (fileRows ?? []).map((r) => mapProjectFile(r as ProjectFileRow)),
+            notifications: (notificationRows ?? []).map((r) => mapNotification(r as NotificationRow)),
           }))
           setupRealtime()
           return
@@ -411,6 +540,7 @@ export const useDataStore = create<DataState>()(
           linkedUserId: userId,
           isSelf: true,
         }
+        const { data: notificationRows } = await supabase.from('notifications').select('*').order('created_at', { ascending: true })
         set({
           loading: false,
           workspaces: [workspace],
@@ -418,6 +548,9 @@ export const useDataStore = create<DataState>()(
           team: [selfMember],
           projects: [],
           tasks: [],
+          chatMessages: [],
+          files: [],
+          notifications: (notificationRows ?? []).map((r) => mapNotification(r as NotificationRow)),
         })
         await supabase.from('workspaces').insert({ id: workspaceId, name: workspace.name, color: workspace.color, created_by: userId })
         await supabase.from('workspace_members').insert({ workspace_id: workspaceId, user_id: userId, role: 'owner' })
@@ -443,6 +576,9 @@ export const useDataStore = create<DataState>()(
           projects: [],
           tasks: [],
           team: [],
+          chatMessages: [],
+          files: [],
+          notifications: [],
         })
       },
 
@@ -535,7 +671,7 @@ export const useDataStore = create<DataState>()(
       addTeamMember: (data) => {
         const id = uuid()
         const workspaceId = get().currentWorkspaceId
-        const currentUserId = useAuthStore.getState().currentUserId
+        const currentUserId = useAuthStore.getState().currentUserId!
         set((state) => ({
           team: [
             ...state.team,
@@ -553,7 +689,7 @@ export const useDataStore = create<DataState>()(
           ],
           notifications: [
             ...state.notifications,
-            makeNotification(workspaceId, 'team', 'Novo membro na equipe', `${data.name} entrou na equipe do workspace.`),
+            makeNotification(currentUserId, workspaceId, 'team', 'Novo membro na equipe', `${data.name} entrou na equipe do workspace.`),
           ],
         }))
         fireAndForget(
@@ -579,9 +715,10 @@ export const useDataStore = create<DataState>()(
       addProject: (data) => {
         const id = uuid()
         const workspaceId = get().currentWorkspaceId
+        const userId = useAuthStore.getState().currentUserId!
         set((state) => ({
           projects: [...state.projects, { ...data, id, workspaceId, createdAt: now() }],
-          notifications: [...state.notifications, makeNotification(workspaceId, 'project', 'Projeto criado', `"${data.name}" foi criado.`)],
+          notifications: [...state.notifications, makeNotification(userId, workspaceId, 'project', 'Projeto criado', `"${data.name}" foi criado.`)],
         }))
         fireAndForget(
           supabase.from('projects').insert({
@@ -598,7 +735,8 @@ export const useDataStore = create<DataState>()(
         )
         return id
       },
-      updateProject: (id, patch) =>
+      updateProject: (id, patch) => {
+        const userId = useAuthStore.getState().currentUserId!
         set((state) => {
           const project = state.projects.find((p) => p.id === id)
           const notifications = [...state.notifications]
@@ -610,7 +748,7 @@ export const useDataStore = create<DataState>()(
               const member = state.team.find((m) => m.id === memberId)
               if (member) {
                 notifications.push(
-                  makeNotification(project.workspaceId, 'team', 'Novo membro no projeto', `${member.name} foi adicionado a "${project.name}".`),
+                  makeNotification(userId, project.workspaceId, 'team', 'Novo membro no projeto', `${member.name} foi adicionado a "${project.name}".`),
                 )
               }
             }
@@ -620,15 +758,17 @@ export const useDataStore = create<DataState>()(
           const hasNonMemberChange = Object.keys(patch).some((key) => key !== 'memberIds')
           if (project && hasNonMemberChange) {
             const displayName = patch.name ?? project.name
-            notifications.push(makeNotification(project.workspaceId, 'project', 'Projeto atualizado', `"${displayName}" foi atualizado.`))
+            notifications.push(makeNotification(userId, project.workspaceId, 'project', 'Projeto atualizado', `"${displayName}" foi atualizado.`))
           }
           fireAndForget(supabase.from('projects').update(projectPatchToRow(patch)).eq('id', id))
           return {
             projects: state.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
             notifications,
           }
-        }),
+        })
+      },
       deleteProject: (id) => {
+        const userId = useAuthStore.getState().currentUserId!
         set((state) => {
           const project = state.projects.find((p) => p.id === id)
           return {
@@ -637,34 +777,65 @@ export const useDataStore = create<DataState>()(
             chatMessages: state.chatMessages.filter((m) => m.projectId !== id),
             files: state.files.filter((f) => f.projectId !== id),
             notifications: project
-              ? [...state.notifications, makeNotification(project.workspaceId, 'project', 'Projeto excluído', `"${project.name}" foi excluído.`)]
+              ? [...state.notifications, makeNotification(userId, project.workspaceId, 'project', 'Projeto excluído', `"${project.name}" foi excluído.`)]
               : state.notifications,
           }
         })
+        // Exclusão em cascata de chat_messages/files/tasks já é resolvida pelas
+        // foreign keys "on delete cascade" no banco.
         fireAndForget(supabase.from('projects').delete().eq('id', id))
       },
-      addChatMessage: (projectId, authorId, text) =>
+      addChatMessage: (projectId, authorId, text) => {
+        const userId = useAuthStore.getState().currentUserId!
+        const id = uuid()
+        const createdAt = now()
         set((state) => {
           const project = state.projects.find((p) => p.id === projectId)
           const preview = text.length > 60 ? `${text.slice(0, 57)}...` : text
           return {
-            chatMessages: [...state.chatMessages, { id: uuid(), projectId, authorId, text, createdAt: now() }],
+            chatMessages: [...state.chatMessages, { id, projectId, authorId, text, createdAt }],
             notifications: project
-              ? [...state.notifications, makeNotification(project.workspaceId, 'project', `Nova mensagem em ${project.name}`, preview)]
+              ? [...state.notifications, makeNotification(userId, project.workspaceId, 'project', `Nova mensagem em ${project.name}`, preview)]
               : state.notifications,
           }
-        }),
-      addFile: (data) =>
+        })
+        const workspaceId = get().projects.find((p) => p.id === projectId)?.workspaceId
+        if (workspaceId) {
+          fireAndForget(
+            supabase.from('chat_messages').insert({ id, workspace_id: workspaceId, project_id: projectId, author_id: authorId, text, created_at: createdAt }),
+          )
+        }
+      },
+      addFile: (data) => {
+        const userId = useAuthStore.getState().currentUserId!
+        const id = uuid()
+        const createdAt = now()
         set((state) => {
           const project = state.projects.find((p) => p.id === data.projectId)
           return {
-            files: [...state.files, { ...data, id: uuid(), createdAt: now() }],
+            files: [...state.files, { ...data, id, createdAt }],
             notifications: project
-              ? [...state.notifications, makeNotification(project.workspaceId, 'project', 'Novo arquivo', `"${data.name}" foi enviado em "${project.name}".`)]
+              ? [...state.notifications, makeNotification(userId, project.workspaceId, 'project', 'Novo arquivo', `"${data.name}" foi enviado em "${project.name}".`)]
               : state.notifications,
           }
-        }),
-      removeFile: (id) =>
+        })
+        fireAndForget(
+          supabase.from('files').insert({
+            id,
+            workspace_id: data.workspaceId,
+            project_id: data.projectId,
+            name: data.name,
+            size: data.size,
+            type: data.type,
+            storage_path: data.storagePath,
+            uploaded_by: data.uploadedBy,
+            created_at: createdAt,
+          }),
+        )
+      },
+      removeFile: (id) => {
+        const userId = useAuthStore.getState().currentUserId!
+        const storagePath = get().files.find((f) => f.id === id)?.storagePath
         set((state) => {
           const file = state.files.find((f) => f.id === id)
           const project = file ? state.projects.find((p) => p.id === file.projectId) : undefined
@@ -672,14 +843,18 @@ export const useDataStore = create<DataState>()(
             files: state.files.filter((f) => f.id !== id),
             notifications:
               file && project
-                ? [...state.notifications, makeNotification(project.workspaceId, 'project', 'Arquivo excluído', `"${file.name}" foi excluído de "${project.name}".`)]
+                ? [...state.notifications, makeNotification(userId, project.workspaceId, 'project', 'Arquivo excluído', `"${file.name}" foi excluído de "${project.name}".`)]
                 : state.notifications,
           }
-        }),
+        })
+        fireAndForget(supabase.from('files').delete().eq('id', id))
+        if (storagePath) fireAndForget(supabase.storage.from('project-files').remove([storagePath]))
+      },
 
       addTask: (data) => {
         const id = uuid()
         const workspaceId = get().currentWorkspaceId
+        const userId = useAuthStore.getState().currentUserId!
         const task: Task = {
           id,
           workspaceId,
@@ -701,7 +876,7 @@ export const useDataStore = create<DataState>()(
           return {
             tasks: [...state.tasks, task],
             notifications: member
-              ? [...state.notifications, makeNotification(workspaceId, 'task', 'Tarefa delegada', `"${task.title}" foi delegada para ${member.name}.`)]
+              ? [...state.notifications, makeNotification(userId, workspaceId, 'task', 'Tarefa delegada', `"${task.title}" foi delegada para ${member.name}.`)]
               : state.notifications,
           }
         })
@@ -723,6 +898,7 @@ export const useDataStore = create<DataState>()(
         return id
       },
       updateTask: (id, patch) => {
+        const userId = useAuthStore.getState().currentUserId!
         set((state) => {
           const existing = state.tasks.find((t) => t.id === id)
           const notifications = [...state.notifications]
@@ -731,7 +907,7 @@ export const useDataStore = create<DataState>()(
             if (patch.assigneeId && patch.assigneeId !== existing.assigneeId && patch.assigneeId !== selfId) {
               const member = state.team.find((m) => m.id === patch.assigneeId)
               if (member) {
-                notifications.push(makeNotification(existing.workspaceId, 'task', 'Tarefa delegada', `"${existing.title}" foi delegada para ${member.name}.`))
+                notifications.push(makeNotification(userId, existing.workspaceId, 'task', 'Tarefa delegada', `"${existing.title}" foi delegada para ${member.name}.`))
               }
             }
           }
@@ -749,26 +925,28 @@ export const useDataStore = create<DataState>()(
       toggleTaskStatus: (id) => {
         const task = get().tasks.find((t) => t.id === id)
         if (!task) return
+        const userId = useAuthStore.getState().currentUserId!
         const becomingDone = task.status !== 'done'
         const status: TaskStatus = becomingDone ? 'done' : 'todo'
         const completedAt = status === 'done' ? now() : undefined
         set((state) => ({
           tasks: state.tasks.map((t) => (t.id === id ? { ...t, status, completedAt, updatedAt: now() } : t)),
           notifications: becomingDone
-            ? [...state.notifications, makeNotification(task.workspaceId, 'task', 'Tarefa concluída', `"${task.title}" foi concluída.`)]
+            ? [...state.notifications, makeNotification(userId, task.workspaceId, 'task', 'Tarefa concluída', `"${task.title}" foi concluída.`)]
             : state.notifications,
         }))
         fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
       },
       setTaskStatus: (id, status) => {
         const task = get().tasks.find((t) => t.id === id)
+        const userId = useAuthStore.getState().currentUserId!
         const becomingDone = !!task && task.status !== 'done' && status === 'done'
         const completedAt = status === 'done' ? now() : undefined
         set((state) => ({
           tasks: state.tasks.map((t) => (t.id === id ? { ...t, status, completedAt, updatedAt: now() } : t)),
           notifications:
             becomingDone && task
-              ? [...state.notifications, makeNotification(task.workspaceId, 'task', 'Tarefa concluída', `"${task.title}" foi concluída.`)]
+              ? [...state.notifications, makeNotification(userId, task.workspaceId, 'task', 'Tarefa concluída', `"${task.title}" foi concluída.`)]
               : state.notifications,
         }))
         fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
@@ -807,6 +985,7 @@ export const useDataStore = create<DataState>()(
         fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks }).eq('id', taskId))
       },
       addComment: (taskId, authorId, text) => {
+        const userId = useAuthStore.getState().currentUserId!
         let nextComments: Task['comments'] = []
         set((state) => {
           const task = state.tasks.find((t) => t.id === taskId)
@@ -817,27 +996,37 @@ export const useDataStore = create<DataState>()(
               return { ...t, comments: nextComments, updatedAt: now() }
             }),
             notifications: task
-              ? [...state.notifications, makeNotification(task.workspaceId, 'task', 'Novo comentário', `Comentário em "${task.title}".`)]
+              ? [...state.notifications, makeNotification(userId, task.workspaceId, 'task', 'Novo comentário', `Comentário em "${task.title}".`)]
               : state.notifications,
           }
         })
         fireAndForget(supabase.from('tasks').update({ comments: nextComments, updated_at: now() }).eq('id', taskId))
       },
 
-      markNotificationRead: (id) =>
+      markNotificationRead: (id) => {
         set((state) => ({
           notifications: state.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
-        })),
-      markAllNotificationsRead: () =>
+        }))
+        fireAndForget(supabase.from('notifications').update({ read: true }).eq('id', id))
+      },
+      markAllNotificationsRead: () => {
+        const state = get()
+        const ids = state.notifications
+          .filter((n) => (n.workspaceId === state.currentWorkspaceId || n.workspaceId === undefined) && !n.read)
+          .map((n) => n.id)
         set((state) => ({
           notifications: state.notifications.map((n) =>
             n.workspaceId === state.currentWorkspaceId || n.workspaceId === undefined ? { ...n, read: true } : n,
           ),
-        })),
-      addNotification: (type, title, body, workspaceId) =>
+        }))
+        if (ids.length > 0) fireAndForget(supabase.from('notifications').update({ read: true }).in('id', ids))
+      },
+      addNotification: (type, title, body, workspaceId) => {
+        const userId = useAuthStore.getState().currentUserId!
         set((state) => ({
-          notifications: [...state.notifications, makeNotification(workspaceId, type, title, body)],
-        })),
+          notifications: [...state.notifications, makeNotification(userId, workspaceId, type, title, body)],
+        }))
+      },
 
       setLayout: (layout) => set({ layout }),
       resetLayout: () => set({ layout: defaultLayout() }),
@@ -869,20 +1058,16 @@ export const useDataStore = create<DataState>()(
     }),
     {
       name: 'taskez-data',
-      // Só o que é genuinamente local (não colaborativo) é persistido — workspaces,
-      // equipe, projetos e tarefas agora vivem no Supabase e são recarregados via
-      // `seedIfEmpty()` a cada sessão.
+      // Só o que é genuinamente local (não colaborativo) é persistido — o resto
+      // (workspaces, equipe, projetos, tarefas, chat, arquivos, notificações) já
+      // vive no Supabase e é recarregado via `seedIfEmpty()` a cada sessão.
       partialize: (state) => ({
         profileSizeMigrated: state.profileSizeMigrated,
-        notifications: state.notifications,
-        chatMessages: state.chatMessages,
-        files: state.files,
         layout: state.layout,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
         state.layout = normalizeLayout(state.layout)
-        if (state.notifications.length === 0) state.notifications = seedNotifications()
       },
     },
   ),

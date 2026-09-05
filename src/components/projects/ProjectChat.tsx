@@ -39,8 +39,8 @@ export function ProjectChat({ projectId }: { projectId: string }) {
   }
 
   function handleSend() {
-    if (!text.trim() || !currentUser) return
-    addChatMessage(projectId, currentUser.id, text.trim())
+    if (!text.trim() || !currentUser || !selfId) return
+    addChatMessage(projectId, selfId, text.trim())
     setText('')
   }
 

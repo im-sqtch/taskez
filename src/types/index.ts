@@ -89,11 +89,12 @@ export interface ChatMessage {
 
 export interface ProjectFile {
   id: string
+  workspaceId: string
   projectId: string
   name: string
   size: number
   type: string
-  dataUrl: string
+  storagePath: string
   uploadedBy: string
   createdAt: string
 }
