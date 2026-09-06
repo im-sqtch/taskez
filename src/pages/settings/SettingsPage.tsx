@@ -1,5 +1,5 @@
 import { ArrowLeft, Bell, LogOut, Moon, Sun, Trash2, User, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { Field } from '@/components/ui/Input'
@@ -7,6 +7,7 @@ import { Sheet } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
 import { Switch } from '@/components/ui/Switch'
 import { cn } from '@/lib/utils'
+import { isPushSubscribed, isPushSupported, subscribeToPush, unsubscribeFromPush } from '@/lib/push'
 import { useAuthStore } from '@/store/authStore'
 import { useThemeStore } from '@/store/themeStore'
 
@@ -55,9 +56,34 @@ export function SettingsPage() {
 
   const [editOpen, setEditOpen] = useState(false)
   const [name, setName] = useState(user?.name ?? '')
-  const [notifEnabled, setNotifEnabled] = useState(true)
+  const [notifEnabled, setNotifEnabled] = useState(false)
+  const [notifBusy, setNotifBusy] = useState(false)
+
+  useEffect(() => {
+    isPushSubscribed().then(setNotifEnabled)
+  }, [])
 
   if (!user) return null
+
+  async function handleToggleNotifications() {
+    if (notifBusy) return
+    setNotifBusy(true)
+    try {
+      if (notifEnabled) {
+        await unsubscribeFromPush()
+        setNotifEnabled(false)
+      } else {
+        const result = await subscribeToPush(user.id)
+        if (result.ok) {
+          setNotifEnabled(true)
+        } else {
+          alert(result.error)
+        }
+      }
+    } finally {
+      setNotifBusy(false)
+    }
+  }
 
   function handleLogout() {
     if (confirm('Deseja sair da sua conta?')) {
@@ -118,8 +144,16 @@ export function SettingsPage() {
       <Section title="Notificações">
         <div className="flex items-center gap-3 px-4 py-3.5">
           <Bell size={17} className="text-text-muted" />
-          <span className="flex-1 text-sm font-medium text-text">Notificações push</span>
-          <Switch checked={notifEnabled} onChange={() => setNotifEnabled((v) => !v)} aria-label="Notificações push" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-text">Notificações push</p>
+            {!isPushSupported() && <p className="text-xs text-text-faint">Não suportado neste navegador.</p>}
+          </div>
+          <Switch
+            checked={notifEnabled}
+            onChange={handleToggleNotifications}
+            disabled={notifBusy || !isPushSupported()}
+            aria-label="Notificações push"
+          />
         </div>
       </Section>
 

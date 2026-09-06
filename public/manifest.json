@@ -1,0 +1,13 @@
+{
+  "name": "TaskEz",
+  "short_name": "TaskEz",
+  "description": "TaskEz — seu sistema operacional pessoal de produtividade.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0E0F13",
+  "theme_color": "#0E0F13",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
