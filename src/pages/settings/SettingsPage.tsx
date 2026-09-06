@@ -66,7 +66,7 @@ export function SettingsPage() {
   if (!user) return null
 
   async function handleToggleNotifications() {
-    if (notifBusy) return
+    if (notifBusy || !user) return
     setNotifBusy(true)
     try {
       if (notifEnabled) {
