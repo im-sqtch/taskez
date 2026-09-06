@@ -109,6 +109,12 @@ export interface Notification {
   read: boolean
   createdAt: string
   type: 'task' | 'project' | 'team' | 'system' | 'workspace'
+  // Presentes quando a notificação se refere a uma tarefa ou projeto específico —
+  // usados para levar o usuário até a página correspondente ao clicar. Ausentes
+  // para eventos sem destino próprio (ex.: novo membro na equipe) ou cuja entidade
+  // foi excluída (ex.: projeto excluído).
+  entityType?: 'task' | 'project'
+  entityId?: string
 }
 
 export type WidgetType =
