@@ -107,6 +107,7 @@ export const useAuthStore = create<AuthState>()(
         const id = get().currentUserId
         if (!id) return
         set((state) => ({ profile: state.profile ? { ...state.profile, ...patch } : state.profile }))
+        useDataStore.getState().syncSelfProfile(patch)
         const updates: Record<string, string> = {}
         if (patch.name !== undefined) updates.name = patch.name
         if (patch.avatarColor !== undefined) updates.avatar_color = patch.avatarColor

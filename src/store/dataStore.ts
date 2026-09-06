@@ -317,6 +317,11 @@ interface DataState {
   seedIfEmpty: () => Promise<void>
   resetWorkspaceData: () => void
   migrateProfileSizeIfNeeded: () => void
+  // Chamado pelo authStore quando o usuário edita nome/cor do avatar em
+  // Configurações — mantém a entrada "isSelf" em sincronia em todos os
+  // workspaces (senão o roster de equipe/atribuição de tarefas mostraria um
+  // nome desatualizado mesmo com o header já refletindo o novo).
+  syncSelfProfile: (patch: { name?: string; avatarColor?: string }) => void
 
   // Workspaces
   addWorkspace: (name: string, color: string) => string
@@ -546,6 +551,13 @@ export const useDataStore = create<DataState>()(
             files: (fileRows ?? []).map((r) => mapProjectFile(r as ProjectFileRow)),
             notifications: (notificationRows ?? []).map((r) => mapNotification(r as NotificationRow)),
           }))
+          // Corrige contas antigas cuja entrada "isSelf" ainda ficou salva como o
+          // placeholder genérico "Você" em vez do nome real do perfil.
+          const profileName = useAuthStore.getState().profile?.name
+          const selfRow = (teamRows ?? []).find((r) => (r as TeamMemberRow).linked_user_id === userId)
+          if (profileName && selfRow && (selfRow as TeamMemberRow).name !== profileName) {
+            get().syncSelfProfile({ name: profileName })
+          }
           setupRealtime()
           return
         }
@@ -557,7 +569,7 @@ export const useDataStore = create<DataState>()(
         const selfMember: TeamMember = {
           id: uuid(),
           workspaceId,
-          name: 'Você',
+          name: profile?.name ?? 'Você',
           role: 'Organizador(a)',
           avatarColor: profile?.avatarColor ?? '#7C5CFF',
           status: 'online',
@@ -607,6 +619,20 @@ export const useDataStore = create<DataState>()(
         })
       },
 
+      syncSelfProfile: (patch) => {
+        const userId = useAuthStore.getState().currentUserId
+        if (!userId) return
+        set((state) => ({
+          team: state.team.map((m) => (m.isSelf ? { ...m, ...patch } : m)),
+        }))
+        const row: Record<string, string> = {}
+        if (patch.name !== undefined) row.name = patch.name
+        if (patch.avatarColor !== undefined) row.avatar_color = patch.avatarColor
+        if (Object.keys(row).length > 0) {
+          fireAndForget(supabase.from('team_members').update(row).eq('linked_user_id', userId))
+        }
+      },
+
       // O widget "profile" deixou de ter um único tamanho ('M'). O que antes era o
       // único visual disponível agora é o tamanho 'S'; quem já tinha esse widget
       // salvo como 'M' migra uma única vez para 'S', para não ganhar as novas
@@ -631,7 +657,7 @@ export const useDataStore = create<DataState>()(
         const selfMember: TeamMember = {
           id: uuid(),
           workspaceId: id,
-          name: 'Você',
+          name: profile?.name ?? 'Você',
           role: 'Organizador(a)',
           avatarColor: profile?.avatarColor ?? '#7C5CFF',
           status: 'online',
