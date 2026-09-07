@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
-import { LinksField } from '@/components/ui/LinksField'
+import { LinksField, withDraft } from '@/components/ui/LinksField'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn } from '@/lib/utils'
 import { useDataStore, useWorkspaceProjects, useWorkspaceTeam } from '@/store/dataStore'
@@ -38,6 +38,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
   const [subtasks, setSubtasks] = useState<string[]>([])
   const [subtaskInput, setSubtaskInput] = useState('')
   const [links, setLinks] = useState<string[]>([])
+  const [linkDraft, setLinkDraft] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -50,6 +51,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     setSubtasks(task?.subtasks.map((s) => s.title) ?? [])
     setSubtaskInput('')
     setLinks(task?.links ?? [])
+    setLinkDraft('')
   }, [open, task, defaultProjectId])
 
   function addSubtaskDraft() {
@@ -67,7 +69,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
       projectId,
       assigneeId,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
-      links,
+      links: withDraft(links, linkDraft),
     }
     if (task) {
       updateTask(task.id, payload)
@@ -106,7 +108,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
           onChange={(e) => setDescription(e.target.value)}
         />
 
-        <LinksField links={links} onChange={setLinks} />
+        <LinksField links={links} onChange={setLinks} draft={linkDraft} onDraftChange={setLinkDraft} />
 
         <div className="flex flex-col gap-1.5">
           <FieldLabel>Prioridade</FieldLabel>

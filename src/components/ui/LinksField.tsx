@@ -1,22 +1,29 @@
 import { Link2, Plus, X } from 'lucide-react'
-import { useState } from 'react'
 import { FieldLabel } from '@/components/ui/Input'
 
 function toHref(link: string) {
   return /^https?:\/\//i.test(link) ? link : `https://${link}`
 }
 
+interface LinksFieldProps {
+  links: string[]
+  onChange: (links: string[]) => void
+  draft: string
+  onDraftChange: (draft: string) => void
+}
+
 // Campo de edição: lista os links já adicionados (com botão de remover) e um input
 // único para o próximo — ao colar ou confirmar um link, ele vai pra lista e o
-// campo fica pronto de novo para receber outro.
-export function LinksField({ links, onChange }: { links: string[]; onChange: (links: string[]) => void }) {
-  const [draft, setDraft] = useState('')
-
+// campo fica pronto de novo para receber outro. O rascunho (`draft`) fica no
+// componente pai (ver TaskFormSheet/ProjectFormSheet) para que, se o usuário digitar
+// ou colar um link e for direto no botão de salvar do formulário sem confirmar essa
+// linha, o texto ainda seja incluído — sem isso ele se perdia silenciosamente.
+export function LinksField({ links, onChange, draft, onDraftChange }: LinksFieldProps) {
   function commit(value: string) {
     const trimmed = value.trim()
     if (!trimmed) return
     onChange([...links, trimmed])
-    setDraft('')
+    onDraftChange('')
   }
 
   function remove(index: number) {
@@ -38,7 +45,7 @@ export function LinksField({ links, onChange }: { links: string[]; onChange: (li
       <div className="flex gap-2">
         <input
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => onDraftChange(e.target.value)}
           onPaste={(e) => {
             const pasted = e.clipboardData.getData('text')
             if (!pasted.trim()) return
@@ -64,6 +71,13 @@ export function LinksField({ links, onChange }: { links: string[]; onChange: (li
       </div>
     </div>
   )
+}
+
+// Junta os links já confirmados com um rascunho ainda não confirmado (se houver
+// texto nele) — usado no submit do formulário para não perder a última linha.
+export function withDraft(links: string[], draft: string): string[] {
+  const trimmed = draft.trim()
+  return trimmed ? [...links, trimmed] : links
 }
 
 // Exibição somente-leitura, usada nas telas de visualização de tarefa e projeto.

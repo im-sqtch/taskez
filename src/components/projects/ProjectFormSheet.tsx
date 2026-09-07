@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
-import { LinksField } from '@/components/ui/LinksField'
+import { LinksField, withDraft } from '@/components/ui/LinksField'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn } from '@/lib/utils'
 import { useDataStore, useWorkspaceTeam } from '@/store/dataStore'
@@ -31,6 +31,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
   const [dueDate, setDueDate] = useState('')
   const [memberIds, setMemberIds] = useState<string[]>([])
   const [links, setLinks] = useState<string[]>([])
+  const [linkDraft, setLinkDraft] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -41,6 +42,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
     const selfId = team.find((m) => m.isSelf)?.id
     setMemberIds(project?.memberIds ?? (currentUser && selfId ? [selfId] : []))
     setLinks(project?.links ?? [])
+    setLinkDraft('')
     // `team` de propósito fora das deps: useWorkspaceTeam() devolve um array novo a
     // cada render, e incluí-lo aqui resetaria a seleção do usuário a cada re-render
     // enquanto o sheet está aberto.
@@ -58,7 +60,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
       color,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       memberIds,
-      links,
+      links: withDraft(links, linkDraft),
     }
     if (project) {
       updateProject(project.id, payload)
@@ -98,7 +100,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
-        <LinksField links={links} onChange={setLinks} />
+        <LinksField links={links} onChange={setLinks} draft={linkDraft} onDraftChange={setLinkDraft} />
         <div className="flex flex-col gap-1.5">
           <FieldLabel htmlFor="project-due">Prazo (opcional)</FieldLabel>
           <input
