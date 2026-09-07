@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Send, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
@@ -6,6 +6,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { LinksList } from '@/components/ui/LinksField'
+import { MessageComposer } from '@/components/ui/MessageComposer'
 import { cn, formatDate, isOverdue } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { confirmAction } from '@/store/confirmStore'
@@ -167,25 +168,21 @@ export function TaskDetailPage() {
               <div key={c.id} className="flex gap-2.5">
                 {currentUser && <Avatar name={currentUser.name} color={currentUser.avatarColor} size="xs" />}
                 <div className="flex-1 rounded-xl bg-surface p-3">
-                  <p className="text-sm text-text">{c.text}</p>
+                  {/* Preserva as quebras de linha digitadas sem deixar palavra longa estourar o balão. */}
+                  <p className="whitespace-pre-wrap break-words text-sm text-text">{c.text}</p>
                   <p className="mt-1 text-[11px] text-text-faint">{formatDate(c.createdAt)}</p>
                 </div>
               </div>
             ))}
           </div>
         )}
-        <div className="flex gap-2">
-          <input
-            value={commentInput}
-            onChange={(e) => setCommentInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-            placeholder="Escreva um comentário..."
-            className="h-11 flex-1 rounded-xl border border-border bg-surface px-3.5 text-sm text-text placeholder:text-text-faint outline-none focus:border-accent"
-          />
-          <button onClick={handleAddComment} className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-white">
-            <Send size={16} />
-          </button>
-        </div>
+        <MessageComposer
+          value={commentInput}
+          onChange={setCommentInput}
+          onSubmit={handleAddComment}
+          placeholder="Escreva um comentário..."
+          sendLabel="Enviar comentário"
+        />
         <div className="flex items-center gap-2 text-xs text-text-faint">
           <Paperclip size={13} /> Anexos chegam em uma próxima fase do TaskEz.
         </div>

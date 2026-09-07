@@ -900,7 +900,10 @@ export const useDataStore = create<DataState>()(
         const createdAt = now()
         set((state) => {
           const project = state.projects.find((p) => p.id === projectId)
-          const preview = text.length > 60 ? `${text.slice(0, 57)}...` : text
+          // A mensagem pode ter várias linhas; o preview da notificação é sempre
+          // uma linha só, então quebras viram espaço antes do corte.
+          const flat = text.replace(/\s+/g, ' ').trim()
+          const preview = flat.length > 60 ? `${flat.slice(0, 57)}...` : flat
           return {
             chatMessages: [...state.chatMessages, { id, projectId, authorId, text, createdAt }],
             notifications: project

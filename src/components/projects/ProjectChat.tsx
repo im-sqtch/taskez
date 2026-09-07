@@ -1,7 +1,8 @@
-import { MessageCircle, Send } from 'lucide-react'
+import { MessageCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { MessageComposer } from '@/components/ui/MessageComposer'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { useDataStore, useWorkspaceTeam } from '@/store/dataStore'
@@ -60,7 +61,9 @@ export function ProjectChat({ projectId }: { projectId: string }) {
                   {!own && <span className="px-1 text-[11px] font-medium text-text-faint">{author.name.split(' ')[0]}</span>}
                   <div
                     className={cn(
-                      'rounded-2xl px-3.5 py-2.5 text-sm',
+                      // whitespace-pre-wrap preserva as quebras de linha digitadas;
+                      // break-words evita que uma palavra/URL longa estoure o balão.
+                      'whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-sm',
                       own ? 'rounded-br-sm bg-accent text-white' : 'rounded-bl-sm bg-surface text-text',
                     )}
                   >
@@ -74,18 +77,13 @@ export function ProjectChat({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      <div className="flex gap-2">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Escreva uma mensagem..."
-          className="h-11 flex-1 rounded-xl border border-border bg-surface px-3.5 text-sm text-text placeholder:text-text-faint outline-none focus:border-accent"
-        />
-        <button onClick={handleSend} className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-white">
-          <Send size={16} />
-        </button>
-      </div>
+      <MessageComposer
+        value={text}
+        onChange={setText}
+        onSubmit={handleSend}
+        placeholder="Escreva uma mensagem..."
+        sendLabel="Enviar mensagem"
+      />
     </div>
   )
 }
