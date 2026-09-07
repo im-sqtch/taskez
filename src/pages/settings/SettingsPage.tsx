@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, ChevronRight, Globe, LogOut, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react'
+import { ArrowLeft, Bell, Check, ChevronRight, Globe, LogOut, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
@@ -71,6 +71,7 @@ export function SettingsPage() {
 
   const [editOpen, setEditOpen] = useState(false)
   const [prefsOpen, setPrefsOpen] = useState(false)
+  const [tzSheetOpen, setTzSheetOpen] = useState(false)
   const [name, setName] = useState(user?.name ?? '')
   const [notifEnabled, setNotifEnabled] = useState(false)
   const [notifBusy, setNotifBusy] = useState(false)
@@ -173,24 +174,17 @@ export function SettingsPage() {
       </Section>
 
       <Section title="Fuso horário">
-        <div className="flex items-center gap-3 px-4 py-3.5">
-          <Globe size={17} className="text-text-muted" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-text">Fuso horário</p>
-            <p className="text-xs text-text-faint">Detectado automaticamente ao criar a conta.</p>
-          </div>
-          <select
-            value={user.timezone}
-            onChange={(e) => updateProfile({ timezone: e.target.value })}
-            className="max-w-[45%] rounded-lg bg-surface-alt px-2 py-1.5 text-right text-xs font-semibold text-text"
-          >
-            {listTimezones(user.timezone).map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Row
+          icon={<Globe size={17} />}
+          label="Fuso horário"
+          onClick={() => setTzSheetOpen(true)}
+          trailing={
+            <span className="flex items-center gap-1 text-xs font-semibold text-text-faint">
+              {user.timezone}
+              <ChevronRight size={15} />
+            </span>
+          }
+        />
       </Section>
 
       <Section title="Notificações">
@@ -246,6 +240,35 @@ export function SettingsPage() {
       </Sheet>
 
       <NotificationPrefsSheet open={prefsOpen} onClose={() => setPrefsOpen(false)} />
+
+      <Sheet
+        open={tzSheetOpen}
+        onClose={() => setTzSheetOpen(false)}
+        title="Fuso horário"
+        subtitle="Detectado automaticamente ao criar a conta"
+      >
+        <div className="flex flex-col gap-1.5">
+          {listTimezones(user.timezone).map((tz) => {
+            const isCurrent = tz === user.timezone
+            return (
+              <button
+                key={tz}
+                onClick={() => {
+                  updateProfile({ timezone: tz })
+                  setTzSheetOpen(false)
+                }}
+                className={cn(
+                  'flex items-center justify-between rounded-xl px-3.5 py-3 text-left text-sm font-medium transition-colors',
+                  isCurrent ? 'bg-accent-soft text-accent' : 'text-text',
+                )}
+              >
+                {tz}
+                {isCurrent && <Check size={16} />}
+              </button>
+            )
+          })}
+        </div>
+      </Sheet>
     </div>
   )
 }
