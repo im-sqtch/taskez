@@ -19,7 +19,6 @@ export function DashboardToolbarCard({ onEdit }: { onEdit: () => void }) {
         className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 py-2 text-xs font-bold text-white"
       >
         <SlidersHorizontal size={13} />
-        Editar Layout
       </button>
     </Card>
   )

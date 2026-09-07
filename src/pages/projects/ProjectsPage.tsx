@@ -1,7 +1,8 @@
-import { FolderKanban, Plus } from 'lucide-react'
+import { FolderKanban, Plus, SlidersHorizontal } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ProjectFormSheet } from '@/components/projects/ProjectFormSheet'
+import { ReorderProjectsSheet } from '@/components/projects/ReorderProjectsSheet'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { cn, formatDate } from '@/lib/utils'
@@ -19,6 +20,7 @@ export function ProjectsPage() {
   const tasks = useWorkspaceTasks()
   const [filter, setFilter] = useState<ProjectStatus>('active')
   const [formOpen, setFormOpen] = useState(false)
+  const [reorderOpen, setReorderOpen] = useState(false)
   const navigate = useNavigate()
 
   const filtered = useMemo(() => projects.filter((p) => p.status === filter), [projects, filter])
@@ -36,13 +38,22 @@ export function ProjectsPage() {
     <div className="flex flex-col gap-5">
       <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
         <h1 className="text-2xl font-bold text-text">Projetos</h1>
-        <button
-          onClick={() => setFormOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-white"
-          aria-label="Novo projeto"
-        >
-          <Plus size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setReorderOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-alt text-text"
+            aria-label="Ordenar projetos"
+          >
+            <SlidersHorizontal size={18} />
+          </button>
+          <button
+            onClick={() => setFormOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-white"
+            aria-label="Novo projeto"
+          >
+            <Plus size={20} />
+          </button>
+        </div>
       </header>
 
       <div className="flex gap-2 px-5">
@@ -99,6 +110,7 @@ export function ProjectsPage() {
       </div>
 
       <ProjectFormSheet open={formOpen} onClose={() => setFormOpen(false)} onCreated={(id) => navigate(`/projects/${id}`)} />
+      <ReorderProjectsSheet open={reorderOpen} onClose={() => setReorderOpen(false)} />
     </div>
   )
 }

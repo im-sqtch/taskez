@@ -45,6 +45,7 @@ export interface Project {
   dueDate?: string
   memberIds: string[]
   createdAt: string
+  order: number
 }
 
 export interface TeamMember {

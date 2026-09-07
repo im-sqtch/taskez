@@ -56,6 +56,7 @@ interface ProjectRow {
   due_date: string | null
   member_ids: string[]
   created_at: string
+  order: number
 }
 
 interface TaskRow {
@@ -105,6 +106,7 @@ function mapProject(row: ProjectRow): Project {
     dueDate: row.due_date ?? undefined,
     memberIds: row.member_ids ?? [],
     createdAt: row.created_at,
+    order: row.order,
   }
 }
 
@@ -202,6 +204,7 @@ function projectPatchToRow(patch: Partial<Project>): Record<string, unknown> {
   if (patch.status !== undefined) row.status = patch.status
   if (patch.dueDate !== undefined) row.due_date = patch.dueDate ?? null
   if (patch.memberIds !== undefined) row.member_ids = patch.memberIds
+  if (patch.order !== undefined) row.order = patch.order
   return row
 }
 
@@ -333,9 +336,10 @@ interface DataState {
   addTeamMember: (data: { name: string; role: string; avatarColor: string; linkedUserId?: string }) => void
 
   // Projects
-  addProject: (data: Omit<Project, 'id' | 'workspaceId' | 'createdAt'>) => string
+  addProject: (data: Omit<Project, 'id' | 'workspaceId' | 'createdAt' | 'order'>) => string
   updateProject: (id: string, patch: Partial<Project>) => void
   deleteProject: (id: string) => void
+  reorderProjects: (orderedIds: string[]) => void
   addChatMessage: (projectId: string, authorId: string, text: string) => void
   addFile: (data: Omit<ProjectFile, 'id' | 'createdAt'>) => void
   removeFile: (id: string) => void
@@ -767,8 +771,9 @@ export const useDataStore = create<DataState>()(
         const id = uuid()
         const workspaceId = get().currentWorkspaceId
         const userId = useAuthStore.getState().currentUserId!
+        const order = Math.max(-1, ...get().projects.filter((p) => p.workspaceId === workspaceId).map((p) => p.order)) + 1
         set((state) => ({
-          projects: [...state.projects, { ...data, id, workspaceId, createdAt: now() }],
+          projects: [...state.projects, { ...data, id, workspaceId, createdAt: now(), order }],
           notifications: [
             ...state.notifications,
             makeNotification(userId, workspaceId, 'project', 'Projeto criado', `"${data.name}" foi criado.`, { type: 'project', id }),
@@ -785,6 +790,7 @@ export const useDataStore = create<DataState>()(
             status: data.status,
             due_date: data.dueDate ?? null,
             member_ids: data.memberIds,
+            order,
           }),
         )
         return id
@@ -846,6 +852,19 @@ export const useDataStore = create<DataState>()(
         // Exclusão em cascata de chat_messages/files/tasks já é resolvida pelas
         // foreign keys "on delete cascade" no banco.
         fireAndForget(supabase.from('projects').delete().eq('id', id))
+      },
+      // Reordenação manual da lista — separada de updateProject porque não deve
+      // gerar a notificação de "projeto atualizado" nem tocar em mais nenhum campo.
+      reorderProjects: (orderedIds) => {
+        set((state) => ({
+          projects: state.projects.map((p) => {
+            const order = orderedIds.indexOf(p.id)
+            return order === -1 ? p : { ...p, order }
+          }),
+        }))
+        orderedIds.forEach((id, order) => {
+          fireAndForget(supabase.from('projects').update({ order }).eq('id', id))
+        })
       },
       addChatMessage: (projectId, authorId, text) => {
         const userId = useAuthStore.getState().currentUserId!
@@ -1183,7 +1202,7 @@ export const useDataStore = create<DataState>()(
 export function useWorkspaceProjects() {
   const projects = useDataStore((s) => s.projects)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
-  return projects.filter((p) => p.workspaceId === currentWorkspaceId)
+  return projects.filter((p) => p.workspaceId === currentWorkspaceId).sort((a, b) => a.order - b.order)
 }
 
 export function useWorkspaceTasks() {
