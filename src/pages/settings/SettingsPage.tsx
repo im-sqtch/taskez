@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
+import { ArrowLeft, Bell, ChevronRight, LogOut, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
@@ -6,10 +6,13 @@ import { Field } from '@/components/ui/Input'
 import { Sheet } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
 import { Switch } from '@/components/ui/Switch'
+import { NotificationPrefsSheet } from '@/components/settings/NotificationPrefsSheet'
 import { cn } from '@/lib/utils'
 import { isPushSubscribed, isPushSupported, subscribeToPush, unsubscribeFromPush } from '@/lib/push'
+import { NOTIFICATION_EVENT_KEYS, NOTIFICATION_EVENTS } from '@/lib/notificationCatalog'
 import { useAuthStore } from '@/store/authStore'
 import { confirmAction } from '@/store/confirmStore'
+import { useNotificationPrefsStore } from '@/store/notificationPrefsStore'
 import { useThemeStore } from '@/store/themeStore'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -54,11 +57,17 @@ export function SettingsPage() {
   const updateProfile = useAuthStore((s) => s.updateProfile)
   const theme = useThemeStore((s) => s.theme)
   const setTheme = useThemeStore((s) => s.setTheme)
+  const disabledEvents = useNotificationPrefsStore((s) => s.disabled)
 
   const [editOpen, setEditOpen] = useState(false)
+  const [prefsOpen, setPrefsOpen] = useState(false)
   const [name, setName] = useState(user?.name ?? '')
   const [notifEnabled, setNotifEnabled] = useState(false)
   const [notifBusy, setNotifBusy] = useState(false)
+
+  const activeEvents = NOTIFICATION_EVENT_KEYS.filter(
+    (event) => NOTIFICATION_EVENTS[event].alwaysOn || !disabledEvents[event],
+  ).length
 
   useEffect(() => {
     isPushSubscribed().then(setNotifEnabled)
@@ -154,7 +163,7 @@ export function SettingsPage() {
       </Section>
 
       <Section title="Notificações">
-        <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="flex items-center gap-3 border-b border-border-soft px-4 py-3.5">
           <Bell size={17} className="text-text-muted" />
           <div className="flex-1">
             <p className="text-sm font-medium text-text">Notificações push</p>
@@ -167,6 +176,17 @@ export function SettingsPage() {
             aria-label="Notificações push"
           />
         </div>
+        <Row
+          icon={<SlidersHorizontal size={17} />}
+          label="Tipos de notificação"
+          onClick={() => setPrefsOpen(true)}
+          trailing={
+            <span className="flex items-center gap-1 text-xs font-semibold text-text-faint">
+              {activeEvents} de {NOTIFICATION_EVENT_KEYS.length}
+              <ChevronRight size={15} />
+            </span>
+          }
+        />
       </Section>
 
       <Section title="Conta">
@@ -193,6 +213,8 @@ export function SettingsPage() {
       >
         <Field label="Nome" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
       </Sheet>
+
+      <NotificationPrefsSheet open={prefsOpen} onClose={() => setPrefsOpen(false)} />
     </div>
   )
 }

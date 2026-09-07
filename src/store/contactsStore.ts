@@ -103,14 +103,14 @@ export const useContactsStore = create<ContactsState>()((set, get) => ({
       set((state) => ({
         contacts: previous ? state.contacts.map((c) => (c.id === id ? previous : c)) : state.contacts,
       }))
-      useDataStore.getState().addNotification('system', 'Não foi possível aceitar o convite', 'Tente novamente em instantes.')
+      useDataStore.getState().addNotification('system.alert', 'Não foi possível aceitar o convite', 'Tente novamente em instantes.')
       return
     }
     if (previous && userId) {
       const otherId = previous.fromUserId === userId ? previous.toUserId : previous.fromUserId
       const other = get().profiles[otherId]
       if (other) {
-        useDataStore.getState().addNotification('team', 'Contato adicionado', `Você e ${other.name} agora são contatos.`)
+        useDataStore.getState().addNotification('team.contact', 'Contato adicionado', `Você e ${other.name} agora são contatos.`)
       }
     }
   },
@@ -122,7 +122,7 @@ export const useContactsStore = create<ContactsState>()((set, get) => ({
     if (error) {
       console.error('[contacts] falha ao recusar convite', error)
       set((state) => (previous && !state.contacts.some((c) => c.id === id) ? { contacts: [...state.contacts, previous] } : state))
-      useDataStore.getState().addNotification('system', 'Não foi possível recusar o convite', 'Tente novamente em instantes.')
+      useDataStore.getState().addNotification('system.alert', 'Não foi possível recusar o convite', 'Tente novamente em instantes.')
     }
   },
 }))
@@ -156,7 +156,7 @@ supabase
     if (p.eventType === 'UPDATE' && wasPending && contact.status === 'accepted' && contact.fromUserId === userId) {
       const accepter = fetched[otherId] ?? useContactsStore.getState().profiles[otherId]
       if (accepter) {
-        useDataStore.getState().addNotification('team', 'Convite aceito', `${accepter.name} aceitou seu convite de contato.`)
+        useDataStore.getState().addNotification('team.contact', 'Convite aceito', `${accepter.name} aceitou seu convite de contato.`)
       }
     }
   })
