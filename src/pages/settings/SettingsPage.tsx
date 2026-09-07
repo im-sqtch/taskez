@@ -10,6 +10,7 @@ import { NotificationPrefsSheet } from '@/components/settings/NotificationPrefsS
 import { cn } from '@/lib/utils'
 import { isPushSubscribed, isPushSupported, subscribeToPush, unsubscribeFromPush } from '@/lib/push'
 import { NOTIFICATION_EVENT_KEYS, NOTIFICATION_EVENTS } from '@/lib/notificationCatalog'
+import { UTC_OFFSETS, formatUtcOffset } from '@/lib/timezone'
 import { useAuthStore } from '@/store/authStore'
 import { confirmAction } from '@/store/confirmStore'
 import { useNotificationPrefsStore } from '@/store/notificationPrefsStore'
@@ -49,15 +50,13 @@ function Row({
   )
 }
 
-// A maioria dos navegadores já suporta Intl.supportedValuesOf; onde não
-// suportar, cai para o fuso detectado automaticamente no cadastro do usuário.
+// Lista fixa de offsets (UTC-12 a UTC+12). Se o valor salvo do usuário não
+// estiver nessa lista (ex.: conta antiga com fuso IANA), ele entra como opção
+// extra para não sumir do select até o usuário escolher um novo.
+const TIMEZONE_OPTIONS = UTC_OFFSETS.map(formatUtcOffset)
+
 function listTimezones(current: string): string[] {
-  try {
-    const all = Intl.supportedValuesOf('timeZone')
-    return all.includes(current) ? all : [current, ...all]
-  } catch {
-    return [current]
-  }
+  return TIMEZONE_OPTIONS.includes(current) ? TIMEZONE_OPTIONS : [current, ...TIMEZONE_OPTIONS]
 }
 
 export function SettingsPage() {

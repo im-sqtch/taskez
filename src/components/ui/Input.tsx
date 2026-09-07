@@ -1,5 +1,9 @@
 import type { InputHTMLAttributes, LabelHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
+import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
+
+// Altura máxima do campo antes de ele passar a rolar por dentro (~6 linhas).
+const TEXTAREA_MAX_HEIGHT = 160
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
@@ -33,14 +37,27 @@ interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
 }
 
-export function TextArea({ label, className, id, ...props }: TextAreaProps) {
+export function TextArea({ label, className, id, value, ...props }: TextAreaProps) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+
+  // Cresce com o conteúdo: zera a altura antes de medir para que o campo também
+  // encolha ao apagar linhas.
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT)}px`
+  }, [value])
+
   return (
     <label className="flex flex-col gap-1.5" htmlFor={id}>
       {label && <span className="text-sm font-medium text-text-muted">{label}</span>}
       <textarea
+        ref={ref}
         id={id}
+        value={value}
         className={cn(
-          'min-h-24 w-full resize-none rounded-2xl border border-border bg-surface px-4 py-3.5 text-[15px] text-text placeholder:text-text-faint outline-none transition-colors focus:border-accent',
+          'min-h-24 w-full resize-none overflow-y-auto rounded-2xl border border-border bg-surface px-4 py-3.5 text-[15px] leading-[22px] text-text placeholder:text-text-faint outline-none transition-colors focus:border-accent',
           className,
         )}
         {...props}

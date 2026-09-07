@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase'
+import { detectUtcOffset } from '@/lib/timezone'
 import { useDataStore } from '@/store/dataStore'
 import { useContactsStore } from '@/store/contactsStore'
 import type { UsageMode, User } from '@/types'
@@ -24,17 +25,6 @@ function mapProfile(row: ProfileRow): User {
     usageMode: row.usage_mode,
     timezone: row.timezone,
     createdAt: row.created_at,
-  }
-}
-
-// Fuso horário do dispositivo no momento do cadastro — o usuário não precisa
-// escolher nada, e pode ajustar depois em Configurações caso o dispositivo não
-// reflita onde ele realmente está.
-function detectTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone
-  } catch {
-    return 'UTC'
   }
 }
 
@@ -85,7 +75,7 @@ export const useAuthStore = create<AuthState>()(
         const { data, error } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: { data: { name: name.trim(), avatar_color: avatarColor, timezone: detectTimezone() } },
+          options: { data: { name: name.trim(), avatar_color: avatarColor, timezone: detectUtcOffset() } },
         })
         if (error) return { ok: false, error: translateAuthError(error.message) }
         if (data.user) {
