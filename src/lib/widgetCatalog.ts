@@ -1,4 +1,5 @@
 import {
+  CalendarDays,
   CheckSquare,
   Flame,
   FolderKanban,
@@ -35,6 +36,14 @@ export const WIDGET_CATALOG: Record<WidgetType, WidgetCatalogEntry> = {
     icon: CheckSquare,
     allowedSizes: ['S', 'M', 'L'],
     defaultSize: 'M',
+  },
+  calendar: {
+    type: 'calendar',
+    label: 'Calendário',
+    description: 'Prazos das tarefas por dia. Toque em um dia para ver a lista.',
+    icon: CalendarDays,
+    allowedSizes: ['S', 'M', 'L'],
+    defaultSize: 'L',
   },
   projects: {
     type: 'projects',

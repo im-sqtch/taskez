@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CustomizeDashboardSheet } from '@/components/dashboard/CustomizeDashboardSheet'
 import { DashboardToolbarCard } from '@/components/dashboard/DashboardToolbarCard'
 import { DashboardHeader } from '@/components/layout/DashboardHeader'
+import { CalendarWidget } from '@/components/widgets/CalendarWidget'
 import { ProfileCardWidget } from '@/components/widgets/ProfileCardWidget'
 import { ProjectsWidget } from '@/components/widgets/ProjectsWidget'
 import { ShortcutsWidget } from '@/components/widgets/ShortcutsWidget'
@@ -15,6 +16,7 @@ import type { WidgetSize, WidgetType } from '@/types'
 const widgetComponents: Record<WidgetType, React.ComponentType<{ size: WidgetSize }>> = {
   summary: SummaryWidget,
   tasks: TasksWidget,
+  calendar: CalendarWidget,
   projects: ProjectsWidget,
   team: TeamWidget,
   profile: ProfileCardWidget,

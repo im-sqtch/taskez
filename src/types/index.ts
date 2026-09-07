@@ -123,6 +123,7 @@ export interface Notification {
 export type WidgetType =
   | 'summary'
   | 'tasks'
+  | 'calendar'
   | 'projects'
   | 'profile'
   | 'team'
