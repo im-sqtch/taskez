@@ -19,6 +19,13 @@ export function dueDateKey(iso: string): string {
   return iso.slice(0, 10)
 }
 
+// Reconstrói o prazo como Date local à meia-noite do dia certo (ver dueDateKey
+// acima). Usar isso em vez de `new Date(iso)` em qualquer comparação/formatação
+// de prazo evita o mesmo problema de fuso horário.
+export function dueDateToLocalDate(iso: string): Date {
+  return keyToDate(dueDateKey(iso))
+}
+
 export function keyToDate(key: string): Date {
   const [year, month, day] = key.split('-').map(Number)
   return new Date(year!, month! - 1, day!)

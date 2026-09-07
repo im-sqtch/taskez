@@ -1,4 +1,5 @@
 import { clsx, type ClassValue } from 'clsx'
+import { dueDateToLocalDate } from './calendar'
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
@@ -12,10 +13,12 @@ export function initials(name: string) {
 
 export function formatDate(iso?: string) {
   if (!iso) return undefined
-  const date = new Date(iso)
+  // dueDateToLocalDate: nunca `new Date(iso)` direto, senão o dia exibido
+  // muda conforme o fuso horário do navegador (ver calendar.ts).
+  const date = dueDateToLocalDate(iso)
   const today = new Date()
   const diffDays = Math.round(
-    (date.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0)) / 86_400_000,
+    (date.getTime() - today.setHours(0, 0, 0, 0)) / 86_400_000,
   )
   if (diffDays === 0) return 'Hoje'
   if (diffDays === 1) return 'Amanhã'
@@ -25,7 +28,7 @@ export function formatDate(iso?: string) {
 
 export function isOverdue(iso?: string) {
   if (!iso) return false
-  const date = new Date(iso)
+  const date = dueDateToLocalDate(iso)
   date.setHours(23, 59, 59, 999)
   return date.getTime() < Date.now()
 }

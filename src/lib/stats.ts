@@ -1,3 +1,4 @@
+import { dueDateToLocalDate } from './calendar'
 import type { Task } from '@/types'
 
 function sameDay(a: Date, b: Date) {
@@ -6,16 +7,25 @@ function sameDay(a: Date, b: Date) {
 
 export function computeStats(tasks: Task[]) {
   const today = new Date()
-  const dueToday = tasks.filter((t) => t.status !== 'done' && t.dueDate && sameDay(new Date(t.dueDate), today))
+  // Prazos (dueDate) são "somente data": reconstrói via dueDateToLocalDate para
+  // não deslocar o dia conforme o fuso horário do navegador (ver calendar.ts).
+  // completedAt é um instante real, então new Date(...) direto está correto.
+  const dueToday = tasks.filter(
+    (t) => t.status !== 'done' && t.dueDate && sameDay(dueDateToLocalDate(t.dueDate), today),
+  )
   const overdue = tasks.filter(
-    (t) => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < today && !sameDay(new Date(t.dueDate), today),
+    (t) =>
+      t.status !== 'done' &&
+      t.dueDate &&
+      dueDateToLocalDate(t.dueDate) < today &&
+      !sameDay(dueDateToLocalDate(t.dueDate), today),
   )
   const completedToday = tasks.filter((t) => t.completedAt && sameDay(new Date(t.completedAt), today))
 
   const startOfWeek = new Date(today)
   startOfWeek.setDate(today.getDate() - today.getDay())
   startOfWeek.setHours(0, 0, 0, 0)
-  const dueThisWeek = tasks.filter((t) => t.dueDate && new Date(t.dueDate) >= startOfWeek)
+  const dueThisWeek = tasks.filter((t) => t.dueDate && dueDateToLocalDate(t.dueDate) >= startOfWeek)
   const doneThisWeek = dueThisWeek.filter((t) => t.status === 'done')
   const weekProgress = dueThisWeek.length === 0 ? 0 : Math.round((doneThisWeek.length / dueThisWeek.length) * 100)
 

@@ -153,6 +153,7 @@ export interface User {
   email: string
   avatarColor: string
   usageMode: UsageMode
+  timezone: string
   createdAt: string
 }
 

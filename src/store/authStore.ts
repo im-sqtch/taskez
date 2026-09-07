@@ -11,6 +11,7 @@ interface ProfileRow {
   email: string
   avatar_color: string
   usage_mode: UsageMode
+  timezone: string
   created_at: string
 }
 
@@ -21,7 +22,19 @@ function mapProfile(row: ProfileRow): User {
     email: row.email,
     avatarColor: row.avatar_color,
     usageMode: row.usage_mode,
+    timezone: row.timezone,
     createdAt: row.created_at,
+  }
+}
+
+// Fuso horário do dispositivo no momento do cadastro — o usuário não precisa
+// escolher nada, e pode ajustar depois em Configurações caso o dispositivo não
+// reflita onde ele realmente está.
+function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone
+  } catch {
+    return 'UTC'
   }
 }
 
@@ -51,7 +64,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
   logout: () => Promise<void>
   setUsageMode: (mode: UsageMode) => Promise<void>
-  updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor'>>) => Promise<void>
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor' | 'timezone'>>) => Promise<void>
   completeOnboarding: () => void
   deleteAccount: () => Promise<void>
   currentUser: () => User | undefined
@@ -72,7 +85,7 @@ export const useAuthStore = create<AuthState>()(
         const { data, error } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: { data: { name: name.trim(), avatar_color: avatarColor } },
+          options: { data: { name: name.trim(), avatar_color: avatarColor, timezone: detectTimezone() } },
         })
         if (error) return { ok: false, error: translateAuthError(error.message) }
         if (data.user) {
@@ -113,6 +126,7 @@ export const useAuthStore = create<AuthState>()(
         const updates: Record<string, string> = {}
         if (patch.name !== undefined) updates.name = patch.name
         if (patch.avatarColor !== undefined) updates.avatar_color = patch.avatarColor
+        if (patch.timezone !== undefined) updates.timezone = patch.timezone
         await supabase.from('profiles').update(updates).eq('id', id)
       },
 

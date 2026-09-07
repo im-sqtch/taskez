@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, ChevronRight, LogOut, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react'
+import { ArrowLeft, Bell, ChevronRight, Globe, LogOut, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
@@ -47,6 +47,17 @@ function Row({
       {trailing}
     </button>
   )
+}
+
+// A maioria dos navegadores já suporta Intl.supportedValuesOf; onde não
+// suportar, cai para o fuso detectado automaticamente no cadastro do usuário.
+function listTimezones(current: string): string[] {
+  try {
+    const all = Intl.supportedValuesOf('timeZone')
+    return all.includes(current) ? all : [current, ...all]
+  } catch {
+    return [current]
+  }
 }
 
 export function SettingsPage() {
@@ -159,6 +170,27 @@ export function SettingsPage() {
               Claro
             </button>
           </div>
+        </div>
+      </Section>
+
+      <Section title="Fuso horário">
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          <Globe size={17} className="text-text-muted" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-text">Fuso horário</p>
+            <p className="text-xs text-text-faint">Detectado automaticamente ao criar a conta.</p>
+          </div>
+          <select
+            value={user.timezone}
+            onChange={(e) => updateProfile({ timezone: e.target.value })}
+            className="max-w-[45%] rounded-lg bg-surface-alt px-2 py-1.5 text-right text-xs font-semibold text-text"
+          >
+            {listTimezones(user.timezone).map((tz) => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
+          </select>
         </div>
       </Section>
 

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { TaskKanban } from '@/components/tasks/TaskKanban'
 import { TaskRow } from '@/components/tasks/TaskRow'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { dueDateToLocalDate } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import { useWorkspaceTasks } from '@/store/dataStore'
 import type { TaskStatus } from '@/types'
@@ -34,13 +35,11 @@ export function TasksPage() {
     return tasks.filter((t) => {
       if (filter === 'today') {
         if (!t.dueDate) return false
-        const d = new Date(t.dueDate)
-        d.setHours(0, 0, 0, 0)
-        return d.getTime() === today.getTime()
+        return dueDateToLocalDate(t.dueDate).getTime() === today.getTime()
       }
       if (filter === 'overdue') {
         if (!t.dueDate || t.status === 'done') return false
-        return new Date(t.dueDate) < today
+        return dueDateToLocalDate(t.dueDate) < today
       }
       if (filter === 'done') return t.status === 'done'
       return true
