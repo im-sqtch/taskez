@@ -120,7 +120,7 @@ export function ProjectDetailPage() {
             {project.dueDate && <p className="text-sm text-text-faint">Prazo: {formatDate(project.dueDate)}</p>}
           </div>
         </div>
-        {project.description && <p className="text-sm text-text-muted">{project.description}</p>}
+        {project.description && <p className="whitespace-pre-wrap text-sm text-text-muted">{project.description}</p>}
         <div className="flex flex-col gap-1.5">
           <ProgressBar value={pct} color={project.color} />
           <p className="text-xs font-medium text-text-muted">{pct}% concluído · {done}/{tasks.length} tarefas</p>

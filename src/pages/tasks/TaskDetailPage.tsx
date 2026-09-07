@@ -121,7 +121,9 @@ export function TaskDetailPage() {
           )}
         </div>
 
-        {task.description && <p className="text-sm leading-relaxed text-text-muted">{task.description}</p>}
+        {task.description && (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-muted">{task.description}</p>
+        )}
         <LinksList links={task.links} />
       </div>
 
