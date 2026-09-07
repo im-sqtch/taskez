@@ -8,11 +8,12 @@ interface SheetProps {
   onClose: () => void
   title?: string
   subtitle?: string
+  headerAction?: ReactNode
   children: ReactNode
   footer?: ReactNode
 }
 
-export function Sheet({ open, onClose, title, subtitle, children, footer }: SheetProps) {
+export function Sheet({ open, onClose, title, subtitle, headerAction, children, footer }: SheetProps) {
   if (!open) return null
 
   return createPortal(
@@ -31,13 +32,16 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Shee
               <h2 className="text-lg font-bold text-text">{title}</h2>
               {subtitle && <p className="text-sm text-text-muted">{subtitle}</p>}
             </div>
-            <button
-              onClick={onClose}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
-              aria-label="Fechar"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {headerAction}
+              <button
+                onClick={onClose}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
         )}
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>

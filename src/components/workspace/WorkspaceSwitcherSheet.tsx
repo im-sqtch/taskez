@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Input'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn } from '@/lib/utils'
+import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
 import type { Workspace } from '@/types'
 
@@ -49,9 +50,13 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
 
   function handleDelete(workspace: Workspace, e: React.MouseEvent) {
     e.stopPropagation()
-    if (confirm(`Excluir o workspace "${workspace.name}"? Todos os projetos, tarefas e a equipe dele serão apagados.`)) {
-      deleteWorkspace(workspace.id)
-    }
+    confirmAction({
+      title: 'Excluir workspace',
+      description: `Excluir o workspace "${workspace.name}"? Todos os projetos, tarefas e a equipe dele serão apagados.`,
+      confirmLabel: 'Excluir',
+      danger: true,
+      onConfirm: () => deleteWorkspace(workspace.id),
+    })
   }
 
   function handleSubmit() {

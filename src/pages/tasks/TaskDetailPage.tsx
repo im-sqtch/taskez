@@ -5,8 +5,10 @@ import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
 import { Avatar } from '@/components/ui/Avatar'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { LinksList } from '@/components/ui/LinksField'
 import { cn, formatDate, isOverdue } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
+import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
 
 export function TaskDetailPage() {
@@ -40,10 +42,16 @@ export function TaskDetailPage() {
 
   function handleDelete() {
     if (!task) return
-    if (confirm(`Excluir a tarefa "${task.title}"?`)) {
-      deleteTask(task.id)
-      navigate(-1)
-    }
+    confirmAction({
+      title: 'Excluir tarefa',
+      description: `Excluir a tarefa "${task.title}"?`,
+      confirmLabel: 'Excluir',
+      danger: true,
+      onConfirm: () => {
+        deleteTask(task.id)
+        navigate(-1)
+      },
+    })
   }
 
   function handleAddSubtask() {
@@ -113,6 +121,7 @@ export function TaskDetailPage() {
         </div>
 
         {task.description && <p className="text-sm leading-relaxed text-text-muted">{task.description}</p>}
+        <LinksList links={task.links} />
       </div>
 
       <div className="flex flex-col gap-3 px-5">

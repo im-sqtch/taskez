@@ -55,6 +55,7 @@ interface ProjectRow {
   status: Project['status']
   due_date: string | null
   member_ids: string[]
+  links: string[]
   created_at: string
   order: number
 }
@@ -71,6 +72,7 @@ interface TaskRow {
   assignee_id: string | null
   subtasks: Subtask[]
   comments: Task['comments']
+  links: string[]
   created_at: string
   updated_at: string
   completed_at: string | null
@@ -105,6 +107,7 @@ function mapProject(row: ProjectRow): Project {
     status: row.status,
     dueDate: row.due_date ?? undefined,
     memberIds: row.member_ids ?? [],
+    links: row.links ?? [],
     createdAt: row.created_at,
     order: row.order,
   }
@@ -189,6 +192,7 @@ function mapTask(row: TaskRow): Task {
     assigneeId: row.assignee_id ?? undefined,
     subtasks: row.subtasks ?? [],
     comments: row.comments ?? [],
+    links: row.links ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at ?? undefined,
@@ -204,6 +208,7 @@ function projectPatchToRow(patch: Partial<Project>): Record<string, unknown> {
   if (patch.status !== undefined) row.status = patch.status
   if (patch.dueDate !== undefined) row.due_date = patch.dueDate ?? null
   if (patch.memberIds !== undefined) row.member_ids = patch.memberIds
+  if (patch.links !== undefined) row.links = patch.links
   if (patch.order !== undefined) row.order = patch.order
   return row
 }
@@ -219,6 +224,7 @@ function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
   if (patch.assigneeId !== undefined) row.assignee_id = patch.assigneeId ?? null
   if (patch.subtasks !== undefined) row.subtasks = patch.subtasks
   if (patch.comments !== undefined) row.comments = patch.comments
+  if (patch.links !== undefined) row.links = patch.links
   if (patch.completedAt !== undefined) row.completed_at = patch.completedAt ?? null
   return row
 }
@@ -790,6 +796,7 @@ export const useDataStore = create<DataState>()(
             status: data.status,
             due_date: data.dueDate ?? null,
             member_ids: data.memberIds,
+            links: data.links,
             order,
           }),
         )
@@ -963,6 +970,7 @@ export const useDataStore = create<DataState>()(
           assigneeId: data.assigneeId,
           subtasks: data.subtasks ?? [],
           comments: data.comments ?? [],
+          links: data.links ?? [],
           createdAt: now(),
           updatedAt: now(),
         }
@@ -993,6 +1001,7 @@ export const useDataStore = create<DataState>()(
             assignee_id: task.assigneeId ?? null,
             subtasks: task.subtasks,
             comments: task.comments,
+            links: task.links,
           }),
         )
         return id

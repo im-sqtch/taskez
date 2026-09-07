@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { formatBytes, formatDate } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
 import type { ProjectFile } from '@/types'
 
@@ -74,7 +75,13 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
   }
 
   function handleRemove(file: ProjectFile) {
-    if (confirm(`Excluir "${file.name}"?`)) removeFile(file.id)
+    confirmAction({
+      title: 'Excluir arquivo',
+      description: `Excluir "${file.name}"?`,
+      confirmLabel: 'Excluir',
+      danger: true,
+      onConfirm: () => removeFile(file.id),
+    })
   }
 
   return (

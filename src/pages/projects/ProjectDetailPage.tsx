@@ -10,8 +10,10 @@ import { TaskRow } from '@/components/tasks/TaskRow'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { LinksList } from '@/components/ui/LinksField'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { cn, formatDate } from '@/lib/utils'
+import { confirmAction } from '@/store/confirmStore'
 import { useDataStore, useWorkspaceTasks, useWorkspaceTeam } from '@/store/dataStore'
 
 const tabs = [
@@ -53,15 +55,30 @@ export function ProjectDetailPage() {
 
   function handleDelete() {
     if (!project) return
-    if (confirm(`Excluir o projeto "${project.name}"? As tarefas serão desvinculadas.`)) {
-      deleteProject(project.id)
-      navigate('/projects')
-    }
+    confirmAction({
+      title: 'Excluir projeto',
+      description: `Excluir o projeto "${project.name}"? As tarefas serão desvinculadas.`,
+      confirmLabel: 'Excluir',
+      danger: true,
+      onConfirm: () => {
+        deleteProject(project.id)
+        navigate('/projects')
+      },
+    })
   }
 
   function handleToggleArchive() {
     if (!project) return
-    updateProject(project.id, { status: project.status === 'archived' ? 'active' : 'archived' })
+    if (project.status === 'archived') {
+      updateProject(project.id, { status: 'active' })
+      return
+    }
+    confirmAction({
+      title: 'Arquivar projeto',
+      description: `Arquivar "${project.name}"? Ele sai da lista de ativos, mas pode ser restaurado depois.`,
+      confirmLabel: 'Arquivar',
+      onConfirm: () => updateProject(project.id, { status: 'archived' }),
+    })
   }
 
   function handleRemoveMember(memberId: string) {
@@ -146,6 +163,12 @@ export function ProjectDetailPage() {
                 <p className="text-xs text-text-faint">Concluídas</p>
               </div>
             </div>
+            {project.links.length > 0 && (
+              <div className="rounded-xl bg-surface p-4">
+                <p className="mb-2 text-sm font-semibold text-text">Links</p>
+                <LinksList links={project.links} />
+              </div>
+            )}
           </div>
         )}
 

@@ -29,6 +29,7 @@ export interface Task {
   assigneeId?: string
   subtasks: Subtask[]
   comments: Comment[]
+  links: string[]
   createdAt: string
   updatedAt: string
   completedAt?: string
@@ -44,6 +45,7 @@ export interface Project {
   status: ProjectStatus
   dueDate?: string
   memberIds: string[]
+  links: string[]
   createdAt: string
   order: number
 }

@@ -6,6 +6,7 @@ import { Sheet } from '@/components/ui/Sheet'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuthStore } from '@/store/authStore'
 import { usePendingInvites, useContactsStore } from '@/store/contactsStore'
+import { confirmAction } from '@/store/confirmStore'
 import { useDataStore, useWorkspaceNotifications } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
 import { cn } from '@/lib/utils'
@@ -59,24 +60,37 @@ export function NotificationsSheet() {
 
   function handleDelete(n: Notification) {
     setOpenMenuId(null)
-    if (confirm(`Apagar a notificação "${n.title}"?`)) deleteNotification(n.id)
+    confirmAction({
+      title: 'Apagar notificação',
+      description: `Apagar a notificação "${n.title}"?`,
+      confirmLabel: 'Apagar',
+      danger: true,
+      onConfirm: () => deleteNotification(n.id),
+    })
   }
 
   return (
-    <Sheet open={open} onClose={close} title="Notificações">
+    <Sheet
+      open={open}
+      onClose={close}
+      title="Notificações"
+      headerAction={
+        notifications.length > 0 && (
+          <button
+            onClick={markAllRead}
+            aria-label="Marcar tudo como lido"
+            title="Marcar tudo como lido"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white"
+          >
+            <CheckCheck size={18} />
+          </button>
+        )
+      }
+    >
       {isEmpty ? (
         <EmptyState icon={<Bell size={26} />} title="Nenhuma notificação" description="Você está em dia." />
       ) : (
         <div className="flex flex-col gap-2">
-          {notifications.length > 0 && (
-            <button
-              onClick={markAllRead}
-              className="mb-1 flex items-center gap-1.5 self-end text-xs font-semibold text-accent"
-            >
-              <CheckCheck size={14} /> Marcar tudo como lido
-            </button>
-          )}
-
           {pendingInvites.map(({ contact, fromUser }) => (
             <div key={contact.id} className="flex items-start gap-3 rounded-2xl bg-accent-soft p-3.5">
               <Avatar name={fromUser.name} color={fromUser.avatarColor} size="sm" />

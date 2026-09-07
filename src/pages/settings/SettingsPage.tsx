@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/Switch'
 import { cn } from '@/lib/utils'
 import { isPushSubscribed, isPushSupported, subscribeToPush, unsubscribeFromPush } from '@/lib/push'
 import { useAuthStore } from '@/store/authStore'
+import { confirmAction } from '@/store/confirmStore'
 import { useThemeStore } from '@/store/themeStore'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -86,17 +87,28 @@ export function SettingsPage() {
   }
 
   function handleLogout() {
-    if (confirm('Deseja sair da sua conta?')) {
-      logout()
-      navigate('/login')
-    }
+    confirmAction({
+      title: 'Sair da conta',
+      description: 'Deseja sair da sua conta?',
+      confirmLabel: 'Sair',
+      onConfirm: () => {
+        logout()
+        navigate('/login')
+      },
+    })
   }
 
   function handleDeleteAccount() {
-    if (confirm('Esta ação é permanente. Excluir sua conta e todos os dados?')) {
-      deleteAccount()
-      navigate('/login')
-    }
+    confirmAction({
+      title: 'Excluir conta',
+      description: 'Esta ação é permanente. Excluir sua conta e todos os dados?',
+      confirmLabel: 'Excluir conta',
+      danger: true,
+      onConfirm: () => {
+        deleteAccount()
+        navigate('/login')
+      },
+    })
   }
 
   return (
