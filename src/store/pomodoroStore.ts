@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 interface TimerState {
   secondsLeft: number
@@ -47,42 +48,68 @@ function playCompletionSound() {
   }
 }
 
-export const usePomodoroStore = create<PomodoroState>((set, get) => ({
-  timers: {},
-  start: (id, totalSeconds) => {
-    const current = getTimer(get(), id, totalSeconds)
-    const secondsLeft = current.secondsLeft > 0 ? current.secondsLeft : totalSeconds
-    set((state) => ({
-      timers: {
-        ...state.timers,
-        [id]: { secondsLeft, running: true, endAt: Date.now() + secondsLeft * 1000 },
+export const usePomodoroStore = create<PomodoroState>()(
+  persist(
+    (set, get) => ({
+      timers: {},
+      start: (id, totalSeconds) => {
+        const current = getTimer(get(), id, totalSeconds)
+        const secondsLeft = current.secondsLeft > 0 ? current.secondsLeft : totalSeconds
+        set((state) => ({
+          timers: {
+            ...state.timers,
+            [id]: { secondsLeft, running: true, endAt: Date.now() + secondsLeft * 1000 },
+          },
+        }))
       },
-    }))
-  },
-  pause: (id) => {
-    set((state) => {
-      const current = state.timers[id]
-      if (!current?.running) return state
-      const secondsLeft = current.endAt
-        ? Math.max(0, Math.round((current.endAt - Date.now()) / 1000))
-        : current.secondsLeft
-      return { timers: { ...state.timers, [id]: { secondsLeft, running: false, endAt: null } } }
-    })
-  },
-  toggle: (id, totalSeconds) => {
-    const current = getTimer(get(), id, totalSeconds)
-    if (current.running) {
-      get().pause(id)
-    } else {
-      get().start(id, totalSeconds)
-    }
-  },
-  reset: (id, totalSeconds) => {
-    set((state) => ({
-      timers: { ...state.timers, [id]: { secondsLeft: totalSeconds, running: false, endAt: null } },
-    }))
-  },
-}))
+      pause: (id) => {
+        set((state) => {
+          const current = state.timers[id]
+          if (!current?.running) return state
+          const secondsLeft = current.endAt
+            ? Math.max(0, Math.round((current.endAt - Date.now()) / 1000))
+            : current.secondsLeft
+          return { timers: { ...state.timers, [id]: { secondsLeft, running: false, endAt: null } } }
+        })
+      },
+      toggle: (id, totalSeconds) => {
+        const current = getTimer(get(), id, totalSeconds)
+        if (current.running) {
+          get().pause(id)
+        } else {
+          get().start(id, totalSeconds)
+        }
+      },
+      reset: (id, totalSeconds) => {
+        set((state) => ({
+          timers: { ...state.timers, [id]: { secondsLeft: totalSeconds, running: false, endAt: null } },
+        }))
+      },
+    }),
+    {
+      name: 'taskez-pomodoro',
+      // Ao reabrir o app/recarregar a página, o tempo que passou enquanto ele
+      // estava fechado precisa ser descontado silenciosamente (sem tocar o
+      // som de conclusão) — o loop de tick abaixo assumiria erroneamente que
+      // o timer acabou de terminar agora.
+      onRehydrateStorage: () => (state, error) => {
+        if (error || !state) return
+        const now = Date.now()
+        const timers = { ...state.timers }
+        let changed = false
+        for (const [id, timer] of Object.entries(timers)) {
+          if (timer.running && timer.endAt !== null) {
+            const secondsLeft = Math.max(0, Math.round((timer.endAt - now) / 1000))
+            timers[id] =
+              secondsLeft <= 0 ? { secondsLeft: 0, running: false, endAt: null } : { ...timer, secondsLeft }
+            changed = true
+          }
+        }
+        if (changed) usePomodoroStore.setState({ timers })
+      },
+    },
+  ),
+)
 
 // Loop único no nível do módulo (não em um efeito de componente), garantindo
 // que a contagem continue rodando mesmo enquanto o widget do Pomodoro está
