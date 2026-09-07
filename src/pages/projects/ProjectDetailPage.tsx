@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, ArrowLeft, Calendar, Pencil, Plus, Trash2, UserPlus, UserX, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowLeft, Calendar, CheckCircle2, Pencil, Plus, Trash2, UserPlus, UserX, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { InviteMemberSheet } from '@/components/projects/InviteMemberSheet'
@@ -52,6 +52,7 @@ export function ProjectDetailPage() {
   const done = tasks.filter((t) => t.status === 'done').length
   const pct = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100)
   const members = team.filter((m) => project.memberIds.includes(m.id))
+  const allTasksDone = tasks.length > 0 && done === tasks.length && project.status === 'active'
 
   function handleDelete() {
     if (!project) return
@@ -144,6 +145,23 @@ export function ProjectDetailPage() {
       <div className="px-5">
         {tab === 'overview' && (
           <div className="flex flex-col gap-3">
+            {allTasksDone && (
+              <div className="rounded-xl bg-success-soft p-4">
+                <div className="mb-1 flex items-center gap-2">
+                  <CheckCircle2 size={18} className="shrink-0 text-success" />
+                  <p className="text-sm font-semibold text-text">Todas as tarefas do projeto foram concluídas</p>
+                </div>
+                <p className="mb-3 text-sm text-text-muted">Deseja marcar esse projeto como concluído ou mantê-lo em ativos?</p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => updateProject(project.id, { status: 'completed' })}>
+                    Concluir o projeto
+                  </Button>
+                  <Button variant="secondary" size="sm">
+                    Manter em ativos
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="rounded-xl bg-surface p-4">
               <p className="mb-2 text-sm font-semibold text-text">Membros</p>
               <div className="flex -space-x-2">
