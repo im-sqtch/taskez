@@ -1,6 +1,6 @@
 import {
-  CalendarClock,
   CheckSquare,
+  Flame,
   FolderKanban,
   LayoutGrid,
   Sparkles,
@@ -71,9 +71,9 @@ export const WIDGET_CATALOG: Record<WidgetType, WidgetCatalogEntry> = {
   },
   utility: {
     type: 'utility',
-    label: 'Calendário & Foco',
-    description: 'Pomodoro, sua sequência de dias e a semana atual.',
-    icon: CalendarClock,
+    label: 'Sequência & Foco',
+    description: 'Sua sequência de dias e timers de pomodoro e descanso.',
+    icon: Flame,
     allowedSizes: ['S', 'M', 'L'],
     defaultSize: 'M',
   },

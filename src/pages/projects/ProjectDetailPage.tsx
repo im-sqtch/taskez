@@ -1,4 +1,4 @@
-import { ArrowLeft, Calendar, Pencil, Plus, Trash2, UserPlus, UserX, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowLeft, Calendar, Pencil, Plus, Trash2, UserPlus, UserX, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { InviteMemberSheet } from '@/components/projects/InviteMemberSheet'
@@ -59,6 +59,11 @@ export function ProjectDetailPage() {
     }
   }
 
+  function handleToggleArchive() {
+    if (!project) return
+    updateProject(project.id, { status: project.status === 'archived' ? 'active' : 'archived' })
+  }
+
   function handleRemoveMember(memberId: string) {
     if (!project) return
     updateProject(project.id, { memberIds: project.memberIds.filter((id) => id !== memberId) })
@@ -73,6 +78,13 @@ export function ProjectDetailPage() {
         <div className="flex gap-2">
           <button onClick={() => setEditOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
             <Pencil size={16} />
+          </button>
+          <button
+            onClick={handleToggleArchive}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted"
+            aria-label={project.status === 'archived' ? 'Desarquivar projeto' : 'Arquivar projeto'}
+          >
+            {project.status === 'archived' ? <ArchiveRestore size={16} /> : <Archive size={16} />}
           </button>
           <button onClick={handleDelete} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-danger">
             <Trash2 size={16} />

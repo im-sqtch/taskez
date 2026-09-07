@@ -75,22 +75,20 @@ export function TasksPage() {
         </div>
       </header>
 
-      {view === 'list' && (
-        <div className="flex gap-2 overflow-x-auto px-5">
-          {filters.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setFilter(f.value)}
-              className={cn(
-                'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-                filter === f.value ? 'bg-accent text-white' : 'bg-surface text-text-muted',
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex gap-2 overflow-x-auto px-5">
+        {filters.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setFilter(f.value)}
+            className={cn(
+              'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+              filter === f.value ? 'bg-accent text-white' : 'bg-surface text-text-muted',
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
       {filtered.length === 0 ? (
         <div className="px-5">

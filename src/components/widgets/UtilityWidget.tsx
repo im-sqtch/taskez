@@ -1,48 +1,9 @@
 import { Flame, Pause, Play, RotateCcw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Card } from '@/components/ui/Card'
-import { cn } from '@/lib/utils'
 import { computeStats } from '@/lib/stats'
 import { useWorkspaceTasks } from '@/store/dataStore'
 import type { WidgetSize } from '@/types'
-
-const WEEKDAY_LETTERS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
-const POMODORO_SECONDS = 25 * 60
-
-function sameDay(a: Date, b: Date) {
-  return a.toDateString() === b.toDateString()
-}
-
-function WeekStrip() {
-  const today = new Date()
-  const startOfWeek = new Date(today)
-  startOfWeek.setDate(today.getDate() - today.getDay())
-
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(startOfWeek)
-    d.setDate(startOfWeek.getDate() + i)
-    return d
-  })
-
-  return (
-    <div className="flex justify-between gap-1">
-      {days.map((day, i) => {
-        const isToday = sameDay(day, today)
-        return (
-          <div
-            key={i}
-            className={cn('flex flex-1 flex-col items-center gap-1 rounded-lg py-2', isToday && 'bg-accent-soft')}
-          >
-            <span className={cn('text-[11px] font-medium text-text-faint', isToday && 'text-accent')}>
-              {WEEKDAY_LETTERS[day.getDay()]}
-            </span>
-            <span className={cn('text-sm font-bold text-text', isToday && 'text-accent')}>{day.getDate()}</span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 function StreakRow({ streak }: { streak: number }) {
   return (
@@ -56,10 +17,10 @@ function StreakRow({ streak }: { streak: number }) {
   )
 }
 
-// Timer simples de sessão de foco: roda apenas enquanto o widget está montado
-// (sem persistência entre navegações ou fechamento do app).
-function PomodoroTimer() {
-  const [secondsLeft, setSecondsLeft] = useState(POMODORO_SECONDS)
+// Timer simples de sessão (pomodoro ou descanso): roda apenas enquanto o widget
+// está montado (sem persistência entre navegações ou fechamento do app).
+function FocusTimer({ label, totalSeconds }: { label: string; totalSeconds: number }) {
+  const [secondsLeft, setSecondsLeft] = useState(totalSeconds)
   const [running, setRunning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -88,7 +49,7 @@ function PomodoroTimer() {
   return (
     <div className="flex items-center justify-between rounded-xl bg-surface-alt px-4 py-3">
       <div>
-        <p className="text-xs font-semibold text-text-muted">Pomodoro</p>
+        <p className="text-xs font-semibold text-text-muted">{label}</p>
         <p className="text-2xl font-bold tabular-nums text-text">
           {minutes}:{seconds}
         </p>
@@ -96,7 +57,7 @@ function PomodoroTimer() {
       <div className="flex gap-2">
         <button
           onClick={() => {
-            setSecondsLeft(POMODORO_SECONDS)
+            setSecondsLeft(totalSeconds)
             setRunning(false)
           }}
           className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted"
@@ -121,11 +82,19 @@ export function UtilityWidget({ size }: { size: WidgetSize }) {
   const tasks = useWorkspaceTasks()
   const stats = computeStats(tasks)
 
+  if (size === 'S') {
+    return (
+      <Card className="flex flex-col gap-3.5">
+        <StreakRow streak={stats.streak} />
+      </Card>
+    )
+  }
+
   return (
     <Card className="flex flex-col gap-3.5">
-      {size === 'L' && <WeekStrip />}
-      {size !== 'S' && <StreakRow streak={stats.streak} />}
-      <PomodoroTimer />
+      {size === 'L' && <StreakRow streak={stats.streak} />}
+      <FocusTimer label="Pomodoro" totalSeconds={25 * 60} />
+      <FocusTimer label="Descanso" totalSeconds={5 * 60} />
     </Card>
   )
 }
