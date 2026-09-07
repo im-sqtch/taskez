@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, LogOut, Moon, Sun, Trash2, User, Users } from 'lucide-react'
+import { ArrowLeft, Bell, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
@@ -167,11 +167,6 @@ export function SettingsPage() {
             aria-label="Notificações push"
           />
         </div>
-      </Section>
-
-      <Section title="Workspace">
-        <Row icon={<Users size={17} />} label="Gerenciar workspaces" onClick={() => alert('Em breve: múltiplos workspaces.')} />
-        <Row icon={<User size={17} />} label="Modo de uso" onClick={() => navigate('/usage-picker')} />
       </Section>
 
       <Section title="Conta">
