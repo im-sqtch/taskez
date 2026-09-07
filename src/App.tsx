@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
+import { ConfirmDialog } from '@/components/layout/ConfirmDialog'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignupPage } from '@/pages/auth/SignupPage'
 import { UsagePickerPage } from '@/pages/auth/UsagePickerPage'
@@ -59,6 +60,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ConfirmDialog />
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/onboarding" element={<OnboardingPage />} />

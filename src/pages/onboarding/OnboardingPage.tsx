@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
+import { confirmAction } from '@/store/confirmStore'
 
 const slides = [
   {
@@ -46,6 +47,15 @@ export function OnboardingPage() {
     navigate('/signup')
   }
 
+  function handleSkip() {
+    confirmAction({
+      title: 'Pular apresentação',
+      description: 'Você não vai ver essa apresentação de novo ao abrir o app.',
+      confirmLabel: 'Não mostrar novamente',
+      onConfirm: finish,
+    })
+  }
+
   function next() {
     if (isLast) finish()
     else setIndex((i) => i + 1)
@@ -73,7 +83,7 @@ export function OnboardingPage() {
     >
       <div className="flex justify-end">
         {!isLast && (
-          <button onClick={finish} className="text-sm font-semibold text-text-muted">
+          <button onClick={handleSkip} className="text-sm font-semibold text-text-muted">
             Pular
           </button>
         )}

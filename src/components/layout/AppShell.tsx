@@ -1,5 +1,4 @@
 import { Outlet } from 'react-router-dom'
-import { ConfirmDialog } from '@/components/layout/ConfirmDialog'
 import { QuickCreateSheet } from '@/components/layout/QuickCreateSheet'
 import { TabBar } from '@/components/layout/TabBar'
 import { NotificationsSheet } from '@/components/layout/NotificationsSheet'
@@ -15,7 +14,6 @@ export function AppShell() {
       <QuickCreateSheet />
       <NotificationsSheet />
       <SearchOverlay />
-      <ConfirmDialog />
     </div>
   )
 }
