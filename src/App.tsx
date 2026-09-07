@@ -43,6 +43,7 @@ function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
 export default function App() {
   const theme = useThemeStore((s) => s.theme)
   const authReady = useAuthStore((s) => s.authReady)
+  const hasHydrated = useAuthStore((s) => s.hasHydrated)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -50,8 +51,11 @@ export default function App() {
 
   // Aguarda a sessão do Supabase ser restaurada (assíncrono) antes de decidir para
   // onde navegar — sem isso, um usuário já logado piscaria a tela de login por um
-  // instante a cada recarregamento da página.
-  if (!authReady) return null
+  // instante a cada recarregamento da página. Também aguarda a reidratação do
+  // localStorage (hasSeenOnboarding): ela é assíncrona, então sem esperar por ela
+  // o app manda o usuário de volta pro onboarding a cada abertura, mesmo já tendo
+  // pulado antes.
+  if (!authReady || !hasHydrated) return null
 
   return (
     <BrowserRouter>

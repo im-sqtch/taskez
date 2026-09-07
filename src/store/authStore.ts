@@ -45,6 +45,7 @@ interface AuthState {
   profile: User | null
   authReady: boolean
   hasSeenOnboarding: boolean
+  hasHydrated: boolean
 
   signup: (name: string, email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
   login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
@@ -63,6 +64,7 @@ export const useAuthStore = create<AuthState>()(
       profile: null,
       authReady: false,
       hasSeenOnboarding: false,
+      hasHydrated: false,
 
       signup: async (name, email, password) => {
         const normalizedEmail = email.trim().toLowerCase()
@@ -129,6 +131,13 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'taskez-auth',
       partialize: (state) => ({ hasSeenOnboarding: state.hasSeenOnboarding }),
+      // A reidratação do localStorage é assíncrona (mesmo sendo um storage síncrono,
+      // o zustand a agenda como uma promise) — sem isto, o primeiro render acontece
+      // com hasSeenOnboarding ainda no valor padrão (false) e manda o usuário de
+      // volta pro onboarding a cada abertura do app, mesmo já tendo pulado antes.
+      onRehydrateStorage: () => () => {
+        useAuthStore.setState({ hasHydrated: true })
+      },
     },
   ),
 )

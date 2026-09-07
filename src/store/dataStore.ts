@@ -1199,9 +1199,7 @@ export function useWorkspaceTeam() {
 }
 
 export function useWorkspaceNotifications() {
-  const notifications = useDataStore((s) => s.notifications)
-  const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
-  return notifications.filter((n) => n.workspaceId === currentWorkspaceId || n.workspaceId === undefined)
+  return useDataStore((s) => s.notifications)
 }
 
 export function useCurrentWorkspace() {
