@@ -131,16 +131,21 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'taskez-auth',
       partialize: (state) => ({ hasSeenOnboarding: state.hasSeenOnboarding }),
-      // A reidratação do localStorage é assíncrona (mesmo sendo um storage síncrono,
-      // o zustand a agenda como uma promise) — sem isto, o primeiro render acontece
-      // com hasSeenOnboarding ainda no valor padrão (false) e manda o usuário de
-      // volta pro onboarding a cada abertura do app, mesmo já tendo pulado antes.
-      onRehydrateStorage: () => () => {
-        useAuthStore.setState({ hasHydrated: true })
-      },
     },
   ),
 )
+
+// Marca quando a reidratação do localStorage termina, para a UI poder aguardá-la
+// (ver App.tsx) em vez de renderizar com hasSeenOnboarding ainda no valor padrão
+// (false) e mandar o usuário de volta pro onboarding a cada abertura do app.
+// Precisa ficar FORA do `persist(...)` acima: como localStorage é síncrono, o
+// zustand resolve essa reidratação de forma síncrona, ainda durante o `create()` —
+// ou seja, antes de `useAuthStore` terminar de ser atribuída. Um `onRehydrateStorage`
+// que referenciasse `useAuthStore` ali dentro cairia num ReferenceError de TDZ
+// (silenciosamente engolido pelo próprio zustand), deixando hasHydrated travado em
+// false para sempre — e a tela do app permanentemente em branco.
+useAuthStore.persist.onFinishHydration(() => useAuthStore.setState({ hasHydrated: true }))
+if (useAuthStore.persist.hasHydrated()) useAuthStore.setState({ hasHydrated: true })
 
 supabase.auth.onAuthStateChange((_event, session) => {
   const userId = session?.user?.id ?? null
