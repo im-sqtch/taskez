@@ -20,7 +20,12 @@ function RootRedirect() {
   const hasSeenOnboarding = useAuthStore((s) => s.hasSeenOnboarding)
   const currentUserId = useAuthStore((s) => s.currentUserId)
 
-  if (!hasSeenOnboarding) return <Navigate to="/onboarding" replace />
+  // O sinalizador "já viu o onboarding" mora só no localStorage do aparelho, que o
+  // iOS pode apagar de PWAs instalados mesmo com a sessão de login ainda válida.
+  // Só é possível ter uma sessão logada tendo passado pelo onboarding antes (é a
+  // única porta de entrada pra /login e /signup) — então uma sessão ativa já vale
+  // como prova disso, sem depender desse valor ter sobrevivido no dispositivo.
+  if (!hasSeenOnboarding && !currentUserId) return <Navigate to="/onboarding" replace />
   if (!currentUserId) return <Navigate to="/login" replace />
   return <Navigate to="/dashboard" replace />
 }
