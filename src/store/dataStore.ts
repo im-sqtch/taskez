@@ -60,6 +60,7 @@ interface ProjectRow {
   links: string[]
   created_at: string
   order: number
+  completion_ack: boolean
 }
 
 interface TaskRow {
@@ -112,6 +113,7 @@ function mapProject(row: ProjectRow): Project {
     links: row.links ?? [],
     createdAt: row.created_at,
     order: row.order,
+    completionAck: row.completion_ack,
   }
 }
 
@@ -212,6 +214,7 @@ function projectPatchToRow(patch: Partial<Project>): Record<string, unknown> {
   if (patch.memberIds !== undefined) row.member_ids = patch.memberIds
   if (patch.links !== undefined) row.links = patch.links
   if (patch.order !== undefined) row.order = patch.order
+  if (patch.completionAck !== undefined) row.completion_ack = patch.completionAck
   return row
 }
 
@@ -233,6 +236,19 @@ function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
 
 function getSelfMember(team: TeamMember[]): TeamMember | undefined {
   return team.find((m) => m.isSelf)
+}
+
+// Reabrir uma tarefa quebra o "100% concluído" que levou o projeto a ficar
+// concluído (ou a ter a decisão de "manter em ativos" registrada) — o projeto
+// volta a ativos e a próxima conclusão total volta a pedir uma decisão nova.
+function reactivateProjectOnTaskReopened(get: () => DataState, projectId: string | undefined) {
+  if (!projectId) return
+  const project = get().projects.find((p) => p.id === projectId)
+  if (!project) return
+  const patch: Partial<Project> = {}
+  if (project.status === 'completed') patch.status = 'active'
+  if (project.completionAck) patch.completionAck = false
+  if (Object.keys(patch).length > 0) get().updateProject(projectId, patch)
 }
 
 // Notificações são sempre por destinatário. Para eventos de workspace (tarefa
@@ -354,7 +370,7 @@ interface DataState {
   addTeamMember: (data: { name: string; role: string; avatarColor: string; linkedUserId?: string }) => void
 
   // Projects
-  addProject: (data: Omit<Project, 'id' | 'workspaceId' | 'createdAt' | 'order'>) => string
+  addProject: (data: Omit<Project, 'id' | 'workspaceId' | 'createdAt' | 'order' | 'completionAck'>) => string
   updateProject: (id: string, patch: Partial<Project>) => void
   deleteProject: (id: string) => void
   reorderProjects: (orderedIds: string[]) => void
@@ -791,7 +807,7 @@ export const useDataStore = create<DataState>()(
         const userId = useAuthStore.getState().currentUserId!
         const order = Math.max(-1, ...get().projects.filter((p) => p.workspaceId === workspaceId).map((p) => p.order)) + 1
         set((state) => ({
-          projects: [...state.projects, { ...data, id, workspaceId, createdAt: now(), order }],
+          projects: [...state.projects, { ...data, id, workspaceId, createdAt: now(), order, completionAck: false }],
           notifications: appendNotification(
             state.notifications,
             makeNotification(userId, workspaceId, 'project.created', 'Projeto criado', `"${data.name}" foi criado.`, { type: 'project', id }),
@@ -1045,6 +1061,7 @@ export const useDataStore = create<DataState>()(
       },
       updateTask: (id, patch) => {
         const userId = useAuthStore.getState().currentUserId!
+        const taskBeforePatch = get().tasks.find((t) => t.id === id)
         set((state) => {
           const existing = state.tasks.find((t) => t.id === id)
           const notifications = [...state.notifications]
@@ -1071,6 +1088,9 @@ export const useDataStore = create<DataState>()(
           }
         })
         fireAndForget(supabase.from('tasks').update({ ...taskPatchToRow(patch), updated_at: now() }).eq('id', id))
+        if (taskBeforePatch?.status === 'done' && patch.status !== undefined && patch.status !== 'done') {
+          reactivateProjectOnTaskReopened(get, taskBeforePatch.projectId)
+        }
       },
       deleteTask: (id) => {
         set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) }))
@@ -1096,6 +1116,9 @@ export const useDataStore = create<DataState>()(
             : state.notifications,
         }))
         fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
+        if (!becomingDone) {
+          reactivateProjectOnTaskReopened(get, task.projectId)
+        }
       },
       setTaskStatus: (id, status) => {
         const task = get().tasks.find((t) => t.id === id)
@@ -1116,6 +1139,9 @@ export const useDataStore = create<DataState>()(
               : state.notifications,
         }))
         fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
+        if (task?.status === 'done' && status !== 'done') {
+          reactivateProjectOnTaskReopened(get, task.projectId)
+        }
       },
       addSubtask: (taskId, title) => {
         let nextSubtasks: Subtask[] = []

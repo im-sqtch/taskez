@@ -48,6 +48,7 @@ export interface Project {
   links: string[]
   createdAt: string
   order: number
+  completionAck: boolean
 }
 
 export interface TeamMember {

@@ -153,10 +153,18 @@ export function ProjectDetailPage() {
                 </div>
                 <p className="mb-3 text-sm text-text-muted">Deseja marcar esse projeto como concluído ou mantê-lo em ativos?</p>
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={() => updateProject(project.id, { status: 'completed' })}>
+                  <Button
+                    variant={project.completionAck ? 'secondary' : 'primary'}
+                    size="sm"
+                    onClick={() => updateProject(project.id, { status: 'completed' })}
+                  >
                     Concluir o projeto
                   </Button>
-                  <Button variant="secondary" size="sm">
+                  <Button
+                    variant={project.completionAck ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={() => updateProject(project.id, { completionAck: true })}
+                  >
                     Manter em ativos
                   </Button>
                 </div>
