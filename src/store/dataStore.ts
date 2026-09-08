@@ -1368,8 +1368,15 @@ export function useWorkspaceTasks() {
 
 export function useWorkspaceTeam() {
   const team = useDataStore((s) => s.team)
+  const tasks = useDataStore((s) => s.tasks)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
-  return team.filter((m) => m.workspaceId === currentWorkspaceId)
+  const members = team.filter((m) => m.workspaceId === currentWorkspaceId)
+  const activeTasks = tasks.filter((t) => t.workspaceId === currentWorkspaceId && t.status !== 'done')
+  const totalActive = activeTasks.length
+  return members.map((m) => ({
+    ...m,
+    workload: totalActive === 0 ? 0 : Math.round((activeTasks.filter((t) => t.assigneeId === m.id).length / totalActive) * 100),
+  }))
 }
 
 export function useWorkspaceFiles() {
