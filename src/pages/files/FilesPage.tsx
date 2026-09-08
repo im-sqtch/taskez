@@ -128,9 +128,17 @@ export function FilesPage() {
                     <p className="text-xs text-text-faint">
                       {formatBytes(file.size)} · {formatDate(file.createdAt)}
                     </p>
-                    <p className="truncate text-xs text-text-faint">
-                      {projectNames.length > 0 ? projectNames.join(', ') : 'Nenhum projeto'}
-                    </p>
+                    {projectNames.length > 0 ? (
+                      <div className="mt-0.5 flex flex-col gap-0.5">
+                        {projectNames.map((name) => (
+                          <p key={name} className="truncate text-xs text-text-faint">
+                            {name}
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-text-faint">Nenhum projeto</p>
+                    )}
                   </div>
                   <button
                     onClick={() => handleDownload(file)}
