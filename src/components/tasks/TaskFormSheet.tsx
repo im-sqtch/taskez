@@ -1,13 +1,18 @@
-import { Plus, UserX, X } from 'lucide-react'
+import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, FolderKanban, Plus, UserX, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
 import { LinksField, withDraft } from '@/components/ui/LinksField'
 import { Sheet } from '@/components/ui/Sheet'
+import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, monthGrid } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import { useDataStore, useWorkspaceProjects, useWorkspaceTeam } from '@/store/dataStore'
 import type { Priority, Task } from '@/types'
+
+function formatShortDate(key: string): string {
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(keyToDate(key)).replace('.', '')
+}
 
 interface TaskFormSheetProps {
   open: boolean
@@ -39,6 +44,9 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
   const [subtaskInput, setSubtaskInput] = useState('')
   const [links, setLinks] = useState<string[]>([])
   const [linkDraft, setLinkDraft] = useState('')
+  const [dueSheetOpen, setDueSheetOpen] = useState(false)
+  const [projectSheetOpen, setProjectSheetOpen] = useState(false)
+  const [calendarCursor, setCalendarCursor] = useState(() => new Date())
 
   useEffect(() => {
     if (!open) return
@@ -48,6 +56,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     setProjectId(task?.projectId ?? defaultProjectId)
     setAssigneeId(task?.assigneeId)
     setDueDate(task?.dueDate ? task.dueDate.slice(0, 10) : '')
+    setCalendarCursor(task?.dueDate ? keyToDate(task.dueDate.slice(0, 10)) : new Date())
     setSubtasks(task?.subtasks.map((s) => s.title) ?? [])
     setSubtaskInput('')
     setLinks(task?.links ?? [])
@@ -83,6 +92,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
   }
 
   return (
+    <>
     <Sheet
       open={open}
       onClose={onClose}
@@ -172,30 +182,30 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
 
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
-            <FieldLabel htmlFor="task-due">Prazo</FieldLabel>
-            <input
-              id="task-due"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="h-13 rounded-2xl border border-border bg-surface px-3.5 text-sm text-text outline-none focus:border-accent"
-            />
+            <FieldLabel>Prazo</FieldLabel>
+            <button
+              type="button"
+              onClick={() => setDueSheetOpen(true)}
+              className="flex h-13 items-center gap-2 rounded-2xl border border-border bg-surface px-3.5 text-left text-sm text-text outline-none transition-colors focus:border-accent"
+            >
+              <CalendarIcon size={16} className="shrink-0 text-text-faint" />
+              <span className={cn('flex-1 truncate', !dueDate && 'text-text-faint')}>
+                {dueDate ? formatShortDate(dueDate) : 'Nenhum'}
+              </span>
+            </button>
           </div>
           <div className="flex flex-col gap-1.5">
-            <FieldLabel htmlFor="task-project">Projeto</FieldLabel>
-            <select
-              id="task-project"
-              value={projectId ?? ''}
-              onChange={(e) => setProjectId(e.target.value || undefined)}
-              className="h-13 rounded-2xl border border-border bg-surface px-3.5 text-sm text-text outline-none focus:border-accent"
+            <FieldLabel>Projeto</FieldLabel>
+            <button
+              type="button"
+              onClick={() => setProjectSheetOpen(true)}
+              className="flex h-13 items-center gap-2 rounded-2xl border border-border bg-surface px-3.5 text-left text-sm text-text outline-none transition-colors focus:border-accent"
             >
-              <option value="">Nenhum</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              <FolderKanban size={16} className="shrink-0 text-text-faint" />
+              <span className={cn('flex-1 truncate', !projectId && 'text-text-faint')}>
+                {projects.find((p) => p.id === projectId)?.name ?? 'Nenhum'}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -237,5 +247,120 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
         )}
       </div>
     </Sheet>
+
+    <Sheet
+      open={dueSheetOpen}
+      onClose={() => setDueSheetOpen(false)}
+      title="Prazo"
+      headerAction={
+        dueDate ? (
+          <button
+            onClick={() => {
+              setDueDate('')
+              setDueSheetOpen(false)
+            }}
+            className="rounded-full px-2.5 py-1 text-xs font-semibold text-text-muted hover:text-danger"
+          >
+            Remover
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-text">{formatMonthTitle(calendarCursor)}</h3>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCalendarCursor((c) => addMonths(c, -1))}
+              aria-label="Mês anterior"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => setCalendarCursor((c) => addMonths(c, 1))}
+              aria-label="Próximo mês"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-7">
+          {WEEKDAY_LABELS.map((label, i) => (
+            <span key={i} className="pb-1 text-center text-[11px] font-semibold uppercase text-text-faint">
+              {label}
+            </span>
+          ))}
+          {monthGrid(calendarCursor).map((date) => {
+            const key = dateKey(date)
+            const selected = key === dueDate
+            const muted = date.getMonth() !== calendarCursor.getMonth()
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  setDueDate(key)
+                  setDueSheetOpen(false)
+                }}
+                className="flex items-center justify-center py-1"
+              >
+                <span
+                  className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-full text-sm tabular-nums transition-colors',
+                    selected && 'bg-accent font-bold text-white',
+                    !selected && muted && 'text-text-faint',
+                    !selected && !muted && 'font-medium text-text',
+                  )}
+                >
+                  {date.getDate()}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </Sheet>
+
+    <Sheet open={projectSheetOpen} onClose={() => setProjectSheetOpen(false)} title="Projeto">
+      <div className="flex flex-col gap-1.5">
+        <button
+          onClick={() => {
+            setProjectId(undefined)
+            setProjectSheetOpen(false)
+          }}
+          className={cn(
+            'flex items-center justify-between rounded-xl px-3.5 py-3 text-left text-sm font-medium transition-colors',
+            !projectId ? 'bg-accent-soft text-accent' : 'text-text',
+          )}
+        >
+          Nenhum
+          {!projectId && <Check size={16} />}
+        </button>
+        {projects.map((p) => {
+          const isCurrent = p.id === projectId
+          return (
+            <button
+              key={p.id}
+              onClick={() => {
+                setProjectId(p.id)
+                setProjectSheetOpen(false)
+              }}
+              className={cn(
+                'flex items-center justify-between rounded-xl px-3.5 py-3 text-left text-sm font-medium transition-colors',
+                isCurrent ? 'bg-accent-soft text-accent' : 'text-text',
+              )}
+            >
+              <span className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
+                {p.name}
+              </span>
+              {isCurrent && <Check size={16} />}
+            </button>
+          )
+        })}
+      </div>
+    </Sheet>
+    </>
   )
 }
