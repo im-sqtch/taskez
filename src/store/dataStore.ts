@@ -154,7 +154,7 @@ interface NotificationRow {
 interface ProjectFileRow {
   id: string
   workspace_id: string
-  project_id: string
+  project_ids: string[]
   name: string
   size: number
   type: string
@@ -185,7 +185,7 @@ function mapProjectFile(row: ProjectFileRow): ProjectFile {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
-    projectId: row.project_id,
+    projectIds: row.project_ids ?? [],
     name: row.name,
     size: row.size,
     type: row.type,
@@ -389,6 +389,8 @@ interface DataState {
   addChatMessage: (projectId: string, authorId: string, text: string) => void
   addFile: (data: Omit<ProjectFile, 'id' | 'createdAt'>) => void
   removeFile: (id: string) => void
+  linkFileToProject: (fileId: string, projectId: string) => void
+  unlinkFileFromProject: (fileId: string, projectId: string) => void
 
   // Tasks
   addTask: (data: Partial<Task> & { title: string }) => string
@@ -761,7 +763,7 @@ export const useDataStore = create<DataState>()(
             team: state.team.filter((m) => m.workspaceId !== id),
             notifications: state.notifications.filter((n) => n.workspaceId !== id),
             chatMessages: state.chatMessages.filter((m) => !projectIds.has(m.projectId)),
-            files: state.files.filter((f) => !projectIds.has(f.projectId)),
+            files: state.files.filter((f) => f.workspaceId !== id),
           }
         })
         // Exclusão em cascata (workspace_members/team_members/projects/tasks) já é
@@ -890,13 +892,17 @@ export const useDataStore = create<DataState>()(
       },
       deleteProject: (id) => {
         const userId = useAuthStore.getState().currentUserId!
+        let unlinkedFiles: ProjectFile[] = []
         set((state) => {
           const project = state.projects.find((p) => p.id === id)
+          unlinkedFiles = state.files.filter((f) => f.projectIds.includes(id))
           return {
             projects: state.projects.filter((p) => p.id !== id),
             tasks: state.tasks.map((t) => (t.projectId === id ? { ...t, projectId: undefined } : t)),
             chatMessages: state.chatMessages.filter((m) => m.projectId !== id),
-            files: state.files.filter((f) => f.projectId !== id),
+            // Arquivo não é apagado por só ter esse projeto excluído — ele fica "sem
+            // projeto" e continua acessível na tela geral de Arquivos.
+            files: state.files.map((f) => (f.projectIds.includes(id) ? { ...f, projectIds: f.projectIds.filter((pid) => pid !== id) } : f)),
             notifications: project
               ? appendNotification(
                   state.notifications,
@@ -905,9 +911,18 @@ export const useDataStore = create<DataState>()(
               : state.notifications,
           }
         })
-        // Exclusão em cascata de chat_messages/files/tasks já é resolvida pelas
-        // foreign keys "on delete cascade" no banco.
+        // Exclusão em cascata de chat_messages/tasks já é resolvida pelas foreign
+        // keys "on delete cascade" no banco; arquivos não têm mais FK para projeto
+        // (viram um array), então o vínculo é removido explicitamente aqui.
         fireAndForget(supabase.from('projects').delete().eq('id', id))
+        for (const file of unlinkedFiles) {
+          fireAndForget(
+            supabase
+              .from('files')
+              .update({ project_ids: file.projectIds.filter((pid) => pid !== id) })
+              .eq('id', file.id),
+          )
+        }
       },
       // Reordenação manual da lista — separada de updateProject porque não deve
       // gerar a notificação de "projeto atualizado" nem tocar em mais nenhum campo.
@@ -957,25 +972,24 @@ export const useDataStore = create<DataState>()(
         const id = uuid()
         const createdAt = now()
         set((state) => {
-          const project = state.projects.find((p) => p.id === data.projectId)
-          return {
-            files: [...state.files, { ...data, id, createdAt }],
-            notifications: project
-              ? appendNotification(
-                  state.notifications,
-                  makeNotification(userId, project.workspaceId, 'project.file_added', 'Novo arquivo', `"${data.name}" foi enviado em "${project.name}".`, {
-                    type: 'project',
-                    id: project.id,
-                  }),
-                )
-              : state.notifications,
+          const linkedProjects = state.projects.filter((p) => data.projectIds.includes(p.id))
+          let notifications = state.notifications
+          for (const project of linkedProjects) {
+            notifications = appendNotification(
+              notifications,
+              makeNotification(userId, project.workspaceId, 'project.file_added', 'Novo arquivo', `"${data.name}" foi enviado em "${project.name}".`, {
+                type: 'project',
+                id: project.id,
+              }),
+            )
           }
+          return { files: [...state.files, { ...data, id, createdAt }], notifications }
         })
         fireAndForget(
           supabase.from('files').insert({
             id,
             workspace_id: data.workspaceId,
-            project_id: data.projectId,
+            project_ids: data.projectIds,
             name: data.name,
             size: data.size,
             type: data.type,
@@ -990,27 +1004,59 @@ export const useDataStore = create<DataState>()(
         const storagePath = get().files.find((f) => f.id === id)?.storagePath
         set((state) => {
           const file = state.files.find((f) => f.id === id)
-          const project = file ? state.projects.find((p) => p.id === file.projectId) : undefined
-          return {
-            files: state.files.filter((f) => f.id !== id),
-            notifications:
-              file && project
-                ? appendNotification(
-                    state.notifications,
-                    makeNotification(
-                      userId,
-                      project.workspaceId,
-                      'project.file_removed',
-                      'Arquivo excluído',
-                      `"${file.name}" foi excluído de "${project.name}".`,
-                      { type: 'project', id: project.id },
-                    ),
-                  )
-                : state.notifications,
+          const linkedProjects = file ? state.projects.filter((p) => file.projectIds.includes(p.id)) : []
+          let notifications = state.notifications
+          for (const project of linkedProjects) {
+            notifications = appendNotification(
+              notifications,
+              makeNotification(
+                userId,
+                project.workspaceId,
+                'project.file_removed',
+                'Arquivo excluído',
+                `"${file!.name}" foi excluído de "${project.name}".`,
+                { type: 'project', id: project.id },
+              ),
+            )
           }
+          return { files: state.files.filter((f) => f.id !== id), notifications }
         })
         fireAndForget(supabase.from('files').delete().eq('id', id))
         if (storagePath) fireAndForget(supabase.storage.from('project-files').remove([storagePath]))
+      },
+      linkFileToProject: (fileId, projectId) => {
+        const userId = useAuthStore.getState().currentUserId!
+        let nextIds: string[] = []
+        set((state) => {
+          const file = state.files.find((f) => f.id === fileId)
+          const project = state.projects.find((p) => p.id === projectId)
+          if (!file || !project || file.projectIds.includes(projectId)) {
+            nextIds = file?.projectIds ?? []
+            return state
+          }
+          nextIds = [...file.projectIds, projectId]
+          return {
+            files: state.files.map((f) => (f.id === fileId ? { ...f, projectIds: nextIds } : f)),
+            notifications: appendNotification(
+              state.notifications,
+              makeNotification(userId, project.workspaceId, 'project.file_added', 'Novo arquivo', `"${file.name}" foi vinculado a "${project.name}".`, {
+                type: 'project',
+                id: project.id,
+              }),
+            ),
+          }
+        })
+        fireAndForget(supabase.from('files').update({ project_ids: nextIds }).eq('id', fileId))
+      },
+      unlinkFileFromProject: (fileId, projectId) => {
+        let nextIds: string[] = []
+        set((state) => {
+          const file = state.files.find((f) => f.id === fileId)
+          if (!file) return state
+          nextIds = file.projectIds.filter((id) => id !== projectId)
+          return { files: state.files.map((f) => (f.id === fileId ? { ...f, projectIds: nextIds } : f)) }
+        })
+        fireAndForget(supabase.from('files').update({ project_ids: nextIds }).eq('id', fileId))
       },
 
       addTask: (data) => {
@@ -1324,6 +1370,12 @@ export function useWorkspaceTeam() {
   const team = useDataStore((s) => s.team)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
   return team.filter((m) => m.workspaceId === currentWorkspaceId)
+}
+
+export function useWorkspaceFiles() {
+  const files = useDataStore((s) => s.files)
+  const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
+  return files.filter((f) => f.workspaceId === currentWorkspaceId)
 }
 
 export function useWorkspaceNotifications() {

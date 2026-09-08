@@ -94,7 +94,7 @@ export interface ChatMessage {
 export interface ProjectFile {
   id: string
   workspaceId: string
-  projectId: string
+  projectIds: string[]
   name: string
   size: number
   type: string

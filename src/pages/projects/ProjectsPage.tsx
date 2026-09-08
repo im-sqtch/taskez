@@ -1,4 +1,4 @@
-import { FolderKanban, Plus, SlidersHorizontal } from 'lucide-react'
+import { FolderKanban, Plus, SlidersHorizontal, Upload } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ProjectFormSheet } from '@/components/projects/ProjectFormSheet'
@@ -45,6 +45,13 @@ export function ProjectsPage() {
             aria-label="Ordenar projetos"
           >
             <SlidersHorizontal size={18} />
+          </button>
+          <button
+            onClick={() => navigate('/files')}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-alt text-text"
+            aria-label="Enviar arquivo"
+          >
+            <Upload size={18} />
           </button>
           <button
             onClick={() => setFormOpen(true)}

@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignupPage } from '@/pages/auth/SignupPage'
 import { UsagePickerPage } from '@/pages/auth/UsagePickerPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
+import { FilesPage } from '@/pages/files/FilesPage'
 import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 import { ProfilePage } from '@/pages/profile/ProfilePage'
 import { ProjectDetailPage } from '@/pages/projects/ProjectDetailPage'
@@ -104,6 +105,7 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
+          <Route path="/files" element={<FilesPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/tasks/:id" element={<TaskDetailPage />} />
           <Route path="/profile" element={<ProfilePage />} />

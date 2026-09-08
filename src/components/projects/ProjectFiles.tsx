@@ -1,7 +1,8 @@
-import { Download, File, FileText, Image, Paperclip, Trash2, Upload } from 'lucide-react'
+import { Download, File, FileText, Image, Paperclip, Search, Unlink, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { FindFileSheet } from '@/components/projects/FindFileSheet'
 import { formatBytes, formatDate } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -21,15 +22,16 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
   const project = useDataStore((s) => s.projects.find((p) => p.id === projectId))
   const allFiles = useDataStore((s) => s.files)
   const addFile = useDataStore((s) => s.addFile)
-  const removeFile = useDataStore((s) => s.removeFile)
+  const unlinkFileFromProject = useDataStore((s) => s.unlinkFileFromProject)
   const currentUser = useAuthStore((s) => s.currentUser())
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
 
   const files = allFiles
-    .filter((f) => f.projectId === projectId)
+    .filter((f) => f.projectIds.includes(projectId))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -53,7 +55,7 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
     }
     addFile({
       workspaceId: project.workspaceId,
-      projectId,
+      projectIds: [projectId],
       name: file.name,
       size: file.size,
       type: file.type || 'application/octet-stream',
@@ -74,29 +76,33 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
     window.open(data.signedUrl, '_blank')
   }
 
-  function handleRemove(file: ProjectFile) {
+  function handleUnlink(file: ProjectFile) {
     confirmAction({
-      title: 'Excluir arquivo',
-      description: `Excluir "${file.name}"?`,
-      confirmLabel: 'Excluir',
+      title: 'Remover arquivo do projeto',
+      description: `Remover "${file.name}" deste projeto? O arquivo continua disponível na tela geral de Arquivos.`,
+      confirmLabel: 'Remover',
       danger: true,
-      onConfirm: () => removeFile(file.id),
+      onConfirm: () => unlinkFileFromProject(file.id, projectId),
     })
   }
 
   return (
     <div className="flex flex-col gap-3">
       <input ref={inputRef} type="file" onChange={handleFileChange} className="hidden" />
-      <Button
-        variant="secondary"
-        size="sm"
-        icon={<Upload size={15} />}
-        onClick={() => inputRef.current?.click()}
-        disabled={uploading}
-        className="self-start"
-      >
-        {uploading ? 'Enviando...' : 'Enviar arquivo'}
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Upload size={15} />}
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? 'Enviando...' : 'Enviar arquivo'}
+        </Button>
+        <Button variant="secondary" size="sm" icon={<Search size={15} />} onClick={() => setFindOpen(true)}>
+          Encontrar arquivo
+        </Button>
+      </div>
       <p className="text-xs text-text-faint">Até {formatBytes(MAX_FILE_SIZE)} por arquivo, visível para toda a equipe do workspace.</p>
       {error && <p className="text-xs font-medium text-danger">{error}</p>}
 
@@ -126,17 +132,19 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
                   <Download size={16} />
                 </button>
                 <button
-                  onClick={() => handleRemove(file)}
+                  onClick={() => handleUnlink(file)}
                   className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-danger"
-                  aria-label={`Excluir ${file.name}`}
+                  aria-label={`Remover ${file.name} deste projeto`}
                 >
-                  <Trash2 size={16} />
+                  <Unlink size={16} />
                 </button>
               </div>
             )
           })}
         </div>
       )}
+
+      <FindFileSheet open={findOpen} onClose={() => setFindOpen(false)} projectId={projectId} excludeFileIds={files.map((f) => f.id)} />
     </div>
   )
 }
