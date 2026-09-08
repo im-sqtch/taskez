@@ -23,6 +23,18 @@ import type {
 
 const now = () => new Date().toISOString()
 
+// Com 2+ subtarefas, o status da tarefa reflete o progresso delas: nenhuma
+// concluída ainda é "a fazer", algumas (mas não todas) concluídas já é "em
+// progresso". Tarefa concluída manualmente não é reaberta por isso.
+function deriveStatusFromSubtasks(current: TaskStatus, subtasks: Subtask[]): TaskStatus {
+  if (current === 'done') return current
+  if (subtasks.length < 2) return current
+  const doneCount = subtasks.filter((s) => s.done).length
+  if (doneCount === 0) return 'todo'
+  if (doneCount < subtasks.length) return 'in_progress'
+  return current
+}
+
 // ============================================================
 // Mapeamento linha do Postgres (snake_case) <-> tipos do app (camelCase)
 // ============================================================
@@ -1145,36 +1157,46 @@ export const useDataStore = create<DataState>()(
       },
       addSubtask: (taskId, title) => {
         let nextSubtasks: Subtask[] = []
+        let nextStatus: TaskStatus | undefined
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t
             nextSubtasks = [...t.subtasks, { id: uuid(), title, done: false }]
-            return { ...t, subtasks: nextSubtasks, updatedAt: now() }
+            nextStatus = deriveStatusFromSubtasks(t.status, nextSubtasks)
+            return { ...t, subtasks: nextSubtasks, status: nextStatus, updatedAt: now() }
           }),
         }))
-        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, updated_at: now() }).eq('id', taskId))
+        fireAndForget(
+          supabase.from('tasks').update({ subtasks: nextSubtasks, status: nextStatus, updated_at: now() }).eq('id', taskId),
+        )
       },
       toggleSubtask: (taskId, subtaskId) => {
         let nextSubtasks: Subtask[] = []
+        let nextStatus: TaskStatus | undefined
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t
             nextSubtasks = t.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s))
-            return { ...t, subtasks: nextSubtasks, updatedAt: now() }
+            nextStatus = deriveStatusFromSubtasks(t.status, nextSubtasks)
+            return { ...t, subtasks: nextSubtasks, status: nextStatus, updatedAt: now() }
           }),
         }))
-        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, updated_at: now() }).eq('id', taskId))
+        fireAndForget(
+          supabase.from('tasks').update({ subtasks: nextSubtasks, status: nextStatus, updated_at: now() }).eq('id', taskId),
+        )
       },
       removeSubtask: (taskId, subtaskId) => {
         let nextSubtasks: Subtask[] = []
+        let nextStatus: TaskStatus | undefined
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t
             nextSubtasks = t.subtasks.filter((s) => s.id !== subtaskId)
-            return { ...t, subtasks: nextSubtasks }
+            nextStatus = deriveStatusFromSubtasks(t.status, nextSubtasks)
+            return { ...t, subtasks: nextSubtasks, status: nextStatus }
           }),
         }))
-        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks }).eq('id', taskId))
+        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, status: nextStatus }).eq('id', taskId))
       },
       addComment: (taskId, authorId, text) => {
         const userId = useAuthStore.getState().currentUserId!

@@ -155,7 +155,10 @@ export function CalendarWidget({ size }: { size: WidgetSize }) {
               <p className="text-xs text-text-faint">{formatFullDate(today)}</p>
             </div>
           </div>
-          <p className="text-lg font-bold text-text">{pendingCount}</p>
+          <div className="flex flex-col items-end">
+            <p className="text-lg font-bold text-text">{pendingCount}</p>
+            <p className="text-[11px] text-text-faint">{pendingCount === 1 ? 'tarefa' : 'tarefas'}</p>
+          </div>
         </button>
         {expanded}
       </Card>
