@@ -24,15 +24,15 @@ import type {
 const now = () => new Date().toISOString()
 
 // Com 2+ subtarefas, o status da tarefa reflete o progresso delas: nenhuma
-// concluída ainda é "a fazer", algumas (mas não todas) concluídas já é "em
-// progresso". Tarefa concluída manualmente não é reaberta por isso.
+// concluída ainda é "a fazer"; havendo alguma concluída — mesmo que sejam
+// todas — a tarefa em si só é "concluída" quando marcada manualmente, então
+// enquanto isso não acontece ela fica "em progresso".
 function deriveStatusFromSubtasks(current: TaskStatus, subtasks: Subtask[]): TaskStatus {
   if (current === 'done') return current
   if (subtasks.length < 2) return current
   const doneCount = subtasks.filter((s) => s.done).length
   if (doneCount === 0) return 'todo'
-  if (doneCount < subtasks.length) return 'in_progress'
-  return current
+  return 'in_progress'
 }
 
 // ============================================================
