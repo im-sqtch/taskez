@@ -1,14 +1,19 @@
-import { Check } from 'lucide-react'
+import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
 import { LinksField, withDraft } from '@/components/ui/LinksField'
 import { Sheet } from '@/components/ui/Sheet'
+import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, monthGrid } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import { useDataStore, useWorkspaceTeam } from '@/store/dataStore'
 import { useAuthStore } from '@/store/authStore'
 import type { Project } from '@/types'
+
+function formatShortDate(key: string): string {
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(keyToDate(key)).replace('.', '')
+}
 
 interface ProjectFormSheetProps {
   open: boolean
@@ -32,6 +37,8 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
   const [memberIds, setMemberIds] = useState<string[]>([])
   const [links, setLinks] = useState<string[]>([])
   const [linkDraft, setLinkDraft] = useState('')
+  const [dueSheetOpen, setDueSheetOpen] = useState(false)
+  const [calendarCursor, setCalendarCursor] = useState(() => new Date())
 
   useEffect(() => {
     if (!open) return
@@ -39,6 +46,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
     setDescription(project?.description ?? '')
     setColor(project?.color ?? COLORS[0]!)
     setDueDate(project?.dueDate ? project.dueDate.slice(0, 10) : '')
+    setCalendarCursor(project?.dueDate ? keyToDate(project.dueDate.slice(0, 10)) : new Date())
     const selfId = team.find((m) => m.isSelf)?.id
     setMemberIds(project?.memberIds ?? (currentUser && selfId ? [selfId] : []))
     setLinks(project?.links ?? [])
@@ -76,6 +84,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
   }
 
   return (
+    <>
     <Sheet
       open={open}
       onClose={onClose}
@@ -102,14 +111,17 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
         />
         <LinksField links={links} onChange={setLinks} draft={linkDraft} onDraftChange={setLinkDraft} />
         <div className="flex flex-col gap-1.5">
-          <FieldLabel htmlFor="project-due">Prazo (opcional)</FieldLabel>
-          <input
-            id="project-due"
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="h-13 rounded-2xl border border-border bg-surface px-3.5 text-sm text-text outline-none focus:border-accent"
-          />
+          <FieldLabel>Prazo (opcional)</FieldLabel>
+          <button
+            type="button"
+            onClick={() => setDueSheetOpen(true)}
+            className="flex h-13 items-center gap-2 rounded-2xl border border-border bg-surface px-3.5 text-left text-sm text-text outline-none transition-colors focus:border-accent"
+          >
+            <CalendarIcon size={16} className="shrink-0 text-text-faint" />
+            <span className={cn('flex-1 truncate', !dueDate && 'text-text-faint')}>
+              {dueDate ? formatShortDate(dueDate) : 'Nenhum'}
+            </span>
+          </button>
         </div>
         <div className="flex flex-col gap-2">
           <FieldLabel>Cor</FieldLabel>
@@ -162,5 +174,80 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
         </div>
       </div>
     </Sheet>
+
+    <Sheet
+      open={dueSheetOpen}
+      onClose={() => setDueSheetOpen(false)}
+      title="Prazo"
+      headerAction={
+        dueDate ? (
+          <button
+            onClick={() => {
+              setDueDate('')
+              setDueSheetOpen(false)
+            }}
+            className="rounded-full px-2.5 py-1 text-xs font-semibold text-text-muted hover:text-danger"
+          >
+            Remover
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-text">{formatMonthTitle(calendarCursor)}</h3>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCalendarCursor((c) => addMonths(c, -1))}
+              aria-label="Mês anterior"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => setCalendarCursor((c) => addMonths(c, 1))}
+              aria-label="Próximo mês"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-7">
+          {WEEKDAY_LABELS.map((label, i) => (
+            <span key={i} className="pb-1 text-center text-[11px] font-semibold uppercase text-text-faint">
+              {label}
+            </span>
+          ))}
+          {monthGrid(calendarCursor).map((date) => {
+            const key = dateKey(date)
+            const selected = key === dueDate
+            const muted = date.getMonth() !== calendarCursor.getMonth()
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  setDueDate(key)
+                  setDueSheetOpen(false)
+                }}
+                className="flex items-center justify-center py-1"
+              >
+                <span
+                  className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-full text-sm tabular-nums transition-colors',
+                    selected && 'bg-accent font-bold text-white',
+                    !selected && muted && 'text-text-faint',
+                    !selected && !muted && 'font-medium text-text',
+                  )}
+                >
+                  {date.getDate()}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </Sheet>
+    </>
   )
 }
