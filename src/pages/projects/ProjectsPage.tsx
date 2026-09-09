@@ -1,4 +1,4 @@
-import { FolderKanban, Plus, SlidersHorizontal, Upload } from 'lucide-react'
+import { FolderKanban, Plus, Repeat, SlidersHorizontal, Upload } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ProjectFormSheet } from '@/components/projects/ProjectFormSheet'
@@ -103,7 +103,10 @@ export function ProjectsPage() {
                       <FolderKanban size={18} />
                     </div>
                     <div>
-                      <p className="font-semibold text-text">{p.name}</p>
+                      <p className="flex items-center gap-1.5 font-semibold text-text">
+                        {p.name}
+                        {p.recurrence && <Repeat size={12} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
+                      </p>
                       {p.dueDate && <p className="text-xs text-text-faint">Prazo: {formatDate(p.dueDate)}</p>}
                     </div>
                   </div>

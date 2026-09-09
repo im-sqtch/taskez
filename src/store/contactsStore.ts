@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
+import { fireAndForget, supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useDataStore } from '@/store/dataStore'
 import type { Contact } from '@/types'
@@ -42,6 +42,23 @@ interface ContactsState {
   inviteContact: (fromUserId: string, email: string) => Promise<{ ok: true } | { ok: false; error: string }>
   acceptContact: (id: string) => Promise<void>
   declineContact: (id: string) => Promise<void>
+  removeContact: (id: string) => Promise<void>
+}
+
+// Notifica a outra ponta de um evento de contato diretamente no banco (não via
+// `dataStore.addNotification`, que sempre grava para o usuário atual e filtra
+// pelas preferências *locais* deste dispositivo — irrelevantes para notificar
+// outra pessoa). O insert já dispara push de verdade via trigger no banco.
+function notifyOtherUser(userId: string, title: string, body: string) {
+  fireAndForget(
+    supabase.from('notifications').insert({
+      id: uuid(),
+      user_id: userId,
+      type: 'team',
+      title,
+      body,
+    }),
+  )
 }
 
 export const useContactsStore = create<ContactsState>()((set, get) => ({
@@ -72,6 +89,11 @@ export const useContactsStore = create<ContactsState>()((set, get) => ({
     if (toUser.id === fromUserId) {
       return { ok: false, error: 'Você não pode adicionar a si mesmo.' }
     }
+    // Resincroniza antes de checar duplicidade: o cache local pode estar
+    // desatualizado (ex.: um convite foi aceito enquanto este dispositivo
+    // estava sem receber o evento realtime), o que faria a checagem abaixo
+    // bloquear um reenvio legítimo com uma mensagem errada.
+    await get().fetchContacts()
     const existing = get().contacts.find(
       (c) =>
         (c.fromUserId === fromUserId && c.toUserId === toUser.id) ||
@@ -85,7 +107,21 @@ export const useContactsStore = create<ContactsState>()((set, get) => ({
       contacts: [...state.contacts, { id, fromUserId, toUserId: toUser.id, status: 'pending', createdAt: new Date().toISOString() }],
       profiles: { ...state.profiles, [toUser.id]: { id: toUser.id, name: toUser.name, email: normalizedEmail, avatarColor: toUser.avatar_color } },
     }))
-    await supabase.from('contacts').insert({ id, from_user_id: fromUserId, to_user_id: toUser.id, status: 'pending' })
+    const { error } = await supabase.from('contacts').insert({ id, from_user_id: fromUserId, to_user_id: toUser.id, status: 'pending' })
+    if (error) {
+      set((state) => ({ contacts: state.contacts.filter((c) => c.id !== id) }))
+      if (error.code === '23505') {
+        await get().fetchContacts()
+        return { ok: false, error: 'Já existe um convite ou contato com essa pessoa.' }
+      }
+      return { ok: false, error: 'Não foi possível enviar o convite. Tente novamente.' }
+    }
+    // Grava a notificação de quem convida direto no banco, endereçada à outra
+    // pessoa — só assim ela recebe push mesmo se estiver com o app fechado
+    // (o realtime sozinho só entrega se o app dela estiver aberto e conectado
+    // naquele exato momento).
+    const fromName = useAuthStore.getState().profile?.name ?? 'Alguém'
+    notifyOtherUser(toUser.id, 'Novo convite de contato', `${fromName} quer te adicionar como contato.`)
     return { ok: true }
   },
 
@@ -111,6 +147,10 @@ export const useContactsStore = create<ContactsState>()((set, get) => ({
       const other = get().profiles[otherId]
       if (other) {
         useDataStore.getState().addNotification('team.contact', 'Contato adicionado', `Você e ${other.name} agora são contatos.`)
+        // Notifica quem convidou diretamente no banco — se ele estiver offline
+        // no momento do aceite, o evento realtime nunca chegaria e o contato
+        // ficaria "pending" para sempre no lado dele.
+        notifyOtherUser(otherId, 'Convite aceito', `${other.name} aceitou seu convite de contato.`)
       }
     }
   },
@@ -123,6 +163,20 @@ export const useContactsStore = create<ContactsState>()((set, get) => ({
       console.error('[contacts] falha ao recusar convite', error)
       set((state) => (previous && !state.contacts.some((c) => c.id === id) ? { contacts: [...state.contacts, previous] } : state))
       useDataStore.getState().addNotification('system.alert', 'Não foi possível recusar o convite', 'Tente novamente em instantes.')
+    }
+  },
+
+  // Desfaz um contato já aceito (ver removeTeamMember/leaveWorkspace em
+  // dataStore.ts para a checagem de "ainda é membro de uma workspace minha"
+  // que deve rodar antes de chamar isto).
+  removeContact: async (id) => {
+    const previous = get().contacts.find((c) => c.id === id)
+    set((state) => ({ contacts: state.contacts.filter((c) => c.id !== id) }))
+    const { error } = await supabase.from('contacts').delete().eq('id', id)
+    if (error) {
+      console.error('[contacts] falha ao remover contato', error)
+      set((state) => (previous && !state.contacts.some((c) => c.id === id) ? { contacts: [...state.contacts, previous] } : state))
+      useDataStore.getState().addNotification('system.alert', 'Não foi possível remover o contato', 'Tente novamente em instantes.')
     }
   },
 }))
@@ -143,7 +197,10 @@ supabase
     const otherId = contact.fromUserId === userId ? contact.toUserId : contact.fromUserId
     const alreadyKnown = Boolean(useContactsStore.getState().profiles[otherId])
     const fetched = alreadyKnown ? {} : await fetchContactProfiles([otherId])
-    const wasPending = useContactsStore.getState().contacts.find((c) => c.id === contact.id)?.status === 'pending'
+    // A notificação de "convite aceito" já é gravada direto no banco por
+    // `acceptContact` (endereçada a quem convidou, independente dele estar
+    // online) — aqui só reconciliamos o estado local para refletir a mudança
+    // na hora, sem duplicar a notificação.
     useContactsStore.setState((state) => {
       const exists = state.contacts.some((c) => c.id === contact.id)
       return {
@@ -151,16 +208,22 @@ supabase
         profiles: { ...state.profiles, ...fetched },
       }
     })
-    // Quem enviou o convite fica sabendo quando o outro lado aceita — chega aqui via
-    // realtime (o `acceptContact` roda no navegador de quem aceitou, não no meu).
-    if (p.eventType === 'UPDATE' && wasPending && contact.status === 'accepted' && contact.fromUserId === userId) {
-      const accepter = fetched[otherId] ?? useContactsStore.getState().profiles[otherId]
-      if (accepter) {
-        useDataStore.getState().addNotification('team.contact', 'Convite aceito', `${accepter.name} aceitou seu convite de contato.`)
-      }
-    }
   })
-  .subscribe()
+  .subscribe((status) => {
+    // Reconectar depois de uma queda pode ter perdido eventos que aconteceram
+    // enquanto o canal estava fora do ar (o Realtime não faz replay) — refaz
+    // a leitura completa para nunca deixar o cache local preso desatualizado.
+    if (status === 'SUBSCRIBED') void useContactsStore.getState().fetchContacts()
+  })
+
+// Segunda rede de segurança: se o app ficou em background/fechado no momento
+// em que um convite chegou ou foi aceito, o realtime pode nunca ter entregue
+// o evento. Ao voltar ao primeiro plano, resincroniza.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void useContactsStore.getState().fetchContacts()
+  })
+}
 
 // Convites pendentes recebidos por este usuário (aguardando aceitar/recusar),
 // já resolvidos com os dados de quem convidou.

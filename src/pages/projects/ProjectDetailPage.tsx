@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, ArrowLeft, Calendar, CheckCircle2, Pencil, Plus, Trash2, UserPlus, UserX, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowLeft, Calendar, CheckCircle2, Pencil, Plus, Repeat, Trash2, UserPlus, UserX, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { InviteMemberSheet } from '@/components/projects/InviteMemberSheet'
@@ -116,7 +116,10 @@ export function ProjectDetailPage() {
             <Calendar size={20} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-text">{project.name}</h1>
+            <h1 className="flex items-center gap-1.5 text-xl font-bold text-text">
+              {project.name}
+              {project.recurrence && <Repeat size={15} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
+            </h1>
             {project.dueDate && <p className="text-sm text-text-faint">Prazo: {formatDate(project.dueDate)}</p>}
           </div>
         </div>

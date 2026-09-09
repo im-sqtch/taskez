@@ -1,4 +1,4 @@
-import { ChevronRight, Flame, Layers, ListChecks, Settings, TrendingUp, UserPlus, Users } from 'lucide-react'
+import { ChevronRight, Flame, Layers, ListChecks, Settings, Trash2, TrendingUp, UserPlus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AddContactSheet } from '@/components/profile/AddContactSheet'
@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { computeStats } from '@/lib/stats'
+import { confirmAction } from '@/store/confirmStore'
 import { useAuthStore } from '@/store/authStore'
-import { useAcceptedContacts } from '@/store/contactsStore'
-import { useCurrentWorkspace, useWorkspaceTasks, useWorkspaceTeam } from '@/store/dataStore'
+import { useAcceptedContacts, useContactsStore } from '@/store/contactsStore'
+import { useCurrentWorkspace, useDataStore, useWorkspaceTasks, useWorkspaceTeam } from '@/store/dataStore'
 
 const usageModeLabels = { personal: 'Uso pessoal', team: 'Equipe', client: 'Clientes' }
 
@@ -19,6 +20,11 @@ export function ProfilePage() {
   const user = useAuthStore((s) => s.currentUser())
   const tasks = useWorkspaceTasks()
   const team = useWorkspaceTeam()
+  const allTeamMembers = useDataStore((s) => s.team)
+  const workspaces = useDataStore((s) => s.workspaces)
+  const workspaceRoles = useDataStore((s) => s.workspaceRoles)
+  const removeTeamMember = useDataStore((s) => s.removeTeamMember)
+  const removeContact = useContactsStore((s) => s.removeContact)
   const contacts = useAcceptedContacts(user?.id)
   const currentWorkspace = useCurrentWorkspace()
   const navigate = useNavigate()
@@ -28,6 +34,41 @@ export function ProfilePage() {
 
   if (!user) return null
   const stats = computeStats(tasks)
+  const isOwnerHere = currentWorkspace ? workspaceRoles[currentWorkspace.id] === 'owner' : false
+
+  function handleRemoveMember(memberId: string, memberName: string) {
+    confirmAction({
+      title: 'Remover da equipe',
+      description: `Remover ${memberName} da equipe deste workspace? O acesso dela ao workspace é revogado.`,
+      confirmLabel: 'Remover',
+      danger: true,
+      onConfirm: () => removeTeamMember(memberId),
+    })
+  }
+
+  function handleRemoveContact(contactId: string, contactUserId: string, contactName: string) {
+    const blockingWorkspaceIds = [...new Set(allTeamMembers.filter((m) => m.linkedUserId === contactUserId).map((m) => m.workspaceId))]
+    if (blockingWorkspaceIds.length > 0) {
+      const names = blockingWorkspaceIds.map((id) => workspaces.find((w) => w.id === id)?.name ?? 'workspace').join(', ')
+      const canRemoveMyself = blockingWorkspaceIds.some((id) => workspaceRoles[id] === 'owner')
+      confirmAction({
+        title: 'Não é possível remover ainda',
+        description: canRemoveMyself
+          ? `${contactName} ainda faz parte da equipe de: ${names}. Remova-a de lá primeiro.`
+          : `${contactName} ainda faz parte da equipe de: ${names}. Só o dono dessa workspace pode removê-la de lá — peça a ele antes de excluir esse contato.`,
+        confirmLabel: 'Entendi',
+        onConfirm: () => {},
+      })
+      return
+    }
+    confirmAction({
+      title: 'Remover contato',
+      description: `Remover ${contactName} da sua lista de contatos?`,
+      confirmLabel: 'Remover',
+      danger: true,
+      onConfirm: () => removeContact(contactId),
+    })
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -83,6 +124,15 @@ export function ProfilePage() {
               <span className="text-xs font-semibold capitalize text-text-muted">
                 {m.status === 'online' ? 'Online' : m.status === 'away' ? 'Ausente' : 'Offline'}
               </span>
+              {isOwnerHere && !m.isSelf && (
+                <button
+                  onClick={() => handleRemoveMember(m.id, m.name)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-faint hover:text-danger"
+                  aria-label={`Remover ${m.name} da equipe`}
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
             </div>
           ))}
         </Card>
@@ -107,6 +157,13 @@ export function ProfilePage() {
                   <p className="text-sm font-medium text-text">{contactUser.name}</p>
                   <p className="text-xs text-text-faint">{contactUser.email}</p>
                 </div>
+                <button
+                  onClick={() => handleRemoveContact(contact.id, contactUser.id, contactUser.name)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-faint hover:text-danger"
+                  aria-label={`Remover ${contactUser.name} dos contatos`}
+                >
+                  <Trash2 size={15} />
+                </button>
               </div>
             ))
           )}

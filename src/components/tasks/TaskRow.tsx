@@ -1,4 +1,4 @@
-import { Circle, CircleCheck, ListChecks } from 'lucide-react'
+import { Circle, CircleCheck, ListChecks, Repeat } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { PriorityBadge } from '@/components/ui/Badge'
 import { cn, formatDate, isOverdue } from '@/lib/utils'
@@ -11,6 +11,7 @@ export function TaskRow({ task }: { task: Task }) {
   const navigate = useNavigate()
   const overdue = isOverdue(task.dueDate) && task.status !== 'done'
   const doneSubtasks = task.subtasks.filter((s) => s.done).length
+  const recurring = Boolean(task.recurrence ?? project?.recurrence)
 
   return (
     <div className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-alt">
@@ -43,6 +44,7 @@ export function TaskRow({ task }: { task: Task }) {
               <ListChecks size={11} /> {doneSubtasks}/{task.subtasks.length}
             </span>
           )}
+          {recurring && <Repeat size={11} className="text-text-faint" aria-label="Recorrente" />}
         </div>
       </button>
 

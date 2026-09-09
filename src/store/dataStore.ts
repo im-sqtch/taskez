@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore'
 import { WIDGET_CATALOG, WIDGET_TYPES } from '@/lib/widgetCatalog'
 import { NOTIFICATION_EVENTS, type NotificationEvent } from '@/lib/notificationCatalog'
 import { isNotificationEventEnabled } from '@/store/notificationPrefsStore'
+import { applyOffset, dueOccurrence, offsetDays } from '@/lib/recurrence'
 import type {
   ChatMessage,
   DashboardLayout,
@@ -14,6 +15,7 @@ import type {
   Priority,
   Project,
   ProjectFile,
+  RecurrenceRule,
   Subtask,
   Task,
   TaskStatus,
@@ -73,6 +75,8 @@ interface ProjectRow {
   created_at: string
   order: number
   completion_ack: boolean
+  recurrence: RecurrenceRule | null
+  series_id: string | null
 }
 
 interface TaskRow {
@@ -91,6 +95,8 @@ interface TaskRow {
   created_at: string
   updated_at: string
   completed_at: string | null
+  recurrence: RecurrenceRule | null
+  series_id: string | null
 }
 
 function mapWorkspace(row: WorkspaceRow): Workspace {
@@ -126,6 +132,8 @@ function mapProject(row: ProjectRow): Project {
     createdAt: row.created_at,
     order: row.order,
     completionAck: row.completion_ack,
+    recurrence: row.recurrence ?? undefined,
+    seriesId: row.series_id ?? undefined,
   }
 }
 
@@ -212,6 +220,8 @@ function mapTask(row: TaskRow): Task {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at ?? undefined,
+    recurrence: row.recurrence ?? undefined,
+    seriesId: row.series_id ?? undefined,
   }
 }
 
@@ -227,6 +237,12 @@ function projectPatchToRow(patch: Partial<Project>): Record<string, unknown> {
   if (patch.links !== undefined) row.links = patch.links
   if (patch.order !== undefined) row.order = patch.order
   if (patch.completionAck !== undefined) row.completion_ack = patch.completionAck
+  // Diferente dos campos acima: os forms sempre mandam `recurrence` no
+  // objeto, mesmo quando "não repete" (valor `undefined`) — checar por chave
+  // presente (em vez de `!== undefined`) é o que permite gravar esse `null`
+  // de verdade em vez de silenciosamente não tocar na coluna.
+  if ('recurrence' in patch) row.recurrence = patch.recurrence ?? null
+  if ('seriesId' in patch) row.series_id = patch.seriesId ?? null
   return row
 }
 
@@ -243,11 +259,173 @@ function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
   if (patch.comments !== undefined) row.comments = patch.comments
   if (patch.links !== undefined) row.links = patch.links
   if (patch.completedAt !== undefined) row.completed_at = patch.completedAt ?? null
+  if ('recurrence' in patch) row.recurrence = patch.recurrence ?? null
+  if ('seriesId' in patch) row.series_id = patch.seriesId ?? null
   return row
 }
 
 function getSelfMember(team: TeamMember[]): TeamMember | undefined {
   return team.find((m) => m.isSelf)
+}
+
+// Gera o próximo ciclo de cada projeto/tarefa recorrente vencido. Roda dentro
+// de `seedIfEmpty` (sem nenhum job em segundo plano) — cada vez que o
+// workspace é recarregado, checa se alguma série já passou da data de
+// aparição prevista. Idempotente: um projeto/tarefa só "dispara" enquanto seu
+// `recurrence` estiver preenchido; ao gerar o sucessor, o registro antigo tem
+// `recurrence` zerado e sai da lista de vencidos nas próximas checagens.
+function generateDueRecurrences(userId: string) {
+  const state = useDataStore.getState()
+  const today = new Date()
+  const nextOrderByWorkspace = new Map<string, number>()
+  const orderFor = (workspaceId: string) => {
+    if (!nextOrderByWorkspace.has(workspaceId)) {
+      nextOrderByWorkspace.set(workspaceId, Math.max(-1, ...state.projects.filter((p) => p.workspaceId === workspaceId).map((p) => p.order)) + 1)
+    }
+    const order = nextOrderByWorkspace.get(workspaceId)!
+    nextOrderByWorkspace.set(workspaceId, order + 1)
+    return order
+  }
+
+  const newProjects: Project[] = []
+  const newTasks: Task[] = []
+  const closedProjectIds = new Set<string>()
+  const closedTaskIds = new Set<string>()
+  const notifications: Notification[] = []
+
+  for (const project of state.projects) {
+    if (!project.recurrence) continue
+    const appearance = dueOccurrence(project.recurrence, new Date(project.createdAt), today)
+    if (!appearance) continue
+    // `createdAt` do novo ciclo é a própria data de aparição (não `now()`) —
+    // é o que mantém o deslocamento em dias de cada prazo exato e faz o
+    // índice único (series_id, created_at) deduplicar gerações concorrentes.
+    // `appearance` já é meia-noite local daquele dia (não usar `applyOffset`
+    // aqui: esse helper serve para `dueDate`, que é lido de volta via
+    // `dueDateToLocalDate`; `createdAt` é lido de volta com `new Date(iso)`
+    // comum, então precisa ser um instante real, não meia-noite UTC).
+    const cycleCreatedAt = appearance.toISOString()
+    const newProjectId = uuid()
+    const newProject: Project = {
+      ...project,
+      id: newProjectId,
+      createdAt: cycleCreatedAt,
+      dueDate: project.dueDate ? applyOffset(appearance, offsetDays(project.dueDate, project.createdAt)) : undefined,
+      status: 'active',
+      completionAck: false,
+      order: orderFor(project.workspaceId),
+      seriesId: project.seriesId ?? project.id,
+    }
+    newProjects.push(newProject)
+    closedProjectIds.add(project.id)
+    const notification = makeNotification(
+      userId,
+      project.workspaceId,
+      'project.created',
+      'Novo ciclo do projeto',
+      `"${project.name}" começou um novo ciclo.`,
+      { type: 'project', id: newProjectId },
+    )
+    if (notification) notifications.push(notification)
+
+    for (const task of state.tasks) {
+      if (task.projectId !== project.id) continue
+      newTasks.push({
+        ...task,
+        id: uuid(),
+        projectId: newProjectId,
+        status: 'todo',
+        completedAt: undefined,
+        comments: [],
+        subtasks: task.subtasks.map((s) => ({ ...s, done: false })),
+        dueDate: task.dueDate ? applyOffset(appearance, offsetDays(task.dueDate, project.createdAt)) : undefined,
+        createdAt: cycleCreatedAt,
+        updatedAt: cycleCreatedAt,
+        recurrence: undefined,
+        seriesId: task.seriesId ?? task.id,
+      })
+    }
+  }
+
+  // Tarefas avulsas recorrentes (sem projeto) — dentro de um projeto
+  // recorrente a cadência é a do projeto, não da tarefa (ver acima).
+  for (const task of state.tasks) {
+    if (!task.recurrence || task.projectId) continue
+    const appearance = dueOccurrence(task.recurrence, new Date(task.createdAt), today)
+    if (!appearance) continue
+    const cycleCreatedAt = appearance.toISOString()
+    newTasks.push({
+      ...task,
+      id: uuid(),
+      status: 'todo',
+      completedAt: undefined,
+      comments: [],
+      subtasks: task.subtasks.map((s) => ({ ...s, done: false })),
+      dueDate: task.dueDate ? applyOffset(appearance, offsetDays(task.dueDate, task.createdAt)) : undefined,
+      createdAt: cycleCreatedAt,
+      updatedAt: cycleCreatedAt,
+      recurrence: task.recurrence,
+      seriesId: task.seriesId ?? task.id,
+    })
+    closedTaskIds.add(task.id)
+  }
+
+  if (newProjects.length === 0 && newTasks.length === 0) return
+
+  useDataStore.setState((s) => ({
+    projects: [...s.projects.map((p) => (closedProjectIds.has(p.id) ? { ...p, recurrence: undefined } : p)), ...newProjects],
+    tasks: [...s.tasks.map((t) => (closedTaskIds.has(t.id) ? { ...t, recurrence: undefined } : t)), ...newTasks],
+    notifications: [...s.notifications, ...notifications],
+  }))
+
+  for (const project of newProjects) {
+    fireAndForget(
+      supabase.from('projects').insert({
+        id: project.id,
+        workspace_id: project.workspaceId,
+        name: project.name,
+        description: project.description ?? null,
+        color: project.color,
+        icon: project.icon ?? null,
+        status: project.status,
+        due_date: project.dueDate ?? null,
+        member_ids: project.memberIds,
+        links: project.links,
+        order: project.order,
+        created_at: project.createdAt,
+        recurrence: project.recurrence ?? null,
+        series_id: project.seriesId ?? null,
+      }),
+    )
+  }
+  for (const id of closedProjectIds) {
+    fireAndForget(supabase.from('projects').update({ recurrence: null }).eq('id', id))
+  }
+  for (const task of newTasks) {
+    fireAndForget(
+      supabase.from('tasks').insert({
+        id: task.id,
+        workspace_id: task.workspaceId,
+        project_id: task.projectId ?? null,
+        title: task.title,
+        description: task.description ?? null,
+        status: task.status,
+        priority: task.priority,
+        due_date: task.dueDate ?? null,
+        assignee_id: task.assigneeId ?? null,
+        subtasks: task.subtasks,
+        comments: task.comments,
+        links: task.links,
+        created_at: task.createdAt,
+        updated_at: task.updatedAt,
+        recurrence: task.recurrence ?? null,
+        series_id: task.seriesId ?? null,
+      }),
+    )
+  }
+  for (const id of closedTaskIds) {
+    fireAndForget(supabase.from('tasks').update({ recurrence: null }).eq('id', id))
+  }
 }
 
 // Reabrir uma tarefa quebra o "100% concluído" que levou o projeto a ficar
@@ -355,6 +533,9 @@ interface DataState {
   profileSizeMigrated: boolean
   workspaces: Workspace[]
   currentWorkspaceId: string
+  // Papel do usuário atual em cada workspace da qual participa — usado para
+  // decidir quem pode remover outros membros (só o dono) ou só sair sozinho.
+  workspaceRoles: Record<string, 'owner' | 'member'>
   projects: Project[]
   tasks: Task[]
   team: TeamMember[]
@@ -380,6 +561,13 @@ interface DataState {
 
   // Equipe do workspace
   addTeamMember: (data: { name: string; role: string; avatarColor: string; linkedUserId?: string }) => void
+  // Só o dono do workspace pode remover outro membro (revoga acesso de verdade
+  // quando é um contato real). Sem efeito e sem chamada ao banco se quem chama
+  // não for dono ou tentar remover a própria entrada.
+  removeTeamMember: (memberId: string) => void
+  // Sai de uma workspace da qual não é dono (dono usa `deleteWorkspace`). Sem
+  // efeito se for a única workspace restante ou se quem chama for o dono.
+  leaveWorkspace: (workspaceId: string) => void
 
   // Projects
   addProject: (data: Omit<Project, 'id' | 'workspaceId' | 'createdAt' | 'order' | 'completionAck'>) => string
@@ -552,6 +740,7 @@ export const useDataStore = create<DataState>()(
       profileSizeMigrated: false,
       workspaces: [],
       currentWorkspaceId: '',
+      workspaceRoles: {},
       projects: [],
       tasks: [],
       team: [],
@@ -571,7 +760,7 @@ export const useDataStore = create<DataState>()(
 
         const { data: memberRows } = await supabase
           .from('workspace_members')
-          .select('workspace_id, workspaces(*)')
+          .select('workspace_id, role, workspaces(*)')
           .eq('user_id', userId)
 
         const workspaceRows = (memberRows ?? [])
@@ -581,6 +770,9 @@ export const useDataStore = create<DataState>()(
         if (workspaceRows.length > 0) {
           const workspaces = workspaceRows.map(mapWorkspace)
           const workspaceIds = workspaces.map((w) => w.id)
+          const workspaceRoles = Object.fromEntries(
+            (memberRows ?? []).map((r) => [r.workspace_id as string, (r.role as string) === 'owner' ? 'owner' : 'member']),
+          ) as Record<string, 'owner' | 'member'>
           const [{ data: teamRows }, { data: projectRows }, { data: taskRows }, { data: chatRows }, { data: fileRows }, { data: notificationRows }] =
             await Promise.all([
               supabase.from('team_members').select('*').in('workspace_id', workspaceIds),
@@ -595,6 +787,7 @@ export const useDataStore = create<DataState>()(
           set((state) => ({
             loading: false,
             workspaces,
+            workspaceRoles,
             currentWorkspaceId: state.currentWorkspaceId && workspaceIds.includes(state.currentWorkspaceId) ? state.currentWorkspaceId : workspaces[0]!.id,
             team: (teamRows ?? []).map((r) => mapTeamMember(r as TeamMemberRow, userId)),
             projects: (projectRows ?? []).map((r) => mapProject(r as ProjectRow)),
@@ -610,6 +803,7 @@ export const useDataStore = create<DataState>()(
           if (profileName && selfRow && (selfRow as TeamMemberRow).name !== profileName) {
             get().syncSelfProfile({ name: profileName })
           }
+          generateDueRecurrences(userId)
           setupRealtime()
           return
         }
@@ -633,6 +827,7 @@ export const useDataStore = create<DataState>()(
         set({
           loading: false,
           workspaces: [workspace],
+          workspaceRoles: { [workspaceId]: 'owner' },
           currentWorkspaceId: workspaceId,
           team: [selfMember],
           projects: [],
@@ -661,6 +856,7 @@ export const useDataStore = create<DataState>()(
         set({
           loading: false,
           workspaces: [],
+          workspaceRoles: {},
           currentWorkspaceId: '',
           projects: [],
           tasks: [],
@@ -719,6 +915,7 @@ export const useDataStore = create<DataState>()(
         }
         set((state) => ({
           workspaces: [...state.workspaces, { id, name: name.trim(), color, createdAt: now() }],
+          workspaceRoles: { ...state.workspaceRoles, [id]: 'owner' },
           team: [...state.team, selfMember],
           currentWorkspaceId: id,
         }))
@@ -755,8 +952,10 @@ export const useDataStore = create<DataState>()(
             state.currentWorkspaceId === id
               ? state.workspaces.find((w) => w.id !== id)!.id
               : state.currentWorkspaceId
+          const { [id]: _removedRole, ...workspaceRoles } = state.workspaceRoles
           return {
             workspaces: state.workspaces.filter((w) => w.id !== id),
+            workspaceRoles,
             currentWorkspaceId: nextWorkspaceId,
             projects: state.projects.filter((p) => p.workspaceId !== id),
             tasks: state.tasks.filter((t) => t.workspaceId !== id),
@@ -769,6 +968,62 @@ export const useDataStore = create<DataState>()(
         // Exclusão em cascata (workspace_members/team_members/projects/tasks) já é
         // resolvida pelas foreign keys "on delete cascade" no banco.
         fireAndForget(supabase.from('workspaces').delete().eq('id', id))
+      },
+
+      // Só o dono do workspace pode remover outro membro — a UI só mostra o
+      // botão nesse caso, mas a guarda fica aqui também porque a policy do
+      // banco (`is_workspace_owner`) é a fonte da verdade real de qualquer forma.
+      removeTeamMember: (memberId) => {
+        const member = get().team.find((m) => m.id === memberId)
+        if (!member || member.isSelf) return
+        if (get().workspaceRoles[member.workspaceId] !== 'owner') return
+        set((state) => ({
+          team: state.team.filter((m) => m.id !== memberId),
+          tasks: state.tasks.map((t) =>
+            t.workspaceId === member.workspaceId && t.assigneeId === memberId ? { ...t, assigneeId: undefined } : t,
+          ),
+        }))
+        fireAndForget(supabase.from('team_members').delete().eq('id', memberId))
+        // Revoga o acesso de fato — sem isso a pessoa continuaria enxergando o
+        // workspace via `workspace_members` mesmo tendo sumido do roster visual.
+        if (member.linkedUserId) {
+          fireAndForget(
+            supabase.from('workspace_members').delete().eq('workspace_id', member.workspaceId).eq('user_id', member.linkedUserId),
+          )
+        }
+      },
+
+      // Sair de uma workspace da qual não é dono. O dono usa `deleteWorkspace`
+      // (não há transferência de titularidade ainda, então o dono não tem como
+      // "só sair" deixando a workspace de pé).
+      leaveWorkspace: (workspaceId) => {
+        const userId = useAuthStore.getState().currentUserId
+        if (!userId) return
+        if (get().workspaces.length <= 1) return
+        if (get().workspaceRoles[workspaceId] === 'owner') return
+        set((state) => {
+          const projectIds = new Set(state.projects.filter((p) => p.workspaceId === workspaceId).map((p) => p.id))
+          const nextWorkspaceId =
+            state.currentWorkspaceId === workspaceId
+              ? state.workspaces.find((w) => w.id !== workspaceId)!.id
+              : state.currentWorkspaceId
+          const { [workspaceId]: _removedRole, ...workspaceRoles } = state.workspaceRoles
+          return {
+            workspaces: state.workspaces.filter((w) => w.id !== workspaceId),
+            workspaceRoles,
+            currentWorkspaceId: nextWorkspaceId,
+            projects: state.projects.filter((p) => p.workspaceId !== workspaceId),
+            tasks: state.tasks.filter((t) => t.workspaceId !== workspaceId),
+            team: state.team.filter((m) => m.workspaceId !== workspaceId),
+            notifications: state.notifications.filter((n) => n.workspaceId !== workspaceId),
+            chatMessages: state.chatMessages.filter((m) => !projectIds.has(m.projectId)),
+            files: state.files.filter((f) => f.workspaceId !== workspaceId),
+          }
+        })
+        // Diferente de `deleteWorkspace`: só a própria participação sai, o
+        // workspace continua existindo para os outros membros.
+        fireAndForget(supabase.from('team_members').delete().eq('workspace_id', workspaceId).eq('linked_user_id', userId))
+        fireAndForget(supabase.from('workspace_members').delete().eq('workspace_id', workspaceId).eq('user_id', userId))
       },
 
       addTeamMember: (data) => {
@@ -820,8 +1075,11 @@ export const useDataStore = create<DataState>()(
         const workspaceId = get().currentWorkspaceId
         const userId = useAuthStore.getState().currentUserId!
         const order = Math.max(-1, ...get().projects.filter((p) => p.workspaceId === workspaceId).map((p) => p.order)) + 1
+        // A própria id vira a raiz da série na primeira vez que a recorrência
+        // é ligada — carregado adiante em todo ciclo gerado a partir daqui.
+        const seriesId = data.recurrence ? id : undefined
         set((state) => ({
-          projects: [...state.projects, { ...data, id, workspaceId, createdAt: now(), order, completionAck: false }],
+          projects: [...state.projects, { ...data, id, workspaceId, createdAt: now(), order, completionAck: false, seriesId }],
           notifications: appendNotification(
             state.notifications,
             makeNotification(userId, workspaceId, 'project.created', 'Projeto criado', `"${data.name}" foi criado.`, { type: 'project', id }),
@@ -840,12 +1098,20 @@ export const useDataStore = create<DataState>()(
             member_ids: data.memberIds,
             links: data.links,
             order,
+            recurrence: data.recurrence ?? null,
+            series_id: seriesId ?? null,
           }),
         )
         return id
       },
       updateProject: (id, patch) => {
         const userId = useAuthStore.getState().currentUserId!
+        // Liga a recorrência pela primeira vez neste projeto: essa própria id
+        // vira a raiz da série (carregada em todo ciclo gerado a partir daqui).
+        const existingProject = get().projects.find((p) => p.id === id)
+        if (patch.recurrence && existingProject && !existingProject.seriesId) {
+          patch = { ...patch, seriesId: id }
+        }
         set((state) => {
           const project = state.projects.find((p) => p.id === id)
           const notifications = [...state.notifications]
@@ -1078,6 +1344,10 @@ export const useDataStore = create<DataState>()(
           links: data.links ?? [],
           createdAt: now(),
           updatedAt: now(),
+          recurrence: data.recurrence,
+          // A própria id vira a raiz da série na primeira vez que a
+          // recorrência é ligada — carregado adiante em todo ciclo gerado.
+          seriesId: data.recurrence ? id : undefined,
         }
         set((state) => {
           const selfId = getSelfMember(state.team.filter((m) => m.workspaceId === workspaceId))?.id
@@ -1113,6 +1383,8 @@ export const useDataStore = create<DataState>()(
             subtasks: task.subtasks,
             comments: task.comments,
             links: task.links,
+            recurrence: task.recurrence ?? null,
+            series_id: task.seriesId ?? null,
           }),
         )
         return id
@@ -1120,6 +1392,11 @@ export const useDataStore = create<DataState>()(
       updateTask: (id, patch) => {
         const userId = useAuthStore.getState().currentUserId!
         const taskBeforePatch = get().tasks.find((t) => t.id === id)
+        // Liga a recorrência pela primeira vez nesta tarefa avulsa: essa
+        // própria id vira a raiz da série.
+        if (patch.recurrence && taskBeforePatch && !taskBeforePatch.seriesId) {
+          patch = { ...patch, seriesId: id }
+        }
         set((state) => {
           const existing = state.tasks.find((t) => t.id === id)
           const notifications = [...state.notifications]

@@ -1,4 +1,4 @@
-import { Check, FolderKanban, Layers, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Check, FolderKanban, Layers, LogOut, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Input'
@@ -18,11 +18,13 @@ const COLORS = ['#7C5CFF', '#3B9EFF', '#34D399', '#F5A524', '#F5455C', '#FF7CE0'
 export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheetProps) {
   const workspaces = useDataStore((s) => s.workspaces)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
+  const workspaceRoles = useDataStore((s) => s.workspaceRoles)
   const projects = useDataStore((s) => s.projects)
   const switchWorkspace = useDataStore((s) => s.switchWorkspace)
   const addWorkspace = useDataStore((s) => s.addWorkspace)
   const renameWorkspace = useDataStore((s) => s.renameWorkspace)
   const deleteWorkspace = useDataStore((s) => s.deleteWorkspace)
+  const leaveWorkspace = useDataStore((s) => s.leaveWorkspace)
 
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editing, setEditing] = useState<Workspace | undefined>(undefined)
@@ -56,6 +58,17 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
       confirmLabel: 'Excluir',
       danger: true,
       onConfirm: () => deleteWorkspace(workspace.id),
+    })
+  }
+
+  function handleLeave(workspace: Workspace, e: React.MouseEvent) {
+    e.stopPropagation()
+    confirmAction({
+      title: 'Sair da workspace',
+      description: `Sair de "${workspace.name}"? Você perde acesso a ela, mas ela continua existindo para os outros membros.`,
+      confirmLabel: 'Sair',
+      danger: true,
+      onConfirm: () => leaveWorkspace(workspace.id),
     })
   }
 
@@ -150,9 +163,14 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
               <button onClick={(e) => openEdit(w, e)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-faint hover:text-accent" aria-label={`Editar ${w.name}`}>
                 <Pencil size={14} />
               </button>
-              {workspaces.length > 1 && (
+              {workspaces.length > 1 && workspaceRoles[w.id] === 'owner' && (
                 <button onClick={(e) => handleDelete(w, e)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-faint hover:text-danger" aria-label={`Excluir ${w.name}`}>
                   <Trash2 size={14} />
+                </button>
+              )}
+              {workspaces.length > 1 && workspaceRoles[w.id] !== 'owner' && (
+                <button onClick={(e) => handleLeave(w, e)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-faint hover:text-danger" aria-label={`Sair de ${w.name}`}>
+                  <LogOut size={14} />
                 </button>
               )}
             </div>

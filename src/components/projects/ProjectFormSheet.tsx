@@ -4,12 +4,13 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
 import { LinksField, withDraft } from '@/components/ui/LinksField'
+import { RecurrenceField } from '@/components/ui/RecurrenceField'
 import { Sheet } from '@/components/ui/Sheet'
 import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, monthGrid } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import { useDataStore, useWorkspaceTeam } from '@/store/dataStore'
 import { useAuthStore } from '@/store/authStore'
-import type { Project } from '@/types'
+import type { Project, RecurrenceRule } from '@/types'
 
 function formatShortDate(key: string): string {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(keyToDate(key)).replace('.', '')
@@ -37,6 +38,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
   const [memberIds, setMemberIds] = useState<string[]>([])
   const [links, setLinks] = useState<string[]>([])
   const [linkDraft, setLinkDraft] = useState('')
+  const [recurrence, setRecurrence] = useState<RecurrenceRule | undefined>(undefined)
   const [dueSheetOpen, setDueSheetOpen] = useState(false)
   const [calendarCursor, setCalendarCursor] = useState(() => new Date())
 
@@ -51,6 +53,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
     setMemberIds(project?.memberIds ?? (currentUser && selfId ? [selfId] : []))
     setLinks(project?.links ?? [])
     setLinkDraft('')
+    setRecurrence(project?.recurrence)
     // `team` de propósito fora das deps: useWorkspaceTeam() devolve um array novo a
     // cada render, e incluí-lo aqui resetaria a seleção do usuário a cada re-render
     // enquanto o sheet está aberto.
@@ -69,6 +72,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       memberIds,
       links: withDraft(links, linkDraft),
+      recurrence,
     }
     if (project) {
       updateProject(project.id, payload)
@@ -123,6 +127,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
             </span>
           </button>
         </div>
+        <RecurrenceField value={recurrence} onChange={setRecurrence} />
         <div className="flex flex-col gap-2">
           <FieldLabel>Cor</FieldLabel>
           <div className="flex gap-3">

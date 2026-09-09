@@ -17,6 +17,19 @@ export interface Comment {
   createdAt: string
 }
 
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
+
+export interface RecurrenceRule {
+  frequency: RecurrenceFrequency
+  // 'weekly': dias da semana em que um novo ciclo nasce (0=domingo..6=sábado).
+  weekdays?: number[]
+  // 'monthly': dia do mês em que um novo ciclo nasce (1-31, clampado no
+  // último dia em meses mais curtos).
+  dayOfMonth?: number
+  // Data (ISO) a partir da qual a série para de gerar novos ciclos.
+  endDate?: string
+}
+
 export interface Task {
   id: string
   workspaceId: string
@@ -33,6 +46,12 @@ export interface Task {
   createdAt: string
   updatedAt: string
   completedAt?: string
+  // Só é considerada quando a tarefa não pertence a um projeto — dentro de um
+  // projeto recorrente, a cadência é a do projeto (ver RecurrenceRule).
+  recurrence?: RecurrenceRule
+  // Identifica a série de ciclos gerados a partir desta tarefa/projeto — só a
+  // store mexe nisto, nunca é exposto na UI.
+  seriesId?: string
 }
 
 export interface Project {
@@ -49,6 +68,8 @@ export interface Project {
   createdAt: string
   order: number
   completionAck: boolean
+  recurrence?: RecurrenceRule
+  seriesId?: string
 }
 
 export interface TeamMember {

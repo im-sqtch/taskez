@@ -4,11 +4,12 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
 import { LinksField, withDraft } from '@/components/ui/LinksField'
+import { RecurrenceField } from '@/components/ui/RecurrenceField'
 import { Sheet } from '@/components/ui/Sheet'
 import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, monthGrid } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import { useDataStore, useWorkspaceProjects, useWorkspaceTeam } from '@/store/dataStore'
-import type { Priority, Task } from '@/types'
+import type { Priority, RecurrenceRule, Task } from '@/types'
 
 function formatShortDate(key: string): string {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(keyToDate(key)).replace('.', '')
@@ -44,6 +45,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
   const [subtaskInput, setSubtaskInput] = useState('')
   const [links, setLinks] = useState<string[]>([])
   const [linkDraft, setLinkDraft] = useState('')
+  const [recurrence, setRecurrence] = useState<RecurrenceRule | undefined>(undefined)
   const [dueSheetOpen, setDueSheetOpen] = useState(false)
   const [projectSheetOpen, setProjectSheetOpen] = useState(false)
   const [calendarCursor, setCalendarCursor] = useState(() => new Date())
@@ -61,6 +63,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     setSubtaskInput('')
     setLinks(task?.links ?? [])
     setLinkDraft('')
+    setRecurrence(task?.recurrence)
   }, [open, task, defaultProjectId])
 
   function addSubtaskDraft() {
@@ -79,6 +82,9 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
       assigneeId,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       links: withDraft(links, linkDraft),
+      // Recorrência de tarefa só faz sentido sem projeto — dentro de um
+      // projeto a cadência é a dele (ver ProjectFormSheet).
+      recurrence: projectId ? undefined : recurrence,
     }
     if (task) {
       updateTask(task.id, payload)
@@ -208,6 +214,8 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
             </button>
           </div>
         </div>
+
+        {!projectId && <RecurrenceField value={recurrence} onChange={setRecurrence} />}
 
         {!task && (
           <div className="flex flex-col gap-2">

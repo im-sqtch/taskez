@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Repeat, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
@@ -91,8 +91,9 @@ export function TaskDetailPage() {
           >
             {task.status === 'done' ? <CheckCheck size={24} /> : <Circle size={24} />}
           </button>
-          <h1 className={cn('flex-1 text-xl font-bold text-text', task.status === 'done' && 'line-through text-text-faint')}>
+          <h1 className={cn('flex flex-1 items-center gap-1.5 text-xl font-bold text-text', task.status === 'done' && 'line-through text-text-faint')}>
             {task.title}
+            {(task.recurrence ?? project?.recurrence) && <Repeat size={15} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
           </h1>
         </div>
 
