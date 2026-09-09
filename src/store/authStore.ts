@@ -172,6 +172,11 @@ supabase.auth.onAuthStateChange((_event, session) => {
   }
   fetchProfile(userId).then((profile) => {
     useAuthStore.setState({ currentUserId: userId, profile, authReady: true })
+    // Só depois do `setState` acima: `fetchContacts` lê `currentUserId` do
+    // próprio store de forma síncrona — chamado em paralelo (sem esperar
+    // este `.then()`) ele sempre encontrava `null` (não é persistido entre
+    // sessões) e retornava sem buscar nada, deixando "Meus contatos" vazio
+    // pra sempre após qualquer login novo.
+    void useContactsStore.getState().fetchContacts()
   })
-  void useContactsStore.getState().fetchContacts()
 })
