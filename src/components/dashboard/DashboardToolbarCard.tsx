@@ -1,9 +1,10 @@
 import { LayoutGrid, SlidersHorizontal } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
-import { useDataStore } from '@/store/dataStore'
+import { useWorkspaceLayout } from '@/store/dataStore'
 
 export function DashboardToolbarCard({ onEdit }: { onEdit: () => void }) {
-  const visibleCount = useDataStore((s) => s.layout.widgets.filter((w) => w.visible).length)
+  const layout = useWorkspaceLayout()
+  const visibleCount = layout.widgets.filter((w) => w.visible).length
 
   return (
     <Card elevated className="flex items-center gap-3.5">

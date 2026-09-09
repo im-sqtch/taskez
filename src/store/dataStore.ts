@@ -11,6 +11,7 @@ import { applyOffset, dueOccurrence, offsetDays } from '@/lib/recurrence'
 import type {
   ChatMessage,
   DashboardLayout,
+  DashboardWidget,
   Notification,
   Priority,
   Project,
@@ -97,6 +98,13 @@ interface TaskRow {
   completed_at: string | null
   recurrence: RecurrenceRule | null
   series_id: string | null
+}
+
+interface DashboardLayoutRow {
+  user_id: string
+  workspace_id: string
+  widgets: DashboardWidget[]
+  updated_at: string
 }
 
 function mapWorkspace(row: WorkspaceRow): Workspace {
@@ -528,6 +536,14 @@ function normalizeLayout(layout: DashboardLayout): DashboardLayout {
   return { widgets: [...fixedSizes, ...appended] }
 }
 
+function persistLayout(userId: string, workspaceId: string, layout: DashboardLayout) {
+  fireAndForget(
+    supabase
+      .from('dashboard_layouts')
+      .upsert({ user_id: userId, workspace_id: workspaceId, widgets: layout.widgets, updated_at: now() }, { onConflict: 'user_id,workspace_id' }),
+  )
+}
+
 interface DataState {
   loading: boolean
   profileSizeMigrated: boolean
@@ -542,7 +558,9 @@ interface DataState {
   notifications: Notification[]
   chatMessages: ChatMessage[]
   files: ProjectFile[]
-  layout: DashboardLayout
+  // Layout do painel modular por workspace — cada workspace tem sua própria
+  // configuração de widgets, sincronizada via Supabase (tabela `dashboard_layouts`).
+  layouts: Record<string, DashboardLayout>
 
   seedIfEmpty: () => Promise<void>
   resetWorkspaceData: () => void
@@ -712,6 +730,21 @@ function setupRealtime() {
         return { files: exists ? state.files.map((f) => (f.id === file.id ? file : f)) : [...state.files, file] }
       })
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_layouts' }, (payload) => {
+      const p = payload as RealtimePostgresChangesPayload<DashboardLayoutRow>
+      if (p.eventType === 'DELETE') {
+        const oldWorkspaceId = (p.old as { workspace_id?: string }).workspace_id
+        if (!oldWorkspaceId) return
+        useDataStore.setState((state) => {
+          const { [oldWorkspaceId]: _removed, ...rest } = state.layouts
+          return { layouts: rest }
+        })
+        return
+      }
+      const row = p.new as DashboardLayoutRow
+      const layout = normalizeLayout({ widgets: row.widgets })
+      useDataStore.setState((state) => ({ layouts: { ...state.layouts, [row.workspace_id]: layout } }))
+    })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (payload) => {
       const p = payload as RealtimePostgresChangesPayload<NotificationRow>
       if (p.eventType === 'DELETE') {
@@ -747,7 +780,7 @@ export const useDataStore = create<DataState>()(
       notifications: [],
       chatMessages: [],
       files: [],
-      layout: defaultLayout(),
+      layouts: {},
 
       // Carrega os workspaces do usuário logado a partir do Supabase. Se ele nunca
       // teve nenhum, cria o primeiro (com ele mesmo na equipe) — tudo já gravado no
@@ -773,17 +806,25 @@ export const useDataStore = create<DataState>()(
           const workspaceRoles = Object.fromEntries(
             (memberRows ?? []).map((r) => [r.workspace_id as string, (r.role as string) === 'owner' ? 'owner' : 'member']),
           ) as Record<string, 'owner' | 'member'>
-          const [{ data: teamRows }, { data: projectRows }, { data: taskRows }, { data: chatRows }, { data: fileRows }, { data: notificationRows }] =
-            await Promise.all([
-              supabase.from('team_members').select('*').in('workspace_id', workspaceIds),
-              supabase.from('projects').select('*').in('workspace_id', workspaceIds),
-              supabase.from('tasks').select('*').in('workspace_id', workspaceIds),
-              supabase.from('chat_messages').select('*').in('workspace_id', workspaceIds),
-              supabase.from('files').select('*').in('workspace_id', workspaceIds),
-              // Sem filtro de workspace: RLS já restringe a `user_id = auth.uid()`,
-              // e notificações de conta (contato aceito etc.) não têm workspace_id.
-              supabase.from('notifications').select('*').order('created_at', { ascending: true }),
-            ])
+          const [
+            { data: teamRows },
+            { data: projectRows },
+            { data: taskRows },
+            { data: chatRows },
+            { data: fileRows },
+            { data: notificationRows },
+            { data: layoutRows },
+          ] = await Promise.all([
+            supabase.from('team_members').select('*').in('workspace_id', workspaceIds),
+            supabase.from('projects').select('*').in('workspace_id', workspaceIds),
+            supabase.from('tasks').select('*').in('workspace_id', workspaceIds),
+            supabase.from('chat_messages').select('*').in('workspace_id', workspaceIds),
+            supabase.from('files').select('*').in('workspace_id', workspaceIds),
+            // Sem filtro de workspace: RLS já restringe a `user_id = auth.uid()`,
+            // e notificações de conta (contato aceito etc.) não têm workspace_id.
+            supabase.from('notifications').select('*').order('created_at', { ascending: true }),
+            supabase.from('dashboard_layouts').select('*').eq('user_id', userId).in('workspace_id', workspaceIds),
+          ])
           set((state) => ({
             loading: false,
             workspaces,
@@ -795,6 +836,18 @@ export const useDataStore = create<DataState>()(
             chatMessages: (chatRows ?? []).map((r) => mapChatMessage(r as ChatMessageRow)),
             files: (fileRows ?? []).map((r) => mapProjectFile(r as ProjectFileRow)),
             notifications: (notificationRows ?? []).map((r) => mapNotification(r as NotificationRow)),
+            // Preserva rascunhos locais (persistidos no localStorage) de workspaces
+            // que ainda não têm linha no Supabase; sobrescreve com o que já está
+            // sincronizado para as demais.
+            layouts: {
+              ...state.layouts,
+              ...Object.fromEntries(
+                (layoutRows ?? []).map((r) => [
+                  (r as DashboardLayoutRow).workspace_id,
+                  normalizeLayout({ widgets: (r as DashboardLayoutRow).widgets }),
+                ]),
+              ),
+            },
           }))
           // Corrige contas antigas cuja entrada "isSelf" ainda ficou salva como o
           // placeholder genérico "Você" em vez do nome real do perfil.
@@ -890,11 +943,16 @@ export const useDataStore = create<DataState>()(
         if (get().profileSizeMigrated) return
         set((state) => ({
           profileSizeMigrated: true,
-          layout: {
-            widgets: state.layout.widgets.map((w) =>
-              w.type === 'profile' && w.size === 'M' ? { ...w, size: 'S' as const } : w,
-            ),
-          },
+          layouts: Object.fromEntries(
+            Object.entries(state.layouts).map(([workspaceId, layout]) => [
+              workspaceId,
+              {
+                widgets: layout.widgets.map((w) =>
+                  w.type === 'profile' && w.size === 'M' ? { ...w, size: 'S' as const } : w,
+                ),
+              },
+            ]),
+          ),
         }))
       },
 
@@ -953,9 +1011,11 @@ export const useDataStore = create<DataState>()(
               ? state.workspaces.find((w) => w.id !== id)!.id
               : state.currentWorkspaceId
           const { [id]: _removedRole, ...workspaceRoles } = state.workspaceRoles
+          const { [id]: _removedLayout, ...layouts } = state.layouts
           return {
             workspaces: state.workspaces.filter((w) => w.id !== id),
             workspaceRoles,
+            layouts,
             currentWorkspaceId: nextWorkspaceId,
             projects: state.projects.filter((p) => p.workspaceId !== id),
             tasks: state.tasks.filter((t) => t.workspaceId !== id),
@@ -1008,9 +1068,11 @@ export const useDataStore = create<DataState>()(
               ? state.workspaces.find((w) => w.id !== workspaceId)!.id
               : state.currentWorkspaceId
           const { [workspaceId]: _removedRole, ...workspaceRoles } = state.workspaceRoles
+          const { [workspaceId]: _removedLayout, ...layouts } = state.layouts
           return {
             workspaces: state.workspaces.filter((w) => w.id !== workspaceId),
             workspaceRoles,
+            layouts,
             currentWorkspaceId: nextWorkspaceId,
             projects: state.projects.filter((p) => p.workspaceId !== workspaceId),
             tasks: state.tasks.filter((t) => t.workspaceId !== workspaceId),
@@ -1024,6 +1086,7 @@ export const useDataStore = create<DataState>()(
         // workspace continua existindo para os outros membros.
         fireAndForget(supabase.from('team_members').delete().eq('workspace_id', workspaceId).eq('linked_user_id', userId))
         fireAndForget(supabase.from('workspace_members').delete().eq('workspace_id', workspaceId).eq('user_id', userId))
+        fireAndForget(supabase.from('dashboard_layouts').delete().eq('workspace_id', workspaceId).eq('user_id', userId))
       },
 
       addTeamMember: (data) => {
@@ -1583,33 +1646,52 @@ export const useDataStore = create<DataState>()(
         }))
       },
 
-      setLayout: (layout) => set({ layout }),
-      resetLayout: () => set({ layout: defaultLayout() }),
-      toggleWidgetVisible: (widgetId) =>
-        set((state) => ({
-          layout: {
-            widgets: state.layout.widgets.map((w) =>
-              w.id === widgetId ? { ...w, visible: !w.visible } : w,
-            ),
-          },
-        })),
-      resizeWidget: (widgetId, size) =>
-        set((state) => ({
-          layout: {
-            widgets: state.layout.widgets.map((w) => (w.id === widgetId ? { ...w, size } : w)),
-          },
-        })),
-      reorderWidgets: (orderedIds) =>
-        set((state) => ({
-          layout: {
-            widgets: orderedIds
-              .map((id, index) => {
-                const widget = state.layout.widgets.find((w) => w.id === id)
-                return widget ? { ...widget, order: index } : undefined
-              })
-              .filter((w): w is NonNullable<typeof w> => Boolean(w)),
-          },
-        })),
+      setLayout: (layout) => {
+        const workspaceId = get().currentWorkspaceId
+        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        const userId = useAuthStore.getState().currentUserId
+        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+      },
+      resetLayout: () => {
+        const workspaceId = get().currentWorkspaceId
+        const layout = defaultLayout()
+        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        const userId = useAuthStore.getState().currentUserId
+        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+      },
+      toggleWidgetVisible: (widgetId) => {
+        const workspaceId = get().currentWorkspaceId
+        const current = get().layouts[workspaceId] ?? defaultLayout()
+        const layout = {
+          widgets: current.widgets.map((w) => (w.id === widgetId ? { ...w, visible: !w.visible } : w)),
+        }
+        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        const userId = useAuthStore.getState().currentUserId
+        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+      },
+      resizeWidget: (widgetId, size) => {
+        const workspaceId = get().currentWorkspaceId
+        const current = get().layouts[workspaceId] ?? defaultLayout()
+        const layout = { widgets: current.widgets.map((w) => (w.id === widgetId ? { ...w, size } : w)) }
+        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        const userId = useAuthStore.getState().currentUserId
+        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+      },
+      reorderWidgets: (orderedIds) => {
+        const workspaceId = get().currentWorkspaceId
+        const current = get().layouts[workspaceId] ?? defaultLayout()
+        const layout = {
+          widgets: orderedIds
+            .map((id, index) => {
+              const widget = current.widgets.find((w) => w.id === id)
+              return widget ? { ...widget, order: index } : undefined
+            })
+            .filter((w): w is NonNullable<typeof w> => Boolean(w)),
+        }
+        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        const userId = useAuthStore.getState().currentUserId
+        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+      },
     }),
     {
       name: 'taskez-data',
@@ -1618,11 +1700,13 @@ export const useDataStore = create<DataState>()(
       // vive no Supabase e é recarregado via `seedIfEmpty()` a cada sessão.
       partialize: (state) => ({
         profileSizeMigrated: state.profileSizeMigrated,
-        layout: state.layout,
+        layouts: state.layouts,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
-        state.layout = normalizeLayout(state.layout)
+        state.layouts = Object.fromEntries(
+          Object.entries(state.layouts).map(([workspaceId, layout]) => [workspaceId, normalizeLayout(layout)]),
+        )
       },
     },
   ),
@@ -1660,6 +1744,14 @@ export function useWorkspaceFiles() {
   const files = useDataStore((s) => s.files)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
   return files.filter((f) => f.workspaceId === currentWorkspaceId)
+}
+
+// Layout do painel modular da workspace atual — cada workspace tem sua própria
+// configuração de widgets (não compartilhada com as demais).
+export function useWorkspaceLayout(): DashboardLayout {
+  const layouts = useDataStore((s) => s.layouts)
+  const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
+  return layouts[currentWorkspaceId] ?? defaultLayout()
 }
 
 export function useWorkspaceNotifications() {

@@ -5,7 +5,7 @@ import { Sheet } from '@/components/ui/Sheet'
 import { Switch } from '@/components/ui/Switch'
 import { cn } from '@/lib/utils'
 import { nextSize, SIZE_LABELS, WIDGET_CATALOG } from '@/lib/widgetCatalog'
-import { defaultLayout, useDataStore } from '@/store/dataStore'
+import { defaultLayout, useDataStore, useWorkspaceLayout } from '@/store/dataStore'
 import type { DashboardWidget } from '@/types'
 
 interface CustomizeDashboardSheetProps {
@@ -14,7 +14,7 @@ interface CustomizeDashboardSheetProps {
 }
 
 export function CustomizeDashboardSheet({ open, onClose }: CustomizeDashboardSheetProps) {
-  const layout = useDataStore((s) => s.layout)
+  const layout = useWorkspaceLayout()
   const setLayout = useDataStore((s) => s.setLayout)
   const [draft, setDraft] = useState<DashboardWidget[]>([])
 

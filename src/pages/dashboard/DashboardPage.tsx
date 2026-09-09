@@ -10,7 +10,7 @@ import { SummaryWidget } from '@/components/widgets/SummaryWidget'
 import { TasksWidget } from '@/components/widgets/TasksWidget'
 import { TeamWidget } from '@/components/widgets/TeamWidget'
 import { UtilityWidget } from '@/components/widgets/UtilityWidget'
-import { useDataStore } from '@/store/dataStore'
+import { useDataStore, useWorkspaceLayout } from '@/store/dataStore'
 import type { WidgetSize, WidgetType } from '@/types'
 
 const widgetComponents: Record<WidgetType, React.ComponentType<{ size: WidgetSize }>> = {
@@ -25,7 +25,7 @@ const widgetComponents: Record<WidgetType, React.ComponentType<{ size: WidgetSiz
 }
 
 export function DashboardPage() {
-  const layout = useDataStore((s) => s.layout)
+  const layout = useWorkspaceLayout()
   const seedIfEmpty = useDataStore((s) => s.seedIfEmpty)
   const migrateProfileSizeIfNeeded = useDataStore((s) => s.migrateProfileSizeIfNeeded)
   const [customizeOpen, setCustomizeOpen] = useState(false)
