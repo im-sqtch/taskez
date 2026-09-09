@@ -19,7 +19,9 @@ interface NotifyRequest {
   user_id: string
   title: string
   body: string
-  entity_type: 'task' | 'project' | null
+  // Repassado como está para o payload do push — o SW decide o que fazer com
+  // isso (inclui o convênio 'pomodoro:<id>' usado pelo timer de foco).
+  entity_type: string | null
   entity_id: string | null
   notification_id: string
 }
