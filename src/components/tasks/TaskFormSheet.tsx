@@ -91,7 +91,9 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     } else {
       addTask({
         ...payload,
-        subtasks: subtasks.map((t) => ({ id: crypto.randomUUID(), title: t, done: false })),
+        // Inclui o rascunho ainda não confirmado com "+"/Enter — sem isso, a
+        // última subtarefa digitada se perdia silenciosamente ao criar.
+        subtasks: withDraft(subtasks, subtaskInput).map((t) => ({ id: crypto.randomUUID(), title: t, done: false })),
       })
     }
     onClose()
