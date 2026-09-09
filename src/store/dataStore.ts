@@ -1746,12 +1746,18 @@ export function useWorkspaceFiles() {
   return files.filter((f) => f.workspaceId === currentWorkspaceId)
 }
 
+// Fallback para workspace sem layout salvo ainda — precisa ser uma referência
+// estável (calculada uma única vez), e não `defaultLayout()` chamado direto no
+// hook: isso criaria um objeto novo a cada render e quebraria qualquer efeito
+// que dependa do valor de `layout` (loop de reset em CustomizeDashboardSheet).
+const FALLBACK_LAYOUT = defaultLayout()
+
 // Layout do painel modular da workspace atual — cada workspace tem sua própria
 // configuração de widgets (não compartilhada com as demais).
 export function useWorkspaceLayout(): DashboardLayout {
   const layouts = useDataStore((s) => s.layouts)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
-  return layouts[currentWorkspaceId] ?? defaultLayout()
+  return layouts[currentWorkspaceId] ?? FALLBACK_LAYOUT
 }
 
 export function useWorkspaceNotifications() {
