@@ -22,11 +22,13 @@ export function ConfirmDialog() {
           {options.description && <p className="text-sm leading-relaxed text-text-muted">{options.description}</p>}
         </div>
         <div className="flex gap-2.5">
-          <Button variant="secondary" size="sm" fullWidth onClick={close}>
-            {options.cancelLabel ?? 'Cancelar'}
-          </Button>
+          {!options.hideCancel && (
+            <Button variant="secondary" size="sm" fullWidth onClick={close}>
+              {options.cancelLabel ?? 'Cancelar'}
+            </Button>
+          )}
           <Button variant={options.danger ? 'danger' : 'primary'} size="sm" fullWidth onClick={handleConfirm}>
-            {options.confirmLabel ?? 'Confirmar'}
+            {options.confirmLabel ?? (options.hideCancel ? 'OK' : 'Confirmar')}
           </Button>
         </div>
       </div>

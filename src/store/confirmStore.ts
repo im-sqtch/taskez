@@ -7,6 +7,9 @@ export interface ConfirmOptions {
   cancelLabel?: string
   danger?: boolean
   onConfirm: () => void
+  // Esconde o botão de cancelar — para avisos informativos (sucesso/erro de
+  // uma ação que já aconteceu) em vez de uma decisão de fato com duas saídas.
+  hideCancel?: boolean
 }
 
 interface ConfirmState {

@@ -56,7 +56,7 @@ export function ProfilePage() {
         description: canRemoveMyself
           ? `${contactName} ainda faz parte da equipe de: ${names}. Remova-a de lá primeiro.`
           : `${contactName} ainda faz parte da equipe de: ${names}. Só o dono dessa workspace pode removê-la de lá — peça a ele antes de excluir esse contato.`,
-        confirmLabel: 'Entendi',
+        hideCancel: true,
         onConfirm: () => {},
       })
       return

@@ -87,6 +87,12 @@ export function SettingsPage() {
 
   if (!user) return null
 
+  // Aviso informativo (sem decisão a tomar) no lugar do `alert()` nativo do
+  // navegador, que destoa do visual do app.
+  function notify(title: string, description: string) {
+    confirmAction({ title, description, hideCancel: true, onConfirm: () => {} })
+  }
+
   async function handleToggleNotifications() {
     if (notifBusy || !user) return
     setNotifBusy(true)
@@ -99,7 +105,7 @@ export function SettingsPage() {
         if (result.ok) {
           setNotifEnabled(true)
         } else {
-          alert(result.error)
+          notify('Não foi possível ativar', result.error)
         }
       }
     } finally {
@@ -127,7 +133,7 @@ export function SettingsPage() {
       danger: true,
       onConfirm: async () => {
         const result = await signOutOtherDevices()
-        alert(result.ok ? 'Sessão encerrada nos outros dispositivos.' : result.error)
+        notify(result.ok ? 'Pronto' : 'Não foi possível desconectar', result.ok ? 'Sessão encerrada nos outros dispositivos.' : result.error)
       },
     })
   }
