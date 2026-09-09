@@ -1,14 +1,28 @@
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/Button'
+import { Field } from '@/components/ui/Input'
 import { useConfirmStore } from '@/store/confirmStore'
 
 export function ConfirmDialog() {
   const options = useConfirmStore((s) => s.options)
   const close = useConfirmStore((s) => s.close)
+  const [typed, setTyped] = useState('')
+
+  // Zera o campo sempre que um novo diálogo é aberto (inclusive reabrindo o
+  // mesmo tipo de ação em seguida) — cada `confirmAction(...)` cria um objeto
+  // novo, então a identidade de `options` muda a cada abertura.
+  useEffect(() => {
+    setTyped('')
+  }, [options])
 
   if (!options) return null
 
+  const needsTypedConfirmation = Boolean(options.confirmText)
+  const confirmDisabled = needsTypedConfirmation && typed !== options.confirmText
+
   function handleConfirm() {
+    if (confirmDisabled) return
     options!.onConfirm()
     close()
   }
@@ -21,13 +35,28 @@ export function ConfirmDialog() {
           <h2 className="text-base font-bold text-text">{options.title}</h2>
           {options.description && <p className="text-sm leading-relaxed text-text-muted">{options.description}</p>}
         </div>
+        {needsTypedConfirmation && (
+          <Field
+            label={`Digite "${options.confirmText}" para confirmar`}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            autoComplete="off"
+            autoFocus
+          />
+        )}
         <div className="flex gap-2.5">
           {!options.hideCancel && (
             <Button variant="secondary" size="sm" fullWidth onClick={close}>
               {options.cancelLabel ?? 'Cancelar'}
             </Button>
           )}
-          <Button variant={options.danger ? 'danger' : 'primary'} size="sm" fullWidth onClick={handleConfirm}>
+          <Button
+            variant={options.danger ? 'danger' : 'primary'}
+            size="sm"
+            fullWidth
+            onClick={handleConfirm}
+            disabled={confirmDisabled}
+          >
             {options.confirmLabel ?? (options.hideCancel ? 'OK' : 'Confirmar')}
           </Button>
         </div>

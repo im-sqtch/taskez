@@ -54,9 +54,10 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
     e.stopPropagation()
     confirmAction({
       title: 'Excluir workspace',
-      description: `Excluir o workspace "${workspace.name}"? Todos os projetos, tarefas e a equipe dele serão apagados.`,
+      description: `Essa ação não pode ser desfeita. Todos os projetos, tarefas e a equipe de "${workspace.name}" serão apagados.`,
       confirmLabel: 'Excluir',
       danger: true,
+      confirmText: workspace.name,
       onConfirm: () => deleteWorkspace(workspace.id),
     })
   }

@@ -10,6 +10,11 @@ export interface ConfirmOptions {
   // Esconde o botão de cancelar — para avisos informativos (sucesso/erro de
   // uma ação que já aconteceu) em vez de uma decisão de fato com duas saídas.
   hideCancel?: boolean
+  // Trava o botão de confirmar até o usuário digitar exatamente este texto
+  // (ex.: o nome do que está sendo excluído) — para ações destrutivas onde um
+  // clique duplo/acidental teria consequência grande demais para um simples
+  // Cancelar/Confirmar.
+  confirmText?: string
 }
 
 interface ConfirmState {
