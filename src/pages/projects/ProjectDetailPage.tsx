@@ -19,9 +19,9 @@ import { useDataStore, useWorkspaceTasks, useWorkspaceTeam } from '@/store/dataS
 const tabs = [
   { key: 'overview', label: 'Visão geral' },
   { key: 'tasks', label: 'Tarefas' },
-  { key: 'team', label: 'Equipe' },
   { key: 'files', label: 'Arquivos' },
   { key: 'chat', label: 'Chat' },
+  { key: 'team', label: 'Equipe' },
 ] as const
 
 type TabKey = (typeof tabs)[number]['key']
@@ -36,7 +36,7 @@ export function ProjectDetailPage() {
   const deleteProject = useDataStore((s) => s.deleteProject)
   const updateProject = useDataStore((s) => s.updateProject)
 
-  const [tab, setTab] = useState<TabKey>('overview')
+  const [tab, setTab] = useState<TabKey>('tasks')
   const [editOpen, setEditOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
