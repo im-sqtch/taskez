@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Check, ChevronRight, Globe, LogOut, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react'
+import { ArrowLeft, Bell, Check, ChevronRight, Globe, LogOut, Monitor, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
@@ -64,6 +64,7 @@ export function SettingsPage() {
   const user = useAuthStore((s) => s.currentUser())
   const logout = useAuthStore((s) => s.logout)
   const deleteAccount = useAuthStore((s) => s.deleteAccount)
+  const signOutOtherDevices = useAuthStore((s) => s.signOutOtherDevices)
   const updateProfile = useAuthStore((s) => s.updateProfile)
   const theme = useThemeStore((s) => s.theme)
   const setTheme = useThemeStore((s) => s.setTheme)
@@ -114,6 +115,19 @@ export function SettingsPage() {
       onConfirm: () => {
         logout()
         navigate('/login')
+      },
+    })
+  }
+
+  function handleSignOutOtherDevices() {
+    confirmAction({
+      title: 'Desconectar de outros dispositivos',
+      description: 'Isso encerra a sessão em qualquer outro celular, tablet ou navegador logado nesta conta. Este dispositivo continua conectado.',
+      confirmLabel: 'Desconectar',
+      danger: true,
+      onConfirm: async () => {
+        const result = await signOutOtherDevices()
+        alert(result.ok ? 'Sessão encerrada nos outros dispositivos.' : result.error)
       },
     })
   }
@@ -215,6 +229,7 @@ export function SettingsPage() {
       </Section>
 
       <Section title="Conta">
+        <Row icon={<Monitor size={17} />} label="Desconectar de outros dispositivos" onClick={handleSignOutOtherDevices} />
         <Row icon={<LogOut size={17} />} label="Sair" onClick={handleLogout} />
         <Row icon={<Trash2 size={17} />} label="Excluir conta" onClick={handleDeleteAccount} danger />
       </Section>

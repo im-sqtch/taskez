@@ -57,6 +57,9 @@ interface AuthState {
   updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor' | 'timezone'>>) => Promise<void>
   completeOnboarding: () => void
   deleteAccount: () => Promise<void>
+  // Revoga a sessão de qualquer outro dispositivo/navegador logado nesta conta,
+  // sem derrubar o dispositivo atual (diferente de `logout`).
+  signOutOtherDevices: () => Promise<{ ok: true } | { ok: false; error: string }>
   currentUser: () => User | undefined
 }
 
@@ -96,9 +99,17 @@ export const useAuthStore = create<AuthState>()(
         return { ok: true }
       },
 
+      // `scope: 'local'` — sem isso, o padrão do Supabase (`'global'`) derruba
+      // a sessão em TODOS os dispositivos logados nesta conta, não só o atual.
       logout: async () => {
-        await supabase.auth.signOut()
+        await supabase.auth.signOut({ scope: 'local' })
         set({ currentUserId: null, profile: null })
+      },
+
+      signOutOtherDevices: async () => {
+        const { error } = await supabase.auth.signOut({ scope: 'others' })
+        if (error) return { ok: false, error: error.message }
+        return { ok: true }
       },
 
       setUsageMode: async (mode) => {
