@@ -117,11 +117,11 @@ export function ProfilePage() {
           {team.map((m) => (
             <div key={m.id} className="flex items-center gap-3">
               <Avatar name={m.name} color={m.avatarColor} size="sm" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-text">{m.name}</p>
-                <p className="text-xs text-text-faint">{m.role}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-text">{m.name}</p>
+                <p className="truncate text-xs text-text-faint">{m.role}</p>
               </div>
-              <span className="text-xs font-semibold capitalize text-text-muted">
+              <span className="shrink-0 text-xs font-semibold capitalize text-text-muted">
                 {m.status === 'online' ? 'Online' : m.status === 'away' ? 'Ausente' : 'Offline'}
               </span>
               {isOwnerHere && !m.isSelf && (
@@ -153,9 +153,9 @@ export function ProfilePage() {
             contacts.map(({ contact, user: contactUser }) => (
               <div key={contact.id} className="flex items-center gap-3">
                 <Avatar name={contactUser.name} color={contactUser.avatarColor} size="sm" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-text">{contactUser.name}</p>
-                  <p className="text-xs text-text-faint">{contactUser.email}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-text">{contactUser.name}</p>
+                  <p className="truncate text-xs text-text-faint">{contactUser.email}</p>
                 </div>
                 <button
                   onClick={() => handleRemoveContact(contact.id, contactUser.id, contactUser.name)}
