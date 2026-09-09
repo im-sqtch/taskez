@@ -51,10 +51,17 @@ Deno.serve(async (req) => {
     notificationId: payload.notification_id,
   })
 
-  await Promise.all(
+  // Antes isto engolia qualquer erro do envio real e sempre respondia "ok" —
+  // um 200 aqui só provava que a função rodou, não que o push chegou no
+  // aparelho. Agora cada tentativa é registrada (sucesso ou motivo da falha)
+  // e devolvida no corpo da resposta, que fica gravado em `net._http_response`
+  // (consultável via SQL) — dá pra diagnosticar sem precisar de acesso aos
+  // logs da function no painel do Supabase.
+  const results = await Promise.all(
     subscriptions.map(async (sub) => {
       try {
         await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, notificationPayload)
+        return { id: sub.id, ok: true }
       } catch (err) {
         // 404/410 = o navegador revogou/expirou essa assinatura — remove para
         // não tentar de novo em toda notificação futura.
@@ -62,9 +69,11 @@ Deno.serve(async (req) => {
         if (statusCode === 404 || statusCode === 410) {
           await supabase.from('push_subscriptions').delete().eq('id', sub.id)
         }
+        const message = err instanceof Error ? err.message : String(err)
+        return { id: sub.id, ok: false, statusCode: statusCode ?? null, message }
       }
     }),
   )
 
-  return new Response('ok', { status: 200 })
+  return new Response(JSON.stringify({ results }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 })

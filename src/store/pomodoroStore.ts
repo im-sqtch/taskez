@@ -28,12 +28,42 @@ function getTimer(state: PomodoroState, id: string, totalSeconds: number): Timer
   return state.timers[id] ?? { secondsLeft: totalSeconds, running: false, endAt: null }
 }
 
+// Contexto único reaproveitado entre chamadas. Criar um `AudioContext` novo a
+// cada beep (como antes) nasce em estado "suspended" quando não é resultado
+// direto de um gesto do usuário — que é exatamente o caso aqui, já que o beep
+// dispara de dentro do `setInterval` do módulo, não de um clique. O navegador
+// então nunca toca o som de verdade, sem erro nenhum visível. A saída é criar
+// o contexto (e "destravá-lo") uma vez, dentro de um clique de verdade (ver
+// `unlockAudio`, chamado em `start`), e reaproveitar esse mesmo contexto —
+// já destravado — quando o beep precisar tocar minutos depois.
+let sharedAudioContext: AudioContext | null = null
+
+function getAudioContext(): AudioContext | null {
+  const AudioContextCtor =
+    window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!AudioContextCtor) return null
+  if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+    sharedAudioContext = new AudioContextCtor()
+  }
+  return sharedAudioContext
+}
+
+// Chamado a partir de um clique real (o botão de play) — a única chance
+// confiável de tirar o contexto do estado "suspended".
+function unlockAudio() {
+  try {
+    const ctx = getAudioContext()
+    if (ctx?.state === 'suspended') void ctx.resume()
+  } catch {
+    // sem suporte a áudio — ignora
+  }
+}
+
 function playCompletionSound() {
   try {
-    const AudioContextCtor =
-      window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextCtor) return
-    const ctx = new AudioContextCtor()
+    const ctx = getAudioContext()
+    if (!ctx) return
+    if (ctx.state === 'suspended') void ctx.resume()
     const now = ctx.currentTime
     ;[0, 0.18, 0.36].forEach((offset, i) => {
       const osc = ctx.createOscillator()
@@ -47,7 +77,8 @@ function playCompletionSound() {
       osc.start(now + offset)
       osc.stop(now + offset + 0.2)
     })
-    setTimeout(() => ctx.close(), 700)
+    // Sem fechar o contexto depois (como antes) — ele é reaproveitado no
+    // próximo beep, já destravado.
   } catch {
     // ambiente sem suporte a áudio (ex.: SSR) — falha silenciosamente
   }
@@ -119,11 +150,38 @@ async function closeRunningNotification(id: string) {
   }
 }
 
+// Sinal imediato de conclusão em primeiro plano — não depende do push
+// agendado (que tem até ~1min de atraso e, em alguns aparelhos, só chega
+// quando o app é reaberto). Reaproveita a mesma tag da notificação "em
+// andamento", então substitui em vez de empilhar.
+async function showCompletedNotification(id: string) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+  if (!('serviceWorker' in navigator)) return
+  const { title, body } = labelsFor(id)
+  try {
+    const reg = await navigator.serviceWorker.ready
+    await reg.showNotification(title, {
+      tag: `pomodoro-${id}`,
+      renotify: true,
+      icon: '/favicon.svg',
+      badge: '/favicon.svg',
+      body,
+      data: { pomodoroId: id },
+    } as NotificationOptions)
+  } catch {
+    // sem Service Worker ativo/sem suporte — o beep sonoro já cobre o aviso
+  }
+}
+
 export const usePomodoroStore = create<PomodoroState>()(
   persist(
     (set, get) => ({
       timers: {},
       start: (id, totalSeconds) => {
+        // Chamado direto do clique no botão de play — o único momento em que
+        // dá pra destravar o áudio de forma confiável (ver comentário acima
+        // de `unlockAudio`).
+        unlockAudio()
         const current = getTimer(get(), id, totalSeconds)
         const secondsLeft = current.secondsLeft > 0 ? current.secondsLeft : totalSeconds
         const endAt = Date.now() + secondsLeft * 1000
@@ -215,9 +273,10 @@ setInterval(() => {
       changed = true
       playCompletionSound()
       // Terminou em primeiro plano — cancela o push agendado pra não vir uma
-      // notificação redundante minutos depois (granularidade do pg_cron).
+      // notificação redundante minutos depois (granularidade do pg_cron), e
+      // mostra o aviso de conclusão na hora em vez de esperar o push.
       cancelScheduledPush(timer.scheduledId)
-      void closeRunningNotification(id)
+      void showCompletedNotification(id)
     } else if (secondsLeft !== timer.secondsLeft) {
       nextTimers[id] = { ...timer, secondsLeft }
       changed = true
