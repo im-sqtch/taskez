@@ -627,6 +627,11 @@ interface DataState {
   // Sai de uma workspace da qual não é dono (dono usa `deleteWorkspace`). Sem
   // efeito se for a única workspace restante ou se quem chama for o dono.
   leaveWorkspace: (workspaceId: string) => void
+  // Só o dono atual pode chamar, e só pra outro membro já existente na
+  // workspace — transfere role='owner' + workspaces.created_by atomicamente
+  // (RPC valida tudo de novo no servidor; ver 20260910160000). Quem chama
+  // vira 'member' na mesma operação.
+  transferOwnership: (workspaceId: string, newOwnerId: string) => Promise<{ ok: true } | { ok: false; error: string }>
 
   // Projects
   addProject: (data: Omit<Project, 'id' | 'workspaceId' | 'createdAt' | 'order' | 'completionAck'>) => string
@@ -1145,8 +1150,8 @@ export const useDataStore = create<DataState>()(
       },
 
       // Sair de uma workspace da qual não é dono. O dono usa `deleteWorkspace`
-      // (não há transferência de titularidade ainda, então o dono não tem como
-      // "só sair" deixando a workspace de pé).
+      // (ou transfere a titularidade primeiro, via `transferOwnership`, se
+      // quiser sair sem apagar a workspace para os demais).
       leaveWorkspace: (workspaceId) => {
         const userId = useAuthStore.getState().currentUserId
         if (!userId) return
@@ -1178,6 +1183,20 @@ export const useDataStore = create<DataState>()(
         fireAndForget(supabase.from('team_members').delete().eq('workspace_id', workspaceId).eq('linked_user_id', userId))
         fireAndForget(supabase.from('workspace_members').delete().eq('workspace_id', workspaceId).eq('user_id', userId))
         fireAndForget(supabase.from('dashboard_layouts').delete().eq('workspace_id', workspaceId).eq('user_id', userId))
+      },
+
+      transferOwnership: async (workspaceId, newOwnerId) => {
+        const { error } = await supabase.rpc('transfer_workspace_ownership', {
+          p_workspace_id: workspaceId,
+          p_new_owner_id: newOwnerId,
+        })
+        if (error) return { ok: false, error: 'Não foi possível transferir a titularidade.' }
+        // Otimista só pra quem chamou (a RPC já validou que é o dono atual):
+        // o resto (o novo dono ver o próprio papel mudar, em qualquer sessão
+        // dele) chega via o realtime de `workspace_members`, que já dispara
+        // `seedIfEmpty()` de novo a cada mudança nessa tabela.
+        set((state) => ({ workspaceRoles: { ...state.workspaceRoles, [workspaceId]: 'member' } }))
+        return { ok: true }
       },
 
       addTeamMember: (data) => {

@@ -1,4 +1,4 @@
-import { ChevronRight, Flame, Layers, ListChecks, Settings, Trash2, TrendingUp, UserPlus, Users } from 'lucide-react'
+import { ChevronRight, Crown, Flame, Layers, ListChecks, Settings, Trash2, TrendingUp, UserPlus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AddContactSheet } from '@/components/profile/AddContactSheet'
@@ -24,6 +24,7 @@ export function ProfilePage() {
   const workspaces = useDataStore((s) => s.workspaces)
   const workspaceRoles = useDataStore((s) => s.workspaceRoles)
   const removeTeamMember = useDataStore((s) => s.removeTeamMember)
+  const transferOwnership = useDataStore((s) => s.transferOwnership)
   const removeContact = useContactsStore((s) => s.removeContact)
   const contacts = useAcceptedContacts(user?.id)
   const currentWorkspace = useCurrentWorkspace()
@@ -43,6 +44,22 @@ export function ProfilePage() {
       confirmLabel: 'Remover',
       danger: true,
       onConfirm: () => removeTeamMember(memberId),
+    })
+  }
+
+  function handleTransferOwnership(workspaceId: string, newOwnerId: string, memberName: string) {
+    confirmAction({
+      title: 'Transferir titularidade',
+      description: `Transferir a titularidade desta workspace para ${memberName}? Você deixa de ser dono(a) — ela passa a poder remover membros, apagar projetos/arquivos e a própria workspace.`,
+      confirmLabel: 'Transferir',
+      danger: true,
+      confirmText: memberName,
+      onConfirm: async () => {
+        const result = await transferOwnership(workspaceId, newOwnerId)
+        if (!result.ok) {
+          confirmAction({ title: 'Não foi possível transferir', description: result.error, hideCancel: true, onConfirm: () => {} })
+        }
+      },
     })
   }
 
@@ -124,6 +141,15 @@ export function ProfilePage() {
               <span className="shrink-0 text-xs font-semibold capitalize text-text-muted">
                 {m.status === 'online' ? 'Online' : m.status === 'away' ? 'Ausente' : 'Offline'}
               </span>
+              {isOwnerHere && !m.isSelf && currentWorkspace && m.linkedUserId && (
+                <button
+                  onClick={() => handleTransferOwnership(currentWorkspace.id, m.linkedUserId!, m.name)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-faint hover:text-accent"
+                  aria-label={`Tornar ${m.name} dono(a) da workspace`}
+                >
+                  <Crown size={15} />
+                </button>
+              )}
               {isOwnerHere && !m.isSelf && (
                 <button
                   onClick={() => handleRemoveMember(m.id, m.name)}
