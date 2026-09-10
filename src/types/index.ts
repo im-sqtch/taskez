@@ -178,6 +178,9 @@ export interface User {
   avatarColor: string
   usageMode: UsageMode
   timezone: string
+  // Configurações > Tarefas concluídas: false pergunta (padrão atual), true
+  // conclui o projeto automaticamente quando todas as tarefas terminam.
+  autoCompleteProjects: boolean
   createdAt: string
 }
 

@@ -50,6 +50,33 @@ function Row({
   )
 }
 
+// Linha de opção com descrição e marca de selecionado — usada em preferências
+// onde o rótulo sozinho (como em `Row`) não basta para explicar a escolha.
+function OptionRow({
+  label,
+  description,
+  selected,
+  onClick,
+}: {
+  label: string
+  description: string
+  selected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-start gap-3 border-b border-border-soft px-4 py-3.5 text-left last:border-b-0"
+    >
+      <div className="flex-1">
+        <p className="text-sm font-medium text-text">{label}</p>
+        <p className="mt-0.5 text-xs text-text-faint">{description}</p>
+      </div>
+      {selected && <Check size={16} className="mt-0.5 shrink-0 text-accent" />}
+    </button>
+  )
+}
+
 // Lista fixa de offsets (UTC-12 a UTC+12). Se o valor salvo do usuário não
 // estiver nessa lista (ex.: conta antiga com fuso IANA), ele entra como opção
 // extra para não sumir do select até o usuário escolher um novo.
@@ -231,6 +258,21 @@ export function SettingsPage() {
               <ChevronRight size={15} />
             </span>
           }
+        />
+      </Section>
+
+      <Section title="Tarefas concluídas">
+        <OptionRow
+          label="Perguntar quando concluir"
+          description="Quando todas as tarefas de um projeto forem concluídas, você escolhe se ele fica em ativos ou é concluído."
+          selected={!user.autoCompleteProjects}
+          onClick={() => updateProfile({ autoCompleteProjects: false })}
+        />
+        <OptionRow
+          label="Concluir automaticamente"
+          description="Quando todas as tarefas de um projeto forem concluídas, ele é movido direto para Concluídos, sem perguntar."
+          selected={user.autoCompleteProjects}
+          onClick={() => updateProfile({ autoCompleteProjects: true })}
         />
       </Section>
 

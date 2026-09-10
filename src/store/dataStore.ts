@@ -445,6 +445,20 @@ async function generateDueRecurrences(userId: string) {
   }
 }
 
+// Chamado sempre que uma tarefa passa a `done`. Quando o usuário escolheu, em
+// Configurações > Tarefas concluídas, pular a pergunta de "manter em ativos ou
+// concluir" (ver ProjectDetailPage), e essa foi a última tarefa pendente do
+// projeto, conclui o projeto direto — sem esperar ele abrir a tela do projeto.
+function maybeAutoCompleteProject(get: () => DataState, projectId: string | undefined) {
+  if (!projectId) return
+  if (!useAuthStore.getState().profile?.autoCompleteProjects) return
+  const project = get().projects.find((p) => p.id === projectId)
+  if (!project || project.status !== 'active') return
+  const projectTasks = get().tasks.filter((t) => t.projectId === projectId)
+  if (projectTasks.length === 0 || !projectTasks.every((t) => t.status === 'done')) return
+  get().updateProject(projectId, { status: 'completed' })
+}
+
 // Reabrir uma tarefa quebra o "100% concluído" que levou o projeto a ficar
 // concluído (ou a ter a decisão de "manter em ativos" registrada) — o projeto
 // volta a ativos e a próxima conclusão total volta a pedir uma decisão nova.
@@ -1535,6 +1549,8 @@ export const useDataStore = create<DataState>()(
         fireAndForget(supabase.from('tasks').update({ ...taskPatchToRow(patch), updated_at: now() }).eq('id', id))
         if (taskBeforePatch?.status === 'done' && patch.status !== undefined && patch.status !== 'done') {
           reactivateProjectOnTaskReopened(get, taskBeforePatch.projectId)
+        } else if (taskBeforePatch?.status !== 'done' && patch.status === 'done') {
+          maybeAutoCompleteProject(get, taskBeforePatch?.projectId)
         }
       },
       deleteTask: (id) => {
@@ -1574,6 +1590,8 @@ export const useDataStore = create<DataState>()(
         fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
         if (!becomingDone) {
           reactivateProjectOnTaskReopened(get, task.projectId)
+        } else {
+          maybeAutoCompleteProject(get, task.projectId)
         }
       },
       setTaskStatus: (id, status) => {
@@ -1597,6 +1615,8 @@ export const useDataStore = create<DataState>()(
         fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
         if (task?.status === 'done' && status !== 'done') {
           reactivateProjectOnTaskReopened(get, task.projectId)
+        } else if (becomingDone) {
+          maybeAutoCompleteProject(get, task?.projectId)
         }
       },
       addSubtask: (taskId, title) => {

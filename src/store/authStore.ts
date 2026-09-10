@@ -13,6 +13,7 @@ interface ProfileRow {
   avatar_color: string
   usage_mode: UsageMode
   timezone: string
+  auto_complete_projects: boolean
   created_at: string
 }
 
@@ -24,6 +25,7 @@ function mapProfile(row: ProfileRow): User {
     avatarColor: row.avatar_color,
     usageMode: row.usage_mode,
     timezone: row.timezone,
+    autoCompleteProjects: row.auto_complete_projects,
     createdAt: row.created_at,
   }
 }
@@ -54,7 +56,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
   logout: () => Promise<void>
   setUsageMode: (mode: UsageMode) => Promise<void>
-  updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor' | 'timezone'>>) => Promise<void>
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor' | 'timezone' | 'autoCompleteProjects'>>) => Promise<void>
   completeOnboarding: () => void
   deleteAccount: () => Promise<void>
   // Revoga a sessão de qualquer outro dispositivo/navegador logado nesta conta,
@@ -124,10 +126,11 @@ export const useAuthStore = create<AuthState>()(
         if (!id) return
         set((state) => ({ profile: state.profile ? { ...state.profile, ...patch } : state.profile }))
         useDataStore.getState().syncSelfProfile(patch)
-        const updates: Record<string, string> = {}
+        const updates: Record<string, string | boolean> = {}
         if (patch.name !== undefined) updates.name = patch.name
         if (patch.avatarColor !== undefined) updates.avatar_color = patch.avatarColor
         if (patch.timezone !== undefined) updates.timezone = patch.timezone
+        if (patch.autoCompleteProjects !== undefined) updates.auto_complete_projects = patch.autoCompleteProjects
         await supabase.from('profiles').update(updates).eq('id', id)
       },
 
