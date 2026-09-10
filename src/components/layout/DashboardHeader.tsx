@@ -5,12 +5,13 @@ import { WorkspaceDropdown } from '@/components/workspace/WorkspaceDropdown'
 import { WorkspaceSwitcherSheet } from '@/components/workspace/WorkspaceSwitcherSheet'
 import { useAuthStore } from '@/store/authStore'
 import { usePendingInvites } from '@/store/contactsStore'
-import { useWorkspaceNotifications } from '@/store/dataStore'
+import { useCurrentWorkspace, useWorkspaceNotifications } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
 import { greeting } from '@/lib/utils'
 
 export function DashboardHeader() {
   const user = useAuthStore((s) => s.currentUser())
+  const currentWorkspace = useCurrentWorkspace()
   const notifications = useWorkspaceNotifications()
   const pendingInvites = usePendingInvites(user?.id)
   const openSearch = useUiStore((s) => s.openSearch)
@@ -45,8 +46,10 @@ export function DashboardHeader() {
         <button onClick={() => setWorkspaceMenuOpen((v) => !v)} className="flex items-center gap-3">
           {user && <Avatar name={user.name} color={user.avatarColor} size="md" />}
           <div className="text-left">
-            <p className="text-xs text-text-muted">{greeting()},</p>
-            <p className="font-bold leading-tight text-text">{firstName}</p>
+            <p className="text-xs text-text-muted">
+              {greeting()}, {firstName}
+            </p>
+            <p className="font-bold leading-tight text-text">{currentWorkspace?.name}</p>
           </div>
         </button>
         {workspaceMenuOpen && (
