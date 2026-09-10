@@ -617,6 +617,7 @@ interface DataState {
   toggleTaskStatus: (id: string) => void
   setTaskStatus: (id: string, status: TaskStatus) => void
   addSubtask: (taskId: string, title: string) => void
+  editSubtask: (taskId: string, subtaskId: string, title: string) => void
   toggleSubtask: (taskId: string, subtaskId: string) => void
   removeSubtask: (taskId: string, subtaskId: string) => void
   addComment: (taskId: string, authorId: string, text: string) => void
@@ -1590,6 +1591,17 @@ export const useDataStore = create<DataState>()(
         fireAndForget(
           supabase.from('tasks').update({ subtasks: nextSubtasks, status: nextStatus, updated_at: now() }).eq('id', taskId),
         )
+      },
+      editSubtask: (taskId, subtaskId, title) => {
+        let nextSubtasks: Subtask[] = []
+        set((state) => ({
+          tasks: state.tasks.map((t) => {
+            if (t.id !== taskId) return t
+            nextSubtasks = t.subtasks.map((s) => (s.id === subtaskId ? { ...s, title } : s))
+            return { ...t, subtasks: nextSubtasks, updatedAt: now() }
+          }),
+        }))
+        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, updated_at: now() }).eq('id', taskId))
       },
       toggleSubtask: (taskId, subtaskId) => {
         let nextSubtasks: Subtask[] = []

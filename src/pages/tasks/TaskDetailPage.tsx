@@ -1,6 +1,7 @@
-import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Repeat, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
 import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
 import { Avatar } from '@/components/ui/Avatar'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
@@ -23,6 +24,7 @@ export function TaskDetailPage() {
   const toggleTaskStatus = useDataStore((s) => s.toggleTaskStatus)
   const deleteTask = useDataStore((s) => s.deleteTask)
   const addSubtask = useDataStore((s) => s.addSubtask)
+  const editSubtask = useDataStore((s) => s.editSubtask)
   const toggleSubtask = useDataStore((s) => s.toggleSubtask)
   const removeSubtask = useDataStore((s) => s.removeSubtask)
   const addComment = useDataStore((s) => s.addComment)
@@ -30,6 +32,8 @@ export function TaskDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false)
   const [subtaskInput, setSubtaskInput] = useState('')
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
+  const [editingSubtaskValue, setEditingSubtaskValue] = useState('')
   const [commentInput, setCommentInput] = useState('')
 
   if (!task) {
@@ -61,6 +65,17 @@ export function TaskDetailPage() {
     if (!subtaskInput.trim() || !task) return
     addSubtask(task.id, subtaskInput.trim())
     setSubtaskInput('')
+  }
+
+  function startEditSubtask(subtaskId: string, title: string) {
+    setEditingSubtaskId(subtaskId)
+    setEditingSubtaskValue(title)
+  }
+
+  function saveEditSubtask() {
+    if (!task || !editingSubtaskId || !editingSubtaskValue.trim()) return
+    editSubtask(task.id, editingSubtaskId, editingSubtaskValue.trim())
+    setEditingSubtaskId(null)
   }
 
   function handleAddComment() {
@@ -137,19 +152,35 @@ export function TaskDetailPage() {
           </p>
         </div>
         <div className="flex flex-col gap-1">
-          {task.subtasks.map((s) => (
-            <div key={s.id} className="flex items-start gap-3 rounded-xl px-1 py-2 hover:bg-surface-alt">
-              <button onClick={() => toggleSubtask(task.id, s.id)} className={cn('mt-0.5 shrink-0', s.done ? 'text-success' : 'text-text-faint')}>
-                {s.done ? <CheckCheck size={18} /> : <Circle size={18} />}
-              </button>
-              <span className={cn('flex-1 whitespace-pre-wrap text-sm text-text', s.done && 'line-through text-text-faint')}>
-                {s.title}
-              </span>
-              <button onClick={() => removeSubtask(task.id, s.id)} className="mt-0.5 shrink-0 text-text-faint hover:text-danger">
-                <X size={15} />
-              </button>
-            </div>
-          ))}
+          {task.subtasks.map((s) =>
+            editingSubtaskId === s.id ? (
+              <div key={s.id} className="flex flex-col gap-2 rounded-xl bg-surface px-3.5 py-2.5">
+                <TextArea value={editingSubtaskValue} onChange={(e) => setEditingSubtaskValue(e.target.value)} autoFocus />
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setEditingSubtaskId(null)}>
+                    Cancelar
+                  </Button>
+                  <Button variant="secondary" size="sm" disabled={!editingSubtaskValue.trim()} onClick={saveEditSubtask}>
+                    Salvar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div key={s.id} className="flex items-start gap-3 rounded-xl px-1 py-2 hover:bg-surface-alt">
+                <button onClick={() => toggleSubtask(task.id, s.id)} className={cn('mt-0.5 shrink-0', s.done ? 'text-success' : 'text-text-faint')}>
+                  {s.done ? <CheckCheck size={18} /> : <Circle size={18} />}
+                </button>
+                <span className={cn('flex-1 whitespace-pre-wrap text-sm text-text', s.done && 'line-through text-text-faint')}>
+                  {s.title}
+                </span>
+                <SubtaskMenu
+                  onCopy={() => void navigator.clipboard.writeText(s.title)}
+                  onEdit={() => startEditSubtask(s.id, s.title)}
+                  onDelete={() => removeSubtask(task.id, s.id)}
+                />
+              </div>
+            ),
+          )}
         </div>
         <TextArea
           value={subtaskInput}

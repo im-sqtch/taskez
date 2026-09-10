@@ -1,5 +1,6 @@
-import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, FolderKanban, Plus, UserX, X } from 'lucide-react'
+import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, FolderKanban, Plus, UserX } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
@@ -43,6 +44,8 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
   const [dueDate, setDueDate] = useState('')
   const [subtasks, setSubtasks] = useState<string[]>([])
   const [subtaskInput, setSubtaskInput] = useState('')
+  const [editingSubtaskIndex, setEditingSubtaskIndex] = useState<number | null>(null)
+  const [editingSubtaskValue, setEditingSubtaskValue] = useState('')
   const [links, setLinks] = useState<string[]>([])
   const [linkDraft, setLinkDraft] = useState('')
   const [recurrence, setRecurrence] = useState<RecurrenceRule | undefined>(undefined)
@@ -61,6 +64,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     setCalendarCursor(task?.dueDate ? keyToDate(task.dueDate.slice(0, 10)) : new Date())
     setSubtasks(task?.subtasks.map((s) => s.title) ?? [])
     setSubtaskInput('')
+    setEditingSubtaskIndex(null)
     setLinks(task?.links ?? [])
     setLinkDraft('')
     setRecurrence(task?.recurrence)
@@ -70,6 +74,12 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     if (!subtaskInput.trim()) return
     setSubtasks((prev) => [...prev, subtaskInput.trim()])
     setSubtaskInput('')
+  }
+
+  function saveEditSubtaskDraft() {
+    if (editingSubtaskIndex === null || !editingSubtaskValue.trim()) return
+    setSubtasks((prev) => prev.map((t, idx) => (idx === editingSubtaskIndex ? editingSubtaskValue.trim() : t)))
+    setEditingSubtaskIndex(null)
   }
 
   function handleSubmit() {
@@ -222,17 +232,33 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
         {!task && (
           <div className="flex flex-col gap-2">
             <FieldLabel>Subtarefas</FieldLabel>
-            {subtasks.map((s, i) => (
-              <div key={i} className="flex items-start justify-between gap-2 rounded-xl bg-surface px-3.5 py-2.5 text-sm">
-                <span className="flex-1 whitespace-pre-wrap text-text">{s}</span>
-                <button
-                  onClick={() => setSubtasks((prev) => prev.filter((_, idx) => idx !== i))}
-                  className="shrink-0 text-text-faint hover:text-danger"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ))}
+            {subtasks.map((s, i) =>
+              editingSubtaskIndex === i ? (
+                <div key={i} className="flex flex-col gap-2 rounded-xl bg-surface px-3.5 py-2.5">
+                  <TextArea value={editingSubtaskValue} onChange={(e) => setEditingSubtaskValue(e.target.value)} autoFocus />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setEditingSubtaskIndex(null)}>
+                      Cancelar
+                    </Button>
+                    <Button variant="secondary" size="sm" disabled={!editingSubtaskValue.trim()} onClick={saveEditSubtaskDraft}>
+                      Salvar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div key={i} className="flex items-start justify-between gap-2 rounded-xl bg-surface px-3.5 py-2.5 text-sm">
+                  <span className="flex-1 whitespace-pre-wrap text-text">{s}</span>
+                  <SubtaskMenu
+                    onCopy={() => void navigator.clipboard.writeText(s)}
+                    onEdit={() => {
+                      setEditingSubtaskIndex(i)
+                      setEditingSubtaskValue(s)
+                    }}
+                    onDelete={() => setSubtasks((prev) => prev.filter((_, idx) => idx !== i))}
+                  />
+                </div>
+              ),
+            )}
             <TextArea
               value={subtaskInput}
               onChange={(e) => setSubtaskInput(e.target.value)}
