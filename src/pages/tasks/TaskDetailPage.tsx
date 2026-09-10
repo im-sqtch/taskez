@@ -58,7 +58,7 @@ export function TaskDetailPage() {
     if (!task) return
     confirmAction({
       title: 'Excluir tarefa',
-      description: `Excluir a tarefa "${task.title}"?`,
+      description: `Excluir a tarefa "${task.title}"? Ela vai para a Lixeira e pode ser restaurada em até 30 dias.`,
       confirmLabel: 'Excluir',
       danger: true,
       onConfirm: () => {

@@ -55,6 +55,11 @@ export interface Task {
   // Identifica a série de ciclos gerados a partir desta tarefa/projeto — só a
   // store mexe nisto, nunca é exposto na UI.
   seriesId?: string
+  // Presentes só nos itens carregados pela tela de Lixeira — a lista normal
+  // de tarefas do workspace já vem filtrada (deleted_at is null) e nunca tem
+  // esses campos preenchidos.
+  deletedAt?: string
+  deletedBy?: string
 }
 
 export interface Project {
@@ -73,6 +78,9 @@ export interface Project {
   completionAck: boolean
   recurrence?: RecurrenceRule
   seriesId?: string
+  // Ver comentário equivalente em Task — só preenchidos na tela de Lixeira.
+  deletedAt?: string
+  deletedBy?: string
 }
 
 export interface TeamMember {
@@ -127,6 +135,9 @@ export interface ProjectFile {
   storagePath: string
   uploadedBy: string
   createdAt: string
+  // Ver comentário equivalente em Task — só preenchidos na tela de Lixeira.
+  deletedAt?: string
+  deletedBy?: string
 }
 
 export interface Notification {

@@ -78,6 +78,8 @@ interface ProjectRow {
   completion_ack: boolean
   recurrence: RecurrenceRule | null
   series_id: string | null
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 interface TaskRow {
@@ -99,6 +101,8 @@ interface TaskRow {
   order: number
   recurrence: RecurrenceRule | null
   series_id: string | null
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 interface DashboardLayoutRow {
@@ -143,6 +147,8 @@ function mapProject(row: ProjectRow): Project {
     completionAck: row.completion_ack,
     recurrence: row.recurrence ?? undefined,
     seriesId: row.series_id ?? undefined,
+    deletedAt: row.deleted_at ?? undefined,
+    deletedBy: row.deleted_by ?? undefined,
   }
 }
 
@@ -178,6 +184,8 @@ interface ProjectFileRow {
   storage_path: string
   uploaded_by: string
   created_at: string
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 function mapChatMessage(row: ChatMessageRow): ChatMessage {
@@ -209,6 +217,8 @@ function mapProjectFile(row: ProjectFileRow): ProjectFile {
     storagePath: row.storage_path,
     uploadedBy: row.uploaded_by,
     createdAt: row.created_at,
+    deletedAt: row.deleted_at ?? undefined,
+    deletedBy: row.deleted_by ?? undefined,
   }
 }
 
@@ -232,6 +242,8 @@ function mapTask(row: TaskRow): Task {
     order: row.order,
     recurrence: row.recurrence ?? undefined,
     seriesId: row.series_id ?? undefined,
+    deletedAt: row.deleted_at ?? undefined,
+    deletedBy: row.deleted_by ?? undefined,
   }
 }
 
@@ -584,6 +596,12 @@ interface DataState {
   // Layout do painel modular por workspace — cada workspace tem sua própria
   // configuração de widgets, sincronizada via Supabase (tabela `dashboard_layouts`).
   layouts: Record<string, DashboardLayout>
+  // Itens apagados (deleted_at preenchido) da workspace atual — carregados sob
+  // demanda por `fetchTrash()` (não faz parte da carga normal do workspace),
+  // ficam disponíveis por 30 dias até a purga automática. Ver Etapa 2 da
+  // correção #8.
+  trash: { projects: Project[]; tasks: Task[]; files: ProjectFile[] }
+  trashLoading: boolean
 
   seedIfEmpty: () => Promise<void>
   resetWorkspaceData: () => void
@@ -629,6 +647,18 @@ interface DataState {
   // quem chama já filtrou pelo projeto (ou grupo) que está sendo reordenado.
   reorderTasks: (orderedIds: string[]) => void
   toggleTaskStatus: (id: string) => void
+
+  // Lixeira (ver Etapa 2 da correção #8) — busca os itens apagados da
+  // workspace atual; restaura devolve o item ao estado principal (projects/
+  // tasks/files) e o remove de `trash`. As três `restore*` retornam
+  // {ok:false} com uma mensagem quando a RPC recusa (ex.: sem permissão,
+  // tarefa cujo projeto ainda está na lixeira) — diferente do resto da
+  // store, que é otimista: aqui a UI da lixeira precisa saber na hora se
+  // falhou, para não achar que restaurou quando não restaurou.
+  fetchTrash: () => Promise<void>
+  restoreProject: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  restoreTask: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  restoreFile: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>
   setTaskStatus: (id: string, status: TaskStatus) => void
   addSubtask: (taskId: string, title: string) => void
   editSubtask: (taskId: string, subtaskId: string, title: string) => void
@@ -714,6 +744,10 @@ function setupRealtime() {
       }
       const project = mapProject(p.new as ProjectRow)
       useDataStore.setState((state) => {
+        // Foi pra lixeira (soft-delete) em outra sessão/dispositivo: some da
+        // lista ativa igual a um DELETE de verdade — a tela de Lixeira busca
+        // esses itens separadamente, sob demanda (fetchTrash), não por aqui.
+        if (project.deletedAt) return { projects: state.projects.filter((pr) => pr.id !== project.id) }
         const exists = state.projects.some((pr) => pr.id === project.id)
         return { projects: exists ? state.projects.map((pr) => (pr.id === project.id ? project : pr)) : [...state.projects, project] }
       })
@@ -728,6 +762,7 @@ function setupRealtime() {
       }
       const task = mapTask(p.new as TaskRow)
       useDataStore.setState((state) => {
+        if (task.deletedAt) return { tasks: state.tasks.filter((t) => t.id !== task.id) }
         const exists = state.tasks.some((t) => t.id === task.id)
         return { tasks: exists ? state.tasks.map((t) => (t.id === task.id ? task : t)) : [...state.tasks, task] }
       })
@@ -756,6 +791,7 @@ function setupRealtime() {
       }
       const file = mapProjectFile(p.new as ProjectFileRow)
       useDataStore.setState((state) => {
+        if (file.deletedAt) return { files: state.files.filter((f) => f.id !== file.id) }
         const exists = state.files.some((f) => f.id === file.id)
         return { files: exists ? state.files.map((f) => (f.id === file.id ? file : f)) : [...state.files, file] }
       })
@@ -811,6 +847,8 @@ export const useDataStore = create<DataState>()(
       chatMessages: [],
       files: [],
       layouts: {},
+      trash: { projects: [], tasks: [], files: [] },
+      trashLoading: false,
 
       // Carrega os workspaces do usuário logado a partir do Supabase. Se ele nunca
       // teve nenhum, cria o primeiro (com ele mesmo na equipe) — tudo já gravado no
@@ -852,10 +890,13 @@ export const useDataStore = create<DataState>()(
             { data: layoutRows },
           ] = await Promise.all([
             supabase.from('team_members').select('*').in('workspace_id', workspaceIds),
-            supabase.from('projects').select('*').in('workspace_id', workspaceIds),
-            supabase.from('tasks').select('*').in('workspace_id', workspaceIds),
+            // .is('deleted_at', null): itens na lixeira (ver Etapa 2 da correção
+            // #8) não entram na carga normal — só a tela de Lixeira os busca,
+            // sob demanda, via fetchTrash().
+            supabase.from('projects').select('*').in('workspace_id', workspaceIds).is('deleted_at', null),
+            supabase.from('tasks').select('*').in('workspace_id', workspaceIds).is('deleted_at', null),
             supabase.from('chat_messages').select('*').in('workspace_id', workspaceIds),
-            supabase.from('files').select('*').in('workspace_id', workspaceIds),
+            supabase.from('files').select('*').in('workspace_id', workspaceIds).is('deleted_at', null),
             // Sem filtro de workspace: RLS já restringe a `user_id = auth.uid()`,
             // e notificações de conta (contato aceito etc.) não têm workspace_id.
             supabase.from('notifications').select('*').order('created_at', { ascending: true }),
@@ -953,6 +994,13 @@ export const useDataStore = create<DataState>()(
           chatMessages: [],
           files: [],
           notifications: [],
+          // `layouts` nunca era limpo aqui — num dispositivo compartilhado, o
+          // painel modular da conta anterior ficava preso no localStorage e
+          // vazava pra sessão da próxima pessoa a logar (correção #19 da
+          // auditoria). `trash` também precisa esvaziar — item na lixeira de
+          // um usuário não deve sobreviver visível pro próximo a logar.
+          layouts: {},
+          trash: { projects: [], tasks: [], files: [] },
         })
       },
 
@@ -1262,39 +1310,32 @@ export const useDataStore = create<DataState>()(
           }
         })
       },
+      // Vai para a lixeira (soft-delete), não é apagado de verdade — ver Etapa
+      // 2 da correção #8. As tarefas do projeto vão junto (mesma RPC, mesmo
+      // timestamp no banco) e voltam juntas se o projeto for restaurado; o
+      // chat sobrevive intacto no banco, só fica inacessível enquanto a tela
+      // do projeto não existe (não precisa ser removido do estado local: sem
+      // o projeto no array `projects`, `ProjectDetailPage` já não renderiza
+      // `ProjectChat` pra ele). Arquivos NÃO são afetados — o vínculo
+      // (`files.project_ids`) continua intacto, pronto pra quando restaurar
+      // (arquivo é many-to-many com projetos, vive numa lista central do
+      // workspace independente de projeto).
       deleteProject: (id) => {
         const userId = useAuthStore.getState().currentUserId!
-        let unlinkedFiles: ProjectFile[] = []
         set((state) => {
           const project = state.projects.find((p) => p.id === id)
-          unlinkedFiles = state.files.filter((f) => f.projectIds.includes(id))
           return {
             projects: state.projects.filter((p) => p.id !== id),
-            tasks: state.tasks.map((t) => (t.projectId === id ? { ...t, projectId: undefined } : t)),
-            chatMessages: state.chatMessages.filter((m) => m.projectId !== id),
-            // Arquivo não é apagado por só ter esse projeto excluído — ele fica "sem
-            // projeto" e continua acessível na tela geral de Arquivos.
-            files: state.files.map((f) => (f.projectIds.includes(id) ? { ...f, projectIds: f.projectIds.filter((pid) => pid !== id) } : f)),
+            tasks: state.tasks.filter((t) => t.projectId !== id),
             notifications: project
               ? appendNotification(
                   state.notifications,
-                  makeNotification(userId, project.workspaceId, 'project.deleted', 'Projeto excluído', `"${project.name}" foi excluído.`),
+                  makeNotification(userId, project.workspaceId, 'project.deleted', 'Projeto enviado para a lixeira', `"${project.name}" foi excluído.`),
                 )
               : state.notifications,
           }
         })
-        // Exclusão em cascata de chat_messages/tasks já é resolvida pelas foreign
-        // keys "on delete cascade" no banco; arquivos não têm mais FK para projeto
-        // (viram um array), então o vínculo é removido explicitamente aqui.
-        fireAndForget(supabase.from('projects').delete().eq('id', id))
-        for (const file of unlinkedFiles) {
-          fireAndForget(
-            supabase
-              .from('files')
-              .update({ project_ids: file.projectIds.filter((pid) => pid !== id) })
-              .eq('id', file.id),
-          )
-        }
+        fireAndForget(supabase.rpc('soft_delete_project', { p_project_id: id }))
       },
       // Reordenação manual da lista — separada de updateProject porque não deve
       // gerar a notificação de "projeto atualizado" nem tocar em mais nenhum campo.
@@ -1371,9 +1412,11 @@ export const useDataStore = create<DataState>()(
           }),
         )
       },
+      // Vai para a lixeira (soft-delete) — o blob no Storage é preservado até
+      // a purga definitiva (30 dias), pro download continuar funcionando se
+      // o arquivo for restaurado. Ver Etapa 2 da correção #8.
       removeFile: (id) => {
         const userId = useAuthStore.getState().currentUserId!
-        const storagePath = get().files.find((f) => f.id === id)?.storagePath
         set((state) => {
           const file = state.files.find((f) => f.id === id)
           const linkedProjects = file ? state.projects.filter((p) => file.projectIds.includes(p.id)) : []
@@ -1385,7 +1428,7 @@ export const useDataStore = create<DataState>()(
                 userId,
                 project.workspaceId,
                 'project.file_removed',
-                'Arquivo excluído',
+                'Arquivo enviado para a lixeira',
                 `"${file!.name}" foi excluído de "${project.name}".`,
                 { type: 'project', id: project.id },
               ),
@@ -1393,19 +1436,7 @@ export const useDataStore = create<DataState>()(
           }
           return { files: state.files.filter((f) => f.id !== id), notifications }
         })
-        // Remove o blob no Storage ANTES da linha em `files`: a policy de
-        // delete do bucket autoriza comparando o objeto com `files.storage_path`
-        // (quem enviou ou o dono do workspace) — se a linha já tivesse sumido
-        // primeiro, essa checagem não encontraria mais nada e o blob ficaria
-        // órfão no bucket para sempre.
-        async function cleanup() {
-          if (storagePath) {
-            const { error } = await supabase.storage.from('project-files').remove([storagePath])
-            if (error) console.error('[files] falha ao remover do storage', error)
-          }
-          fireAndForget(supabase.from('files').delete().eq('id', id))
-        }
-        void cleanup()
+        fireAndForget(supabase.rpc('soft_delete_file', { p_file_id: id }))
       },
       linkFileToProject: (fileId, projectId) => {
         const userId = useAuthStore.getState().currentUserId!
@@ -1564,9 +1595,10 @@ export const useDataStore = create<DataState>()(
           maybeAutoCompleteProject(get, taskBeforePatch?.projectId)
         }
       },
+      // Vai para a lixeira (soft-delete) — ver Etapa 2 da correção #8.
       deleteTask: (id) => {
         set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) }))
-        fireAndForget(supabase.from('tasks').delete().eq('id', id))
+        fireAndForget(supabase.rpc('soft_delete_task', { p_task_id: id }))
       },
       reorderTasks: (orderedIds) => {
         set((state) => ({
@@ -1604,6 +1636,74 @@ export const useDataStore = create<DataState>()(
         } else {
           maybeAutoCompleteProject(get, task.projectId)
         }
+      },
+      // Lixeira (Etapa 2 da correção #8) — ver comentário na interface.
+      fetchTrash: async () => {
+        const workspaceId = get().currentWorkspaceId
+        if (!workspaceId) return
+        set({ trashLoading: true })
+        const [{ data: projectRows }, { data: taskRows }, { data: fileRows }] = await Promise.all([
+          supabase.from('projects').select('*').eq('workspace_id', workspaceId).not('deleted_at', 'is', null),
+          supabase.from('tasks').select('*').eq('workspace_id', workspaceId).not('deleted_at', 'is', null),
+          supabase.from('files').select('*').eq('workspace_id', workspaceId).not('deleted_at', 'is', null),
+        ])
+        set({
+          trash: {
+            projects: (projectRows ?? []).map((r) => mapProject(r as ProjectRow)),
+            tasks: (taskRows ?? []).map((r) => mapTask(r as TaskRow)),
+            files: (fileRows ?? []).map((r) => mapProjectFile(r as ProjectFileRow)),
+          },
+          trashLoading: false,
+        })
+      },
+      restoreProject: async (id) => {
+        const { error } = await supabase.rpc('restore_project', { p_project_id: id })
+        if (error) return { ok: false, error: 'Não foi possível restaurar o projeto.' }
+        // A RPC também restaura, em cascata, as tarefas apagadas junto — busca
+        // de novo o estado real (projeto + suas tarefas ativas) em vez de
+        // tentar reconstruir isso a partir do que a lixeira tinha em cache.
+        const [{ data: projectRow }, { data: taskRows }] = await Promise.all([
+          supabase.from('projects').select('*').eq('id', id).single(),
+          supabase.from('tasks').select('*').eq('project_id', id).is('deleted_at', null),
+        ])
+        const restoredTasks = (taskRows ?? []).map((r) => mapTask(r as TaskRow))
+        const restoredTaskIds = new Set(restoredTasks.map((t) => t.id))
+        set((state) => ({
+          projects: projectRow ? [...state.projects, mapProject(projectRow as ProjectRow)] : state.projects,
+          tasks: [...state.tasks.filter((t) => !restoredTaskIds.has(t.id)), ...restoredTasks],
+          trash: {
+            ...state.trash,
+            projects: state.trash.projects.filter((p) => p.id !== id),
+            tasks: state.trash.tasks.filter((t) => !restoredTaskIds.has(t.id)),
+          },
+        }))
+        return { ok: true }
+      },
+      restoreTask: async (id) => {
+        const { error } = await supabase.rpc('restore_task', { p_task_id: id })
+        if (error) return { ok: false, error: 'Não foi possível restaurar a tarefa.' }
+        const { data } = await supabase.from('tasks').select('*').eq('id', id).single()
+        if (data) {
+          const task = mapTask(data as TaskRow)
+          set((state) => ({
+            tasks: [...state.tasks, task],
+            trash: { ...state.trash, tasks: state.trash.tasks.filter((t) => t.id !== id) },
+          }))
+        }
+        return { ok: true }
+      },
+      restoreFile: async (id) => {
+        const { error } = await supabase.rpc('restore_file', { p_file_id: id })
+        if (error) return { ok: false, error: 'Não foi possível restaurar o arquivo.' }
+        const { data } = await supabase.from('files').select('*').eq('id', id).single()
+        if (data) {
+          const file = mapProjectFile(data as ProjectFileRow)
+          set((state) => ({
+            files: [...state.files, file],
+            trash: { ...state.trash, files: state.trash.files.filter((f) => f.id !== id) },
+          }))
+        }
+        return { ok: true }
       },
       setTaskStatus: (id, status) => {
         const task = get().tasks.find((t) => t.id === id)

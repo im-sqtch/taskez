@@ -14,6 +14,7 @@ import { ProjectsPage } from '@/pages/projects/ProjectsPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { TaskDetailPage } from '@/pages/tasks/TaskDetailPage'
 import { TasksPage } from '@/pages/tasks/TasksPage'
+import { TrashPage } from '@/pages/trash/TrashPage'
 import { useAuthStore } from '@/store/authStore'
 import { useThemeStore } from '@/store/themeStore'
 
@@ -110,6 +111,7 @@ export default function App() {
           <Route path="/tasks/:id" element={<TaskDetailPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/trash" element={<TrashPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

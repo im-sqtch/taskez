@@ -85,7 +85,7 @@ export function ProjectDetailPage() {
     if (!project) return
     confirmAction({
       title: 'Excluir projeto',
-      description: `Excluir o projeto "${project.name}"? As tarefas serão desvinculadas.`,
+      description: `Excluir o projeto "${project.name}"? Ele vai para a Lixeira com as tarefas dele, e pode ser restaurado em até 30 dias.`,
       confirmLabel: 'Excluir',
       danger: true,
       onConfirm: () => {

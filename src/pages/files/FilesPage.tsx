@@ -85,7 +85,7 @@ export function FilesPage() {
   function handleRemove(file: ProjectFile) {
     confirmAction({
       title: 'Excluir arquivo',
-      description: `Excluir "${file.name}" definitivamente? Ele some de todos os projetos vinculados.`,
+      description: `Excluir "${file.name}"? Ele vai para a Lixeira e pode ser restaurado em até 30 dias.`,
       confirmLabel: 'Excluir',
       danger: true,
       onConfirm: () => removeFile(file.id),

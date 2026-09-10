@@ -1,4 +1,5 @@
-import { Check, Layers, Settings } from 'lucide-react'
+import { Check, Layers, Settings, Trash2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useDataStore } from '@/store/dataStore'
 
@@ -8,6 +9,7 @@ interface WorkspaceDropdownProps {
 }
 
 export function WorkspaceDropdown({ onClose, onManageWorkspaces }: WorkspaceDropdownProps) {
+  const navigate = useNavigate()
   const workspaces = useDataStore((s) => s.workspaces)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
   const switchWorkspace = useDataStore((s) => s.switchWorkspace)
@@ -55,6 +57,19 @@ export function WorkspaceDropdown({ onClose, onManageWorkspaces }: WorkspaceDrop
             <Settings size={14} />
           </div>
           <p className="text-sm font-semibold">Gerenciar workspaces</p>
+        </button>
+        <button
+          role="menuitem"
+          onClick={() => {
+            navigate('/trash')
+            onClose()
+          }}
+          className="flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left text-text-muted transition-colors hover:bg-surface-alt hover:text-accent"
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-alt">
+            <Trash2 size={14} />
+          </div>
+          <p className="text-sm font-semibold">Lixeira</p>
         </button>
       </div>
     </div>
