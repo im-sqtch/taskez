@@ -89,6 +89,7 @@ interface TaskRow {
   title: string
   description: string | null
   status: TaskStatus
+  not_fulfilled: boolean
   priority: Priority
   due_date: string | null
   assignee_ids: string[]
@@ -229,6 +230,7 @@ function mapTask(row: TaskRow): Task {
     title: row.title,
     description: row.description ?? undefined,
     status: row.status,
+    notFulfilled: row.not_fulfilled,
     priority: row.priority,
     projectId: row.project_id ?? undefined,
     dueDate: row.due_date ?? undefined,
@@ -273,6 +275,7 @@ function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
   if (patch.title !== undefined) row.title = patch.title
   if (patch.description !== undefined) row.description = patch.description ?? null
   if (patch.status !== undefined) row.status = patch.status
+  if (patch.notFulfilled !== undefined) row.not_fulfilled = patch.notFulfilled
   if (patch.priority !== undefined) row.priority = patch.priority
   if (patch.projectId !== undefined) row.project_id = patch.projectId ?? null
   if (patch.dueDate !== undefined) row.due_date = patch.dueDate ?? null
@@ -1634,11 +1637,28 @@ export const useDataStore = create<DataState>()(
         const task = get().tasks.find((t) => t.id === id)
         if (!task) return
         const userId = useAuthStore.getState().currentUserId!
-        const becomingDone = task.status !== 'done'
-        const status: TaskStatus = becomingDone ? 'done' : 'todo'
-        const completedAt = status === 'done' ? now() : undefined
+        // Ciclo de 3 cliques: vazio -> cumprida (check) -> concluída sem
+        // cumprir (X, ainda `status: 'done'` — só `notFulfilled` muda) ->
+        // vazio de novo. O passo do meio para o X não é "reabrir": para o
+        // resto do app (stats, % de conclusão do projeto) a tarefa continua
+        // done até o terceiro clique de fato tirá-la de done.
+        let status: TaskStatus
+        let notFulfilled: boolean
+        if (task.status !== 'done') {
+          status = 'done'
+          notFulfilled = false
+        } else if (!task.notFulfilled) {
+          status = 'done'
+          notFulfilled = true
+        } else {
+          status = 'todo'
+          notFulfilled = false
+        }
+        const becomingDone = task.status !== 'done' && status === 'done'
+        const reopening = task.status === 'done' && status !== 'done'
+        const completedAt = status === 'done' ? (becomingDone ? now() : task.completedAt) : undefined
         set((state) => ({
-          tasks: state.tasks.map((t) => (t.id === id ? { ...t, status, completedAt, updatedAt: now() } : t)),
+          tasks: state.tasks.map((t) => (t.id === id ? { ...t, status, notFulfilled, completedAt, updatedAt: now() } : t)),
           notifications: becomingDone
             ? appendNotification(
                 state.notifications,
@@ -1649,10 +1669,15 @@ export const useDataStore = create<DataState>()(
               )
             : state.notifications,
         }))
-        fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
-        if (!becomingDone) {
+        fireAndForget(
+          supabase
+            .from('tasks')
+            .update({ status, not_fulfilled: notFulfilled, completed_at: completedAt ?? null, updated_at: now() })
+            .eq('id', id),
+        )
+        if (reopening) {
           reactivateProjectOnTaskReopened(get, task.projectId)
-        } else {
+        } else if (becomingDone) {
           maybeAutoCompleteProject(get, task.projectId)
         }
       },
@@ -1729,8 +1754,11 @@ export const useDataStore = create<DataState>()(
         const userId = useAuthStore.getState().currentUserId!
         const becomingDone = !!task && task.status !== 'done' && status === 'done'
         const completedAt = status === 'done' ? now() : undefined
+        // Vem do Kanban (arrastar entre colunas), que não tem o conceito de
+        // X de "não cumprida" — toda entrada em `done` por aqui é sempre o
+        // check verde, mesmo que a tarefa tivesse ficado marcada com X antes.
         set((state) => ({
-          tasks: state.tasks.map((t) => (t.id === id ? { ...t, status, completedAt, updatedAt: now() } : t)),
+          tasks: state.tasks.map((t) => (t.id === id ? { ...t, status, notFulfilled: false, completedAt, updatedAt: now() } : t)),
           notifications:
             becomingDone && task
               ? appendNotification(
@@ -1742,7 +1770,9 @@ export const useDataStore = create<DataState>()(
                 )
               : state.notifications,
         }))
-        fireAndForget(supabase.from('tasks').update({ status, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id))
+        fireAndForget(
+          supabase.from('tasks').update({ status, not_fulfilled: false, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id),
+        )
         if (task?.status === 'done' && status !== 'done') {
           reactivateProjectOnTaskReopened(get, task.projectId)
         } else if (becomingDone) {
@@ -1781,11 +1811,21 @@ export const useDataStore = create<DataState>()(
         }))
         fireAndForget(supabase.rpc('task_edit_subtask', { p_task_id: taskId, p_subtask_id: subtaskId, p_title: title }))
       },
+      // Mesmo ciclo de 3 cliques da tarefa (ver toggleTaskStatus): vazio ->
+      // cumprida (check) -> concluída sem cumprir (X, `done` continua `true`)
+      // -> vazio de novo. `done` é o único campo que conta para o progresso
+      // da tarefa (contador na TaskRow, `derive_task_status`) — `notFulfilled`
+      // é só o desenho.
       toggleSubtask: (taskId, subtaskId) => {
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t
-            const nextSubtasks = t.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s))
+            const nextSubtasks = t.subtasks.map((s) => {
+              if (s.id !== subtaskId) return s
+              if (!s.done) return { ...s, done: true, notFulfilled: false }
+              if (!s.notFulfilled) return { ...s, notFulfilled: true }
+              return { ...s, done: false, notFulfilled: false }
+            })
             return { ...t, subtasks: nextSubtasks, status: deriveStatusFromSubtasks(t.status, nextSubtasks), updatedAt: now() }
           }),
         }))

@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Repeat, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ReorderSubtasksSheet } from '@/components/tasks/ReorderSubtasksSheet'
@@ -120,9 +120,12 @@ export function TaskDetailPage() {
         <div className="flex items-start gap-3">
           <button
             onClick={() => toggleTaskStatus(task.id)}
-            className={cn('mt-0.5 shrink-0', task.status === 'done' ? 'text-success' : 'text-text-faint')}
+            className={cn(
+              'mt-0.5 shrink-0',
+              task.status === 'done' ? (task.notFulfilled ? 'text-danger' : 'text-success') : 'text-text-faint',
+            )}
           >
-            {task.status === 'done' ? <CheckCheck size={24} /> : <Circle size={24} />}
+            {task.status === 'done' ? task.notFulfilled ? <X size={24} /> : <CheckCheck size={24} /> : <Circle size={24} />}
           </button>
           <h1 className={cn('flex flex-1 items-center gap-1.5 text-xl font-bold text-text', task.status === 'done' && 'line-through text-text-faint')}>
             {task.title}
@@ -193,8 +196,11 @@ export function TaskDetailPage() {
               </div>
             ) : (
               <div key={s.id} className="flex items-start gap-3 rounded-xl px-1 py-2 hover:bg-surface-alt">
-                <button onClick={() => toggleSubtask(task.id, s.id)} className={cn('mt-0.5 shrink-0', s.done ? 'text-success' : 'text-text-faint')}>
-                  {s.done ? <CheckCheck size={18} /> : <Circle size={18} />}
+                <button
+                  onClick={() => toggleSubtask(task.id, s.id)}
+                  className={cn('mt-0.5 shrink-0', s.done ? (s.notFulfilled ? 'text-danger' : 'text-success') : 'text-text-faint')}
+                >
+                  {s.done ? s.notFulfilled ? <X size={18} /> : <CheckCheck size={18} /> : <Circle size={18} />}
                 </button>
                 <span className={cn('flex-1 whitespace-pre-wrap text-sm text-text', s.done && 'line-through text-text-faint')}>
                   <MentionText text={s.title} workspaceId={task.workspaceId} />

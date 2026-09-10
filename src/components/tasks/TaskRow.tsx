@@ -1,4 +1,4 @@
-import { Circle, CircleCheck, ListChecks, Repeat } from 'lucide-react'
+import { Circle, CircleCheck, CircleX, ListChecks, Repeat } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { PriorityBadge } from '@/components/ui/Badge'
 import { cn, formatDate, isOverdue } from '@/lib/utils'
@@ -17,10 +17,21 @@ export function TaskRow({ task }: { task: Task }) {
     <div className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-alt">
       <button
         onClick={() => toggleTaskStatus(task.id)}
-        className={cn('shrink-0 transition-colors', task.status === 'done' ? 'text-success' : 'text-text-faint hover:text-accent')}
+        className={cn(
+          'shrink-0 transition-colors',
+          task.status === 'done' ? (task.notFulfilled ? 'text-danger' : 'text-success') : 'text-text-faint hover:text-accent',
+        )}
         aria-label="Alternar conclusão"
       >
-        {task.status === 'done' ? <CircleCheck size={22} fill="currentColor" className="text-success [&>path]:stroke-surface" /> : <Circle size={22} />}
+        {task.status === 'done' ? (
+          task.notFulfilled ? (
+            <CircleX size={22} fill="currentColor" className="text-danger [&>path]:stroke-surface" />
+          ) : (
+            <CircleCheck size={22} fill="currentColor" className="text-success [&>path]:stroke-surface" />
+          )
+        ) : (
+          <Circle size={22} />
+        )}
       </button>
 
       <button onClick={() => navigate(`/tasks/${task.id}`)} className="flex flex-1 flex-col items-start gap-1 text-left min-w-0">

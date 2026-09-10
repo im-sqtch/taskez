@@ -8,6 +8,10 @@ export interface Subtask {
   id: string
   title: string
   done: boolean
+  // Mesmo sub-estado visual de `Task.notFulfilled`, aplicado à subtarefa: só
+  // importa quando `done` é `true` (check verde vs. X vermelho). `done`
+  // continua sendo o único campo que conta para o progresso da tarefa.
+  notFulfilled?: boolean
 }
 
 export interface Comment {
@@ -36,6 +40,12 @@ export interface Task {
   title: string
   description?: string
   status: TaskStatus
+  // Sub-estado visual de `status === 'done'`: alternado pelo terceiro clique
+  // no círculo de conclusão (ver TaskRow/TaskDetailPage). `false`/ausente
+  // mostra o check verde de "cumprida"; `true` mostra o X vermelho de
+  // "concluída sem cumprir". É só visual — nenhuma lógica de conclusão de
+  // tarefa/projeto olha para este campo, só para `status`.
+  notFulfilled?: boolean
   priority: Priority
   projectId?: string
   dueDate?: string
