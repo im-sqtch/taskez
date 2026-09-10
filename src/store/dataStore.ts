@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { v4 as uuid } from 'uuid'
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import { fireAndForget, supabase } from '@/lib/supabase'
+import { fireAndForget, setFireAndForgetErrorHandler, supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { WIDGET_CATALOG, WIDGET_TYPES } from '@/lib/widgetCatalog'
 import { NOTIFICATION_EVENTS, type NotificationEvent } from '@/lib/notificationCatalog'
@@ -1812,6 +1812,24 @@ export const useDataStore = create<DataState>()(
     },
   ),
 )
+
+// As ~50 escritas "fire-and-forget" deste arquivo (otimistas, já refletidas no
+// estado local antes de chamar o banco) engoliam qualquer erro silenciosamente
+// — RLS negada, constraint violada, rede caída: o usuário via a mudança
+// aplicada na tela e fechava o app sem saber que ela nunca chegou ao banco.
+// `fireAndForget` agora loga todo erro real (ver lib/supabase.ts) e chama
+// este handler para também avisar visualmente, sem precisar tornar cada uma
+// das ~50 chamadas async só para checar `{ error }` individualmente.
+setFireAndForgetErrorHandler(() => {
+  if (!useAuthStore.getState().currentUserId) return
+  useDataStore
+    .getState()
+    .addNotification(
+      'system.alert',
+      'Uma alteração pode não ter sido salva',
+      'Verifique sua conexão e tente novamente. Se o problema persistir, recarregue o app.',
+    )
+})
 
 // Hooks derivados: filtram pelo workspace atual no corpo do hook (não dentro do
 // seletor do zustand) para não recriar array a cada notificação de store e cair no
