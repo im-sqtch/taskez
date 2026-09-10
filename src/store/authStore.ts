@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase'
 import { detectUtcOffset } from '@/lib/timezone'
+import { unsubscribeFromPush } from '@/lib/push'
 import { useDataStore } from '@/store/dataStore'
 import { useContactsStore } from '@/store/contactsStore'
 import type { UsageMode, User } from '@/types'
@@ -103,7 +104,12 @@ export const useAuthStore = create<AuthState>()(
 
       // `scope: 'local'` — sem isso, o padrão do Supabase (`'global'`) derruba
       // a sessão em TODOS os dispositivos logados nesta conta, não só o atual.
+      // Cancela a assinatura de push ANTES do signOut: o delete em
+      // push_subscriptions depende da sessão (RLS por auth.uid()) ainda
+      // válida — feito depois, a linha ficaria órfã apontando pra esta conta
+      // neste dispositivo (ver comentário em unsubscribeFromPush).
       logout: async () => {
+        await unsubscribeFromPush()
         await supabase.auth.signOut({ scope: 'local' })
         set({ currentUserId: null, profile: null })
       },
@@ -140,6 +146,7 @@ export const useAuthStore = create<AuthState>()(
       // que não existe no client — por ora isso desloga o dispositivo; remoção
       // definitiva fica para um fluxo futuro via Edge Function.
       deleteAccount: async () => {
+        await unsubscribeFromPush()
         await supabase.auth.signOut()
         set({ currentUserId: null, profile: null })
       },

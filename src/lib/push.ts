@@ -51,11 +51,24 @@ export async function subscribeToPush(userId: string): Promise<{ ok: true } | { 
   return { ok: true }
 }
 
+// Chamada também no logout (ver authStore.ts) — sem isso, a assinatura fica
+// ligada ao endpoint do navegador/dispositivo, não à conta: em um aparelho
+// compartilhado, o usuário A saía, o usuário B entrava e assinava push nesse
+// mesmo dispositivo, mas o `upsert(..., { onConflict: 'endpoint' })` de
+// `subscribeToPush` esbarrava na policy de update (dono only) e falhava
+// silenciosamente — o endpoint continuava apontando pra conta de A, que
+// seguia recebendo títulos e prévias de tarefas/mensagens de B nesse
+// aparelho. Envolvido em try/catch para nunca travar o logout por causa de
+// uma falha de rede ou de Service Worker indisponível.
 export async function unsubscribeFromPush(): Promise<void> {
-  if (!isPushSupported()) return
-  const registration = await navigator.serviceWorker.ready
-  const subscription = await registration.pushManager.getSubscription()
-  if (!subscription) return
-  await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint)
-  await subscription.unsubscribe()
+  try {
+    if (!isPushSupported()) return
+    const registration = await navigator.serviceWorker.ready
+    const subscription = await registration.pushManager.getSubscription()
+    if (!subscription) return
+    await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint)
+    await subscription.unsubscribe()
+  } catch (err) {
+    console.error('[push] falha ao cancelar assinatura no logout', err)
+  }
 }
