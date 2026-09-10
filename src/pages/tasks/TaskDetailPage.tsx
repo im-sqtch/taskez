@@ -1,6 +1,7 @@
-import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Repeat, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { ReorderSubtasksSheet } from '@/components/tasks/ReorderSubtasksSheet'
 import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
 import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
 import { Avatar } from '@/components/ui/Avatar'
@@ -31,6 +32,7 @@ export function TaskDetailPage() {
   const currentUser = useAuthStore((s) => s.currentUser())
 
   const [editOpen, setEditOpen] = useState(false)
+  const [reorderSubtasksOpen, setReorderSubtasksOpen] = useState(false)
   const [subtaskInput, setSubtaskInput] = useState('')
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
   const [editingSubtaskValue, setEditingSubtaskValue] = useState('')
@@ -94,6 +96,15 @@ export function TaskDetailPage() {
           <button onClick={() => setEditOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
             <Pencil size={16} />
           </button>
+          {task.subtasks.length > 1 && (
+            <button
+              onClick={() => setReorderSubtasksOpen(true)}
+              aria-label="Reordenar subtarefa"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted"
+            >
+              <SlidersHorizontal size={16} />
+            </button>
+          )}
           <button onClick={handleDelete} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-danger">
             <Trash2 size={16} />
           </button>
@@ -223,6 +234,7 @@ export function TaskDetailPage() {
       </div>
 
       <TaskFormSheet open={editOpen} onClose={() => setEditOpen(false)} task={task} />
+      <ReorderSubtasksSheet open={reorderSubtasksOpen} onClose={() => setReorderSubtasksOpen(false)} taskId={task.id} />
     </div>
   )
 }

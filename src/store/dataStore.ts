@@ -620,6 +620,9 @@ interface DataState {
   editSubtask: (taskId: string, subtaskId: string, title: string) => void
   toggleSubtask: (taskId: string, subtaskId: string) => void
   removeSubtask: (taskId: string, subtaskId: string) => void
+  // Reordena as subtarefas de uma tarefa (a ordem é a posição no array
+  // `subtasks`, sem coluna própria — mesma ideia de `reorderTasks`).
+  reorderSubtasks: (taskId: string, orderedIds: string[]) => void
   addComment: (taskId: string, authorId: string, text: string) => void
 
   // Notifications
@@ -1630,6 +1633,18 @@ export const useDataStore = create<DataState>()(
           }),
         }))
         fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, status: nextStatus }).eq('id', taskId))
+      },
+      reorderSubtasks: (taskId, orderedIds) => {
+        let nextSubtasks: Subtask[] = []
+        set((state) => ({
+          tasks: state.tasks.map((t) => {
+            if (t.id !== taskId) return t
+            const byId = new Map(t.subtasks.map((s) => [s.id, s]))
+            nextSubtasks = orderedIds.map((id) => byId.get(id)).filter((s): s is Subtask => s !== undefined)
+            return { ...t, subtasks: nextSubtasks, updatedAt: now() }
+          }),
+        }))
+        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, updated_at: now() }).eq('id', taskId))
       },
       addComment: (taskId, authorId, text) => {
         const userId = useAuthStore.getState().currentUserId!
