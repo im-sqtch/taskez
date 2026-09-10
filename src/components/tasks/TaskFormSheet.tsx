@@ -223,36 +223,24 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
           <div className="flex flex-col gap-2">
             <FieldLabel>Subtarefas</FieldLabel>
             {subtasks.map((s, i) => (
-              <div key={i} className="flex items-center justify-between rounded-xl bg-surface px-3.5 py-2.5 text-sm">
-                <span className="text-text">{s}</span>
+              <div key={i} className="flex items-start justify-between gap-2 rounded-xl bg-surface px-3.5 py-2.5 text-sm">
+                <span className="flex-1 whitespace-pre-wrap text-text">{s}</span>
                 <button
                   onClick={() => setSubtasks((prev) => prev.filter((_, idx) => idx !== i))}
-                  className="text-text-faint hover:text-danger"
+                  className="shrink-0 text-text-faint hover:text-danger"
                 >
                   <X size={16} />
                 </button>
               </div>
             ))}
-            <div className="flex gap-2">
-              <input
-                value={subtaskInput}
-                onChange={(e) => setSubtaskInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addSubtaskDraft()
-                  }
-                }}
-                placeholder="Adicionar subtarefa"
-                className="h-11 flex-1 rounded-xl border border-border bg-surface px-3.5 text-sm text-text placeholder:text-text-faint outline-none focus:border-accent"
-              />
-              <button
-                onClick={addSubtaskDraft}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-alt text-text-muted hover:text-accent"
-              >
-                <Plus size={18} />
-              </button>
-            </div>
+            <TextArea
+              value={subtaskInput}
+              onChange={(e) => setSubtaskInput(e.target.value)}
+              placeholder="Adicionar subtarefa"
+            />
+            <Button variant="secondary" size="sm" icon={<Plus size={15} />} onClick={addSubtaskDraft} className="self-end">
+              Adicionar
+            </Button>
           </div>
         )}
       </div>

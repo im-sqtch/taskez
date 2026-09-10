@@ -4,7 +4,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
 import { Avatar } from '@/components/ui/Avatar'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { TextArea } from '@/components/ui/Input'
 import { LinksList } from '@/components/ui/LinksField'
 import { MessageComposer } from '@/components/ui/MessageComposer'
 import { cn, formatDate, isOverdue } from '@/lib/utils'
@@ -136,29 +138,27 @@ export function TaskDetailPage() {
         </div>
         <div className="flex flex-col gap-1">
           {task.subtasks.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 rounded-xl px-1 py-2 hover:bg-surface-alt">
-              <button onClick={() => toggleSubtask(task.id, s.id)} className={s.done ? 'text-success' : 'text-text-faint'}>
+            <div key={s.id} className="flex items-start gap-3 rounded-xl px-1 py-2 hover:bg-surface-alt">
+              <button onClick={() => toggleSubtask(task.id, s.id)} className={cn('mt-0.5 shrink-0', s.done ? 'text-success' : 'text-text-faint')}>
                 {s.done ? <CheckCheck size={18} /> : <Circle size={18} />}
               </button>
-              <span className={cn('flex-1 text-sm text-text', s.done && 'line-through text-text-faint')}>{s.title}</span>
-              <button onClick={() => removeSubtask(task.id, s.id)} className="text-text-faint hover:text-danger">
+              <span className={cn('flex-1 whitespace-pre-wrap text-sm text-text', s.done && 'line-through text-text-faint')}>
+                {s.title}
+              </span>
+              <button onClick={() => removeSubtask(task.id, s.id)} className="mt-0.5 shrink-0 text-text-faint hover:text-danger">
                 <X size={15} />
               </button>
             </div>
           ))}
         </div>
-        <div className="flex gap-2">
-          <input
-            value={subtaskInput}
-            onChange={(e) => setSubtaskInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddSubtask()}
-            placeholder="Adicionar item ao checklist"
-            className="h-11 flex-1 rounded-xl border border-border bg-surface px-3.5 text-sm text-text placeholder:text-text-faint outline-none focus:border-accent"
-          />
-          <button onClick={handleAddSubtask} className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-alt text-text-muted hover:text-accent">
-            <Plus size={18} />
-          </button>
-        </div>
+        <TextArea
+          value={subtaskInput}
+          onChange={(e) => setSubtaskInput(e.target.value)}
+          placeholder="Adicionar item ao checklist"
+        />
+        <Button variant="secondary" size="sm" icon={<Plus size={15} />} onClick={handleAddSubtask} className="self-end">
+          Adicionar
+        </Button>
       </div>
 
       <div className="flex flex-col gap-3 px-5 pb-2">
