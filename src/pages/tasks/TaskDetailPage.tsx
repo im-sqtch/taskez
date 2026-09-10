@@ -8,8 +8,9 @@ import { Avatar } from '@/components/ui/Avatar'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { TextArea } from '@/components/ui/Input'
 import { LinksList } from '@/components/ui/LinksField'
+import { MentionText } from '@/components/ui/MentionText'
+import { MentionTextArea } from '@/components/ui/MentionTextArea'
 import { MessageComposer } from '@/components/ui/MessageComposer'
 import { cn, formatDate, isOverdue } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -158,7 +159,9 @@ export function TaskDetailPage() {
         </div>
 
         {task.description && (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-muted">{task.description}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-muted">
+            <MentionText text={task.description} workspaceId={task.workspaceId} />
+          </p>
         )}
         <LinksList links={task.links} />
       </div>
@@ -173,7 +176,12 @@ export function TaskDetailPage() {
           {task.subtasks.map((s) =>
             editingSubtaskId === s.id ? (
               <div key={s.id} className="flex flex-col gap-2 rounded-xl bg-surface px-3.5 py-2.5">
-                <TextArea value={editingSubtaskValue} onChange={(e) => setEditingSubtaskValue(e.target.value)} autoFocus />
+                <MentionTextArea
+                  value={editingSubtaskValue}
+                  onChange={setEditingSubtaskValue}
+                  workspaceId={task.workspaceId}
+                  autoFocus
+                />
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setEditingSubtaskId(null)}>
                     Cancelar
@@ -189,7 +197,7 @@ export function TaskDetailPage() {
                   {s.done ? <CheckCheck size={18} /> : <Circle size={18} />}
                 </button>
                 <span className={cn('flex-1 whitespace-pre-wrap text-sm text-text', s.done && 'line-through text-text-faint')}>
-                  {s.title}
+                  <MentionText text={s.title} workspaceId={task.workspaceId} />
                 </span>
                 <SubtaskMenu
                   onCopy={() => void navigator.clipboard.writeText(s.title)}
@@ -200,9 +208,10 @@ export function TaskDetailPage() {
             ),
           )}
         </div>
-        <TextArea
+        <MentionTextArea
           value={subtaskInput}
-          onChange={(e) => setSubtaskInput(e.target.value)}
+          onChange={setSubtaskInput}
+          workspaceId={task.workspaceId}
           placeholder="Adicionar item ao checklist"
         />
         <Button variant="secondary" size="sm" icon={<Plus size={15} />} onClick={handleAddSubtask} className="self-end">
@@ -221,7 +230,9 @@ export function TaskDetailPage() {
                 {currentUser && <Avatar name={currentUser.name} color={currentUser.avatarColor} size="xs" />}
                 <div className="flex-1 rounded-xl bg-surface p-3">
                   {/* Preserva as quebras de linha digitadas sem deixar palavra longa estourar o balão. */}
-                  <p className="whitespace-pre-wrap break-words text-sm text-text">{c.text}</p>
+                  <p className="whitespace-pre-wrap break-words text-sm text-text">
+                    <MentionText text={c.text} workspaceId={task.workspaceId} />
+                  </p>
                   <p className="mt-1 text-[11px] text-text-faint">{formatDate(c.createdAt)}</p>
                 </div>
               </div>
@@ -232,8 +243,9 @@ export function TaskDetailPage() {
           value={commentInput}
           onChange={setCommentInput}
           onSubmit={handleAddComment}
-          placeholder="Escreva um comentário..."
+          placeholder="Escreva um comentário... Use @ para mencionar"
           sendLabel="Enviar comentário"
+          workspaceId={task.workspaceId}
         />
         <div className="flex items-center gap-2 text-xs text-text-faint">
           <Paperclip size={13} /> Anexos chegam em uma próxima fase do TaskEz.

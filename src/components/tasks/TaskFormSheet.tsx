@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react'
 import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
-import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
+import { Field, FieldLabel } from '@/components/ui/Input'
 import { LinksField, withDraft } from '@/components/ui/LinksField'
+import { MentionText } from '@/components/ui/MentionText'
+import { MentionTextArea } from '@/components/ui/MentionTextArea'
 import { RecurrenceField } from '@/components/ui/RecurrenceField'
 import { Sheet } from '@/components/ui/Sheet'
 import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, monthGrid } from '@/lib/calendar'
@@ -35,6 +37,13 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
   const team = useWorkspaceTeam()
   const addTask = useDataStore((s) => s.addTask)
   const updateTask = useDataStore((s) => s.updateTask)
+  const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
+  const allProjects = useDataStore((s) => s.projects)
+  // A sheet pode ser aberta a partir de um projeto de outra workspace (a lista
+  // de projetos do formulário é a da workspace atual, mas o projeto de origem
+  // manda mais).
+  const mentionWorkspaceId =
+    task?.workspaceId ?? allProjects.find((p) => p.id === defaultProjectId)?.workspaceId ?? currentWorkspaceId
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -133,11 +142,12 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
           onChange={(e) => setTitle(e.target.value)}
           autoFocus
         />
-        <TextArea
+        <MentionTextArea
           label="Descrição (opcional)"
-          placeholder="Adicione detalhes..."
+          placeholder="Adicione detalhes... Use @ para mencionar"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={setDescription}
+          workspaceId={mentionWorkspaceId}
         />
 
         <LinksField links={links} onChange={setLinks} draft={linkDraft} onDraftChange={setLinkDraft} />
@@ -244,7 +254,12 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
             {subtasks.map((s, i) =>
               editingSubtaskIndex === i ? (
                 <div key={i} className="flex flex-col gap-2 rounded-xl bg-surface px-3.5 py-2.5">
-                  <TextArea value={editingSubtaskValue} onChange={(e) => setEditingSubtaskValue(e.target.value)} autoFocus />
+                  <MentionTextArea
+                    value={editingSubtaskValue}
+                    onChange={setEditingSubtaskValue}
+                    workspaceId={mentionWorkspaceId}
+                    autoFocus
+                  />
                   <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="sm" onClick={() => setEditingSubtaskIndex(null)}>
                       Cancelar
@@ -256,7 +271,9 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
                 </div>
               ) : (
                 <div key={i} className="flex items-start justify-between gap-2 rounded-xl bg-surface px-3.5 py-2.5 text-sm">
-                  <span className="flex-1 whitespace-pre-wrap text-text">{s}</span>
+                  <span className="flex-1 whitespace-pre-wrap text-text">
+                    <MentionText text={s} workspaceId={mentionWorkspaceId} />
+                  </span>
                   <SubtaskMenu
                     onCopy={() => void navigator.clipboard.writeText(s)}
                     onEdit={() => {
@@ -268,9 +285,10 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
                 </div>
               ),
             )}
-            <TextArea
+            <MentionTextArea
               value={subtaskInput}
-              onChange={(e) => setSubtaskInput(e.target.value)}
+              onChange={setSubtaskInput}
+              workspaceId={mentionWorkspaceId}
               placeholder="Adicionar subtarefa"
             />
             <Button variant="secondary" size="sm" icon={<Plus size={15} />} onClick={addSubtaskDraft} className="self-end">

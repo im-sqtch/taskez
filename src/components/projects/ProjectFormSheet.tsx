@@ -2,8 +2,9 @@ import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight } from 'luci
 import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
-import { Field, FieldLabel, TextArea } from '@/components/ui/Input'
+import { Field, FieldLabel } from '@/components/ui/Input'
 import { LinksField, withDraft } from '@/components/ui/LinksField'
+import { MentionTextArea } from '@/components/ui/MentionTextArea'
 import { RecurrenceField } from '@/components/ui/RecurrenceField'
 import { Sheet } from '@/components/ui/Sheet'
 import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, monthGrid } from '@/lib/calendar'
@@ -28,8 +29,10 @@ const COLORS = ['#7C5CFF', '#3B9EFF', '#34D399', '#F5A524', '#F5455C', '#FF7CE0'
 export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectFormSheetProps) {
   const addProject = useDataStore((s) => s.addProject)
   const updateProject = useDataStore((s) => s.updateProject)
+  const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
   const team = useWorkspaceTeam()
   const currentUser = useAuthStore((s) => s.currentUser())
+  const mentionWorkspaceId = project?.workspaceId ?? currentWorkspaceId
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -107,11 +110,12 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
           onChange={(e) => setName(e.target.value)}
           autoFocus
         />
-        <TextArea
+        <MentionTextArea
           label="Descrição (opcional)"
-          placeholder="Do que se trata este projeto?"
+          placeholder="Do que se trata este projeto? Use @ para mencionar"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={setDescription}
+          workspaceId={mentionWorkspaceId}
         />
         <LinksField links={links} onChange={setLinks} draft={linkDraft} onDraftChange={setLinkDraft} />
         <div className="flex flex-col gap-1.5">

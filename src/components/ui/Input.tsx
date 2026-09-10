@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, LabelHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
+import type { InputHTMLAttributes, LabelHTMLAttributes, ReactNode, RefObject, TextareaHTMLAttributes } from 'react'
 import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
@@ -35,9 +35,12 @@ export function Field({ label, icon, error, className, id, ...props }: FieldProp
 
 interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
+  // Ref opcional para quem precisa do elemento (ex.: menções lêem a posição do
+  // cursor) sem abrir mão do auto-crescimento que vive aqui dentro.
+  textareaRef?: RefObject<HTMLTextAreaElement | null>
 }
 
-export function TextArea({ label, className, id, value, ...props }: TextAreaProps) {
+export function TextArea({ label, className, id, value, textareaRef, ...props }: TextAreaProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
   // Cresce com o conteúdo: zera a altura antes de medir para que o campo também
@@ -53,7 +56,10 @@ export function TextArea({ label, className, id, value, ...props }: TextAreaProp
     <label className="flex flex-col gap-1.5" htmlFor={id}>
       {label && <span className="text-sm font-medium text-text-muted">{label}</span>}
       <textarea
-        ref={ref}
+        ref={(el) => {
+          ref.current = el
+          if (textareaRef) textareaRef.current = el
+        }}
         id={id}
         value={value}
         className={cn(

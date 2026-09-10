@@ -26,6 +26,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { LinksList } from '@/components/ui/LinksField'
+import { MentionText } from '@/components/ui/MentionText'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { cn, formatDate } from '@/lib/utils'
 import { confirmAction } from '@/store/confirmStore'
@@ -144,7 +145,11 @@ export function ProjectDetailPage() {
             {project.dueDate && <p className="text-sm text-text-faint">Prazo: {formatDate(project.dueDate)}</p>}
           </div>
         </div>
-        {project.description && <p className="whitespace-pre-wrap text-sm text-text-muted">{project.description}</p>}
+        {project.description && (
+          <p className="whitespace-pre-wrap text-sm text-text-muted">
+            <MentionText text={project.description} workspaceId={project.workspaceId} />
+          </p>
+        )}
         <div className="flex flex-col gap-1.5">
           <ProgressBar value={pct} color={project.color} />
           <p className="text-xs font-medium text-text-muted">{pct}% concluído · {done}/{tasks.length} tarefas</p>

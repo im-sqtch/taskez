@@ -1,5 +1,7 @@
 import { Send } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { MentionDropdown } from '@/components/ui/MentionDropdown'
+import { useMentionAutocomplete } from '@/components/ui/useMentionAutocomplete'
 import { cn } from '@/lib/utils'
 
 // Altura máxima do campo antes de ele passar a rolar por dentro (~5 linhas).
@@ -19,11 +21,14 @@ interface MessageComposerProps {
   onSubmit: () => void
   placeholder?: string
   sendLabel?: string
+  // Quando informado, "@" abre o autocomplete de menções do workspace.
+  workspaceId?: string
 }
 
-export function MessageComposer({ value, onChange, onSubmit, placeholder, sendLabel = 'Enviar' }: MessageComposerProps) {
+export function MessageComposer({ value, onChange, onSubmit, placeholder, sendLabel = 'Enviar', workspaceId }: MessageComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
   const [touchKeyboard] = useState(hasTouchKeyboard)
+  const mentions = useMentionAutocomplete({ value, onChange, workspaceId, textareaRef: ref })
 
   // Cresce com o conteúdo: zera a altura antes de medir para que o campo também
   // encolha ao apagar linhas.
@@ -35,6 +40,8 @@ export function MessageComposer({ value, onChange, onSubmit, placeholder, sendLa
   }, [value])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Com o dropdown de menção aberto, Enter escolhe a menção em vez de enviar.
+    if (mentions.handleKeyDown(e)) return
     if (e.key !== 'Enter' || touchKeyboard || e.shiftKey) return
     // Enquanto o IME está compondo (acentos, teclados asiáticos), o Enter
     // confirma a palavra — não pode ser confundido com envio.
@@ -51,6 +58,10 @@ export function MessageComposer({ value, onChange, onSubmit, placeholder, sendLa
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
+        onInput={mentions.sync}
+        onKeyUp={mentions.sync}
+        onClick={mentions.sync}
+        onBlur={mentions.close}
         enterKeyHint={touchKeyboard ? 'enter' : 'send'}
         placeholder={placeholder}
         className={cn(
@@ -65,6 +76,15 @@ export function MessageComposer({ value, onChange, onSubmit, placeholder, sendLa
       >
         <Send size={16} />
       </button>
+      {mentions.open && (
+        <MentionDropdown
+          anchorRef={ref}
+          items={mentions.items}
+          activeIndex={mentions.activeIndex}
+          onSelect={mentions.select}
+          onHover={mentions.setActiveIndex}
+        />
+      )}
     </div>
   )
 }

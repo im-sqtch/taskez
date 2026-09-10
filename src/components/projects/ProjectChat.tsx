@@ -2,6 +2,7 @@ import { MessageCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { MentionText } from '@/components/ui/MentionText'
 import { MessageComposer } from '@/components/ui/MessageComposer'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -13,6 +14,7 @@ function formatTime(iso: string) {
 
 export function ProjectChat({ projectId }: { projectId: string }) {
   const allMessages = useDataStore((s) => s.chatMessages)
+  const workspaceId = useDataStore((s) => s.projects.find((p) => p.id === projectId)?.workspaceId)
   const team = useWorkspaceTeam()
   const addChatMessage = useDataStore((s) => s.addChatMessage)
   const currentUser = useAuthStore((s) => s.currentUser())
@@ -67,7 +69,7 @@ export function ProjectChat({ projectId }: { projectId: string }) {
                       own ? 'rounded-br-sm bg-accent text-white' : 'rounded-bl-sm bg-surface text-text',
                     )}
                   >
-                    {m.text}
+                    <MentionText text={m.text} workspaceId={workspaceId} variant={own ? 'onAccent' : 'default'} />
                   </div>
                   <span className="px-1 text-[10px] text-text-faint">{formatTime(m.createdAt)}</span>
                 </div>
@@ -81,8 +83,9 @@ export function ProjectChat({ projectId }: { projectId: string }) {
         value={text}
         onChange={setText}
         onSubmit={handleSend}
-        placeholder="Escreva uma mensagem..."
+        placeholder="Escreva uma mensagem... Use @ para mencionar"
         sendLabel="Enviar mensagem"
+        workspaceId={workspaceId}
       />
     </div>
   )
