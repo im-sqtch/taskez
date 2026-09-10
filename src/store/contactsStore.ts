@@ -48,17 +48,13 @@ interface ContactsState {
 // Notifica a outra ponta de um evento de contato diretamente no banco (não via
 // `dataStore.addNotification`, que sempre grava para o usuário atual e filtra
 // pelas preferências *locais* deste dispositivo — irrelevantes para notificar
-// outra pessoa). O insert já dispara push de verdade via trigger no banco.
-function notifyOtherUser(userId: string, title: string, body: string) {
-  fireAndForget(
-    supabase.from('notifications').insert({
-      id: uuid(),
-      user_id: userId,
-      type: 'team',
-      title,
-      body,
-    }),
-  )
+// outra pessoa). Via RPC (security definer) em vez de insert direto: o título
+// e o corpo são montados no servidor a partir de um catálogo fixo de eventos —
+// o client não consegue mais injetar texto livre na notificação/push de outra
+// pessoa (ver 20260910040000_contact_notification_templates.sql). O insert
+// que a RPC faz já dispara push de verdade via trigger no banco.
+function notifyContactEvent(userId: string, event: 'invite' | 'accepted') {
+  fireAndForget(supabase.rpc('notify_contact_event', { p_to_user_id: userId, p_event: event }))
 }
 
 export const useContactsStore = create<ContactsState>()((set, get) => ({
@@ -120,8 +116,7 @@ export const useContactsStore = create<ContactsState>()((set, get) => ({
     // pessoa — só assim ela recebe push mesmo se estiver com o app fechado
     // (o realtime sozinho só entrega se o app dela estiver aberto e conectado
     // naquele exato momento).
-    const fromName = useAuthStore.getState().profile?.name ?? 'Alguém'
-    notifyOtherUser(toUser.id, 'Novo convite de contato', `${fromName} quer te adicionar como contato.`)
+    notifyContactEvent(toUser.id, 'invite')
     return { ok: true }
   },
 
@@ -150,7 +145,7 @@ export const useContactsStore = create<ContactsState>()((set, get) => ({
         // Notifica quem convidou diretamente no banco — se ele estiver offline
         // no momento do aceite, o evento realtime nunca chegaria e o contato
         // ficaria "pending" para sempre no lado dele.
-        notifyOtherUser(otherId, 'Convite aceito', `${other.name} aceitou seu convite de contato.`)
+        notifyContactEvent(otherId, 'accepted')
       }
     }
   },
