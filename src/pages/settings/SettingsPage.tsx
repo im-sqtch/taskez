@@ -6,6 +6,7 @@ import { Field } from '@/components/ui/Input'
 import { Sheet } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
 import { Switch } from '@/components/ui/Switch'
+import { DeleteAccountSheet } from '@/components/settings/DeleteAccountSheet'
 import { NotificationPrefsSheet } from '@/components/settings/NotificationPrefsSheet'
 import { cn } from '@/lib/utils'
 import { isPushSubscribed, isPushSupported, subscribeToPush, unsubscribeFromPush } from '@/lib/push'
@@ -90,7 +91,6 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.currentUser())
   const logout = useAuthStore((s) => s.logout)
-  const deleteAccount = useAuthStore((s) => s.deleteAccount)
   const signOutOtherDevices = useAuthStore((s) => s.signOutOtherDevices)
   const updateProfile = useAuthStore((s) => s.updateProfile)
   const theme = useThemeStore((s) => s.theme)
@@ -100,6 +100,7 @@ export function SettingsPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [prefsOpen, setPrefsOpen] = useState(false)
   const [tzSheetOpen, setTzSheetOpen] = useState(false)
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
   const [name, setName] = useState(user?.name ?? '')
   const [notifEnabled, setNotifEnabled] = useState(false)
   const [notifBusy, setNotifBusy] = useState(false)
@@ -165,18 +166,6 @@ export function SettingsPage() {
     })
   }
 
-  function handleDeleteAccount() {
-    confirmAction({
-      title: 'Excluir conta',
-      description: 'Esta ação é permanente. Excluir sua conta e todos os dados?',
-      confirmLabel: 'Excluir conta',
-      danger: true,
-      onConfirm: () => {
-        deleteAccount()
-        navigate('/login')
-      },
-    })
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -279,7 +268,7 @@ export function SettingsPage() {
       <Section title="Conta">
         <Row icon={<Monitor size={17} />} label="Desconectar de outros dispositivos" onClick={handleSignOutOtherDevices} />
         <Row icon={<LogOut size={17} />} label="Sair" onClick={handleLogout} />
-        <Row icon={<Trash2 size={17} />} label="Excluir conta" onClick={handleDeleteAccount} danger />
+        <Row icon={<Trash2 size={17} />} label="Excluir conta" onClick={() => setDeleteAccountOpen(true)} danger />
       </Section>
 
       <Sheet
@@ -303,6 +292,7 @@ export function SettingsPage() {
       </Sheet>
 
       <NotificationPrefsSheet open={prefsOpen} onClose={() => setPrefsOpen(false)} />
+      <DeleteAccountSheet open={deleteAccountOpen} onClose={() => setDeleteAccountOpen(false)} />
 
       <Sheet
         open={tzSheetOpen}

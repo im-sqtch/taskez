@@ -133,7 +133,9 @@ export interface ProjectFile {
   size: number
   type: string
   storagePath: string
-  uploadedBy: string
+  // undefined quando quem enviou apagou a própria conta (files.uploaded_by
+  // ... on delete set null) — o arquivo sobrevive, só perde a atribuição.
+  uploadedBy?: string
   createdAt: string
   // Ver comentário equivalente em Task — só preenchidos na tela de Lixeira.
   deletedAt?: string

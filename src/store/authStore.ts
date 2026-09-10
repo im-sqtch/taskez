@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { detectUtcOffset } from '@/lib/timezone'
 import { unsubscribeFromPush } from '@/lib/push'
@@ -59,7 +60,12 @@ interface AuthState {
   setUsageMode: (mode: UsageMode) => Promise<void>
   updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor' | 'timezone' | 'autoCompleteProjects'>>) => Promise<void>
   completeOnboarding: () => void
-  deleteAccount: () => Promise<void>
+  // Apaga a conta de verdade (Edge Function delete-account, com service
+  // role) — pede a senha atual pra confirmar que é a pessoa mesmo, não só
+  // uma sessão aberta esquecida num aparelho. Recusa (ok:false) se a senha
+  // estiver errada ou se a pessoa ainda for dona de alguma workspace com
+  // outras pessoas dentro — nesses casos nada é apagado.
+  deleteAccount: (password: string) => Promise<{ ok: true } | { ok: false; error: string }>
   // Revoga a sessão de qualquer outro dispositivo/navegador logado nesta conta,
   // sem derrubar o dispositivo atual (diferente de `logout`).
   signOutOtherDevices: () => Promise<{ ok: true } | { ok: false; error: string }>
@@ -142,13 +148,26 @@ export const useAuthStore = create<AuthState>()(
 
       completeOnboarding: () => set({ hasSeenOnboarding: true }),
 
-      // Apagar a conta de verdade (auth.users) exige privilégio de service role,
-      // que não existe no client — por ora isso desloga o dispositivo; remoção
-      // definitiva fica para um fluxo futuro via Edge Function.
-      deleteAccount: async () => {
+      deleteAccount: async (password) => {
+        const { data, error } = await supabase.functions.invoke('delete-account', { body: { password } })
+        if (error) {
+          // A function retorna 401 (senha errada) ou 409 (workspaces com
+          // outras pessoas ainda pendentes) com `{ error: '<mensagem>' }` no
+          // corpo — só `FunctionsHttpError` (a function respondeu, mas com
+          // status de erro) carrega esse corpo em `.context`; os demais
+          // (`FunctionsRelayError`/`FunctionsFetchError`) são falha de
+          // transporte, sem nada estruturado pra ler.
+          const body = error instanceof FunctionsHttpError ? await error.context.json().catch(() => null) : null
+          return { ok: false, error: body?.error ?? 'Não foi possível excluir a conta. Tente novamente.' }
+        }
+        if (data?.error) return { ok: false, error: data.error as string }
+        // A conta já não existe mais no servidor neste ponto — só limpa a
+        // sessão local (o token JWT ainda "parece" válido até expirar, mas
+        // toda chamada que dependa de auth.uid() já não encontra mais
+        // nenhuma linha correspondente).
         await unsubscribeFromPush()
-        await supabase.auth.signOut()
         set({ currentUserId: null, profile: null })
+        return { ok: true }
       },
 
       currentUser: () => get().profile ?? undefined,

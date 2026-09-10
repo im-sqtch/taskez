@@ -182,7 +182,7 @@ interface ProjectFileRow {
   size: number
   type: string
   storage_path: string
-  uploaded_by: string
+  uploaded_by: string | null
   created_at: string
   deleted_at: string | null
   deleted_by: string | null
@@ -215,7 +215,7 @@ function mapProjectFile(row: ProjectFileRow): ProjectFile {
     size: row.size,
     type: row.type,
     storagePath: row.storage_path,
-    uploadedBy: row.uploaded_by,
+    uploadedBy: row.uploaded_by ?? undefined,
     createdAt: row.created_at,
     deletedAt: row.deleted_at ?? undefined,
     deletedBy: row.deleted_by ?? undefined,
