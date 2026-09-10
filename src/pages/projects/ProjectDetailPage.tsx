@@ -1,10 +1,25 @@
-import { Archive, ArchiveRestore, ArrowLeft, Calendar, CheckCircle2, Pencil, Plus, Repeat, Trash2, UserPlus, UserX, Users } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  Pencil,
+  Plus,
+  Repeat,
+  SlidersHorizontal,
+  Trash2,
+  UserPlus,
+  UserX,
+  Users,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { InviteMemberSheet } from '@/components/projects/InviteMemberSheet'
 import { ProjectChat } from '@/components/projects/ProjectChat'
 import { ProjectFiles } from '@/components/projects/ProjectFiles'
 import { ProjectFormSheet } from '@/components/projects/ProjectFormSheet'
+import { ReorderTasksSheet } from '@/components/tasks/ReorderTasksSheet'
 import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
 import { TaskRow } from '@/components/tasks/TaskRow'
 import { Avatar } from '@/components/ui/Avatar'
@@ -14,7 +29,7 @@ import { LinksList } from '@/components/ui/LinksField'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { cn, formatDate } from '@/lib/utils'
 import { confirmAction } from '@/store/confirmStore'
-import { useDataStore, useWorkspaceTasks, useWorkspaceTeam } from '@/store/dataStore'
+import { useDataStore } from '@/store/dataStore'
 
 const tabs = [
   { key: 'overview', label: 'Visão geral' },
@@ -30,9 +45,14 @@ export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const project = useDataStore((s) => s.projects.find((p) => p.id === id))
-  const allTasks = useWorkspaceTasks()
-  const tasks = allTasks.filter((t) => t.projectId === id)
-  const team = useWorkspaceTeam()
+  const allTasks = useDataStore((s) => s.tasks)
+  const allTeam = useDataStore((s) => s.team)
+  // Filtra por `project.workspaceId` (não pela workspace "atual" do usuário):
+  // um membro pode ter sido convidado para um projeto de uma workspace que não
+  // é a que está selecionada no momento, e ainda assim precisa ver as tarefas
+  // e a equipe reais desse projeto.
+  const tasks = allTasks.filter((t) => t.projectId === id).sort((a, b) => a.order - b.order)
+  const team = project ? allTeam.filter((m) => m.workspaceId === project.workspaceId) : []
   const deleteProject = useDataStore((s) => s.deleteProject)
   const updateProject = useDataStore((s) => s.updateProject)
 
@@ -40,6 +60,7 @@ export function ProjectDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [reorderOpen, setReorderOpen] = useState(false)
 
   if (!project) {
     return (
@@ -203,9 +224,20 @@ export function ProjectDetailPage() {
 
         {tab === 'tasks' && (
           <div className="flex flex-col gap-3">
-            <Button variant="secondary" size="sm" icon={<Plus size={15} />} onClick={() => setTaskFormOpen(true)} className="self-start">
-              Nova tarefa
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm" icon={<Plus size={15} />} onClick={() => setTaskFormOpen(true)} className="self-start">
+                Nova tarefa
+              </Button>
+              {tasks.length > 1 && (
+                <button
+                  onClick={() => setReorderOpen(true)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-alt text-text"
+                  aria-label="Ordenar tarefas"
+                >
+                  <SlidersHorizontal size={16} />
+                </button>
+              )}
+            </div>
             {tasks.length === 0 ? (
               <EmptyState icon={<Calendar size={22} />} title="Nenhuma tarefa neste projeto" />
             ) : (
@@ -256,6 +288,7 @@ export function ProjectDetailPage() {
       <ProjectFormSheet open={editOpen} onClose={() => setEditOpen(false)} project={project} />
       <TaskFormSheet open={taskFormOpen} onClose={() => setTaskFormOpen(false)} defaultProjectId={project.id} />
       <InviteMemberSheet open={inviteOpen} onClose={() => setInviteOpen(false)} project={project} />
+      <ReorderTasksSheet open={reorderOpen} onClose={() => setReorderOpen(false)} projectId={project.id} />
     </div>
   )
 }

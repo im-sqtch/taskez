@@ -46,6 +46,9 @@ export interface Task {
   createdAt: string
   updatedAt: string
   completedAt?: string
+  // Ordem manual dentro do projeto (ou da lista de avulsas do workspace,
+  // quando sem projeto) — definida na sheet de reordenar.
+  order: number
   // Só é considerada quando a tarefa não pertence a um projeto — dentro de um
   // projeto recorrente, a cadência é a do projeto (ver RecurrenceRule).
   recurrence?: RecurrenceRule

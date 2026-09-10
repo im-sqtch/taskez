@@ -96,6 +96,7 @@ interface TaskRow {
   created_at: string
   updated_at: string
   completed_at: string | null
+  order: number
   recurrence: RecurrenceRule | null
   series_id: string | null
 }
@@ -228,6 +229,7 @@ function mapTask(row: TaskRow): Task {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at ?? undefined,
+    order: row.order,
     recurrence: row.recurrence ?? undefined,
     seriesId: row.series_id ?? undefined,
   }
@@ -267,6 +269,7 @@ function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
   if (patch.comments !== undefined) row.comments = patch.comments
   if (patch.links !== undefined) row.links = patch.links
   if (patch.completedAt !== undefined) row.completed_at = patch.completedAt ?? null
+  if (patch.order !== undefined) row.order = patch.order
   if ('recurrence' in patch) row.recurrence = patch.recurrence ?? null
   if ('seriesId' in patch) row.series_id = patch.seriesId ?? null
   return row
@@ -282,7 +285,7 @@ function getSelfMember(team: TeamMember[]): TeamMember | undefined {
 // aparição prevista. Idempotente: um projeto/tarefa só "dispara" enquanto seu
 // `recurrence` estiver preenchido; ao gerar o sucessor, o registro antigo tem
 // `recurrence` zerado e sai da lista de vencidos nas próximas checagens.
-function generateDueRecurrences(userId: string) {
+async function generateDueRecurrences(userId: string) {
   const state = useDataStore.getState()
   const today = new Date()
   const nextOrderByWorkspace = new Map<string, number>()
@@ -386,8 +389,13 @@ function generateDueRecurrences(userId: string) {
     notifications: [...s.notifications, ...notifications],
   }))
 
-  for (const project of newProjects) {
-    fireAndForget(
+  // Espera os projetos novos serem gravados antes de disparar as tarefas: elas
+  // referenciam `project_id` (FK) e, sem esse await, a requisição da tarefa podia
+  // chegar ao Postgres antes da do projeto confirmar — a tarefa falhava por
+  // violação de chave estrangeira, e como o insert é fire-and-forget, esse erro
+  // era simplesmente descartado (nenhuma tarefa do novo ciclo sobrevivia).
+  await Promise.allSettled(
+    newProjects.map((project) =>
       supabase.from('projects').insert({
         id: project.id,
         workspace_id: project.workspaceId,
@@ -404,8 +412,8 @@ function generateDueRecurrences(userId: string) {
         recurrence: project.recurrence ?? null,
         series_id: project.seriesId ?? null,
       }),
-    )
-  }
+    ),
+  )
   for (const id of closedProjectIds) {
     fireAndForget(supabase.from('projects').update({ recurrence: null }).eq('id', id))
   }
@@ -426,6 +434,7 @@ function generateDueRecurrences(userId: string) {
         links: task.links,
         created_at: task.createdAt,
         updated_at: task.updatedAt,
+        order: task.order,
         recurrence: task.recurrence ?? null,
         series_id: task.seriesId ?? null,
       }),
@@ -602,6 +611,9 @@ interface DataState {
   addTask: (data: Partial<Task> & { title: string }) => string
   updateTask: (id: string, patch: Partial<Task>) => void
   deleteTask: (id: string) => void
+  // Reordena as tarefas cujo id está em `orderedIds` (0..n-1, na ordem dada) —
+  // quem chama já filtrou pelo projeto (ou grupo) que está sendo reordenado.
+  reorderTasks: (orderedIds: string[]) => void
   toggleTaskStatus: (id: string) => void
   setTaskStatus: (id: string, status: TaskStatus) => void
   addSubtask: (taskId: string, title: string) => void
@@ -791,10 +803,16 @@ export const useDataStore = create<DataState>()(
         if (!userId) return
         set({ loading: true })
 
+        // `order by joined_at` garante que o fallback de `currentWorkspaceId`
+        // abaixo (workspaces[0]) seja sempre a workspace mais antiga do usuário
+        // em vez de uma ordem arbitrária do Postgres — sem isso, quem tem mais
+        // de uma workspace podia cair, a cada sessão, numa workspace diferente
+        // da que estava vendo.
         const { data: memberRows } = await supabase
           .from('workspace_members')
           .select('workspace_id, role, workspaces(*)')
           .eq('user_id', userId)
+          .order('joined_at')
 
         const workspaceRows = (memberRows ?? [])
           .map((r) => r.workspaces as unknown as WorkspaceRow | null)
@@ -856,7 +874,7 @@ export const useDataStore = create<DataState>()(
           if (profileName && selfRow && (selfRow as TeamMemberRow).name !== profileName) {
             get().syncSelfProfile({ name: profileName })
           }
-          generateDueRecurrences(userId)
+          void generateDueRecurrences(userId)
           setupRealtime()
           return
         }
@@ -1392,6 +1410,10 @@ export const useDataStore = create<DataState>()(
         const id = uuid()
         const workspaceId = get().currentWorkspaceId
         const userId = useAuthStore.getState().currentUserId!
+        // Escopo da ordem é o projeto (ou o workspace, para avulsas) — mesmo
+        // agrupamento usado na sheet de reordenar.
+        const order =
+          Math.max(-1, ...get().tasks.filter((t) => (t.projectId ?? t.workspaceId) === (data.projectId ?? workspaceId)).map((t) => t.order)) + 1
         const task: Task = {
           id,
           workspaceId,
@@ -1407,6 +1429,7 @@ export const useDataStore = create<DataState>()(
           links: data.links ?? [],
           createdAt: now(),
           updatedAt: now(),
+          order,
           recurrence: data.recurrence,
           // A própria id vira a raiz da série na primeira vez que a
           // recorrência é ligada — carregado adiante em todo ciclo gerado.
@@ -1446,6 +1469,7 @@ export const useDataStore = create<DataState>()(
             subtasks: task.subtasks,
             comments: task.comments,
             links: task.links,
+            order: task.order,
             recurrence: task.recurrence ?? null,
             series_id: task.seriesId ?? null,
           }),
@@ -1493,6 +1517,17 @@ export const useDataStore = create<DataState>()(
       deleteTask: (id) => {
         set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) }))
         fireAndForget(supabase.from('tasks').delete().eq('id', id))
+      },
+      reorderTasks: (orderedIds) => {
+        set((state) => ({
+          tasks: state.tasks.map((t) => {
+            const order = orderedIds.indexOf(t.id)
+            return order === -1 ? t : { ...t, order }
+          }),
+        }))
+        orderedIds.forEach((id, order) => {
+          fireAndForget(supabase.from('tasks').update({ order }).eq('id', id))
+        })
       },
       toggleTaskStatus: (id) => {
         const task = get().tasks.find((t) => t.id === id)

@@ -2,7 +2,7 @@ import { UserPlus } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Sheet } from '@/components/ui/Sheet'
-import { useDataStore, useWorkspaceTeam } from '@/store/dataStore'
+import { useDataStore } from '@/store/dataStore'
 import type { Project } from '@/types'
 
 interface InviteMemberSheetProps {
@@ -12,7 +12,10 @@ interface InviteMemberSheetProps {
 }
 
 export function InviteMemberSheet({ open, onClose, project }: InviteMemberSheetProps) {
-  const team = useWorkspaceTeam()
+  // Equipe da workspace do projeto (não a workspace "atual" do usuário) — quem
+  // vê esta sheet pode ter várias workspaces e estar visualizando este projeto
+  // sem que a workspace dele seja a selecionada no momento.
+  const team = useDataStore((s) => s.team.filter((m) => m.workspaceId === project.workspaceId))
   const updateProject = useDataStore((s) => s.updateProject)
 
   const available = team.filter((m) => !project.memberIds.includes(m.id))
