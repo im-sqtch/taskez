@@ -110,7 +110,9 @@ export interface Workspace {
 export interface ChatMessage {
   id: string
   projectId: string
-  authorId: string
+  // null quando o autor já foi removido da equipe — a mensagem sobrevive
+  // (chat_messages.author_id ... on delete set null), só perde o vínculo.
+  authorId: string | null
   text: string
   createdAt: string
 }

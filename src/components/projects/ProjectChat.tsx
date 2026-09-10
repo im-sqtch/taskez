@@ -29,16 +29,19 @@ export function ProjectChat({ projectId }: { projectId: string }) {
     window.scrollTo({ top: document.body.scrollHeight })
   }, [messages.length])
 
-  function isOwnMessage(authorId: string) {
-    return authorId === currentUser?.id || authorId === selfId
+  function isOwnMessage(authorId: string | null) {
+    return authorId !== null && (authorId === currentUser?.id || authorId === selfId)
   }
 
-  function authorFor(authorId: string) {
+  // authorId null = quem escreveu já foi removido da equipe; a mensagem
+  // sobrevive (ver migration chat_author on delete set null) com um autor
+  // genérico em vez de sumir do histórico.
+  function authorFor(authorId: string | null) {
     if (isOwnMessage(authorId) && currentUser) {
       return { name: currentUser.name, avatarColor: currentUser.avatarColor }
     }
-    const member = team.find((m) => m.id === authorId)
-    return member ? { name: member.name, avatarColor: member.avatarColor } : { name: 'Alguém', avatarColor: '#62667A' }
+    const member = authorId ? team.find((m) => m.id === authorId) : undefined
+    return member ? { name: member.name, avatarColor: member.avatarColor } : { name: 'Ex-membro', avatarColor: '#62667A' }
   }
 
   function handleSend() {

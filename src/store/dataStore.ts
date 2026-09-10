@@ -150,7 +150,7 @@ interface ChatMessageRow {
   id: string
   workspace_id: string
   project_id: string
-  author_id: string
+  author_id: string | null
   text: string
   created_at: string
 }
