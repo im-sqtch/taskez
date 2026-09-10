@@ -14,8 +14,12 @@ interface InviteMemberSheetProps {
 export function InviteMemberSheet({ open, onClose, project }: InviteMemberSheetProps) {
   // Equipe da workspace do projeto (não a workspace "atual" do usuário) — quem
   // vê esta sheet pode ter várias workspaces e estar visualizando este projeto
-  // sem que a workspace dele seja a selecionada no momento.
-  const team = useDataStore((s) => s.team.filter((m) => m.workspaceId === project.workspaceId))
+  // sem que a workspace dele seja a selecionada no momento. Filtra no corpo do
+  // componente (não dentro do seletor do zustand): um `.filter()` ali criaria
+  // um array novo a cada notificação da store e entraria em loop de re-render
+  // ("Maximum update depth exceeded").
+  const allTeam = useDataStore((s) => s.team)
+  const team = allTeam.filter((m) => m.workspaceId === project.workspaceId)
   const updateProject = useDataStore((s) => s.updateProject)
 
   const available = team.filter((m) => !project.memberIds.includes(m.id))
