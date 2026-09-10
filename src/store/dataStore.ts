@@ -1619,83 +1619,79 @@ export const useDataStore = create<DataState>()(
           maybeAutoCompleteProject(get, task?.projectId)
         }
       },
+      // As mutações de subtasks/comments abaixo continuam otimistas (o `set`
+      // local não muda), mas a escrita no banco passou de um `update` que
+      // sobrescrevia a coluna inteira com o array calculado A PARTIR DO
+      // ESTADO LOCAL — potencialmente desatualizado — para uma RPC que
+      // recalcula o array dentro do próprio banco, a partir do que está
+      // gravado no momento exato da escrita (com `select ... for update`
+      // travando a linha). Isso fecha a corrida: dois membros editando a
+      // mesma tarefa ao mesmo tempo não fazem mais o último a escrever
+      // apagar o que o outro tinha acabado de salvar (ver
+      // 20260910070000_atomic_subtask_comment_writes.sql).
       addSubtask: (taskId, title) => {
+        const subtaskId = uuid()
         let nextSubtasks: Subtask[] = []
         let nextStatus: TaskStatus | undefined
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t
-            nextSubtasks = [...t.subtasks, { id: uuid(), title, done: false }]
+            nextSubtasks = [...t.subtasks, { id: subtaskId, title, done: false }]
             nextStatus = deriveStatusFromSubtasks(t.status, nextSubtasks)
             return { ...t, subtasks: nextSubtasks, status: nextStatus, updatedAt: now() }
           }),
         }))
-        fireAndForget(
-          supabase.from('tasks').update({ subtasks: nextSubtasks, status: nextStatus, updated_at: now() }).eq('id', taskId),
-        )
+        fireAndForget(supabase.rpc('task_add_subtask', { p_task_id: taskId, p_subtask_id: subtaskId, p_title: title }))
       },
       editSubtask: (taskId, subtaskId, title) => {
-        let nextSubtasks: Subtask[] = []
         set((state) => ({
-          tasks: state.tasks.map((t) => {
-            if (t.id !== taskId) return t
-            nextSubtasks = t.subtasks.map((s) => (s.id === subtaskId ? { ...s, title } : s))
-            return { ...t, subtasks: nextSubtasks, updatedAt: now() }
-          }),
+          tasks: state.tasks.map((t) =>
+            t.id !== taskId ? t : { ...t, subtasks: t.subtasks.map((s) => (s.id === subtaskId ? { ...s, title } : s)), updatedAt: now() },
+          ),
         }))
-        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, updated_at: now() }).eq('id', taskId))
+        fireAndForget(supabase.rpc('task_edit_subtask', { p_task_id: taskId, p_subtask_id: subtaskId, p_title: title }))
       },
       toggleSubtask: (taskId, subtaskId) => {
-        let nextSubtasks: Subtask[] = []
-        let nextStatus: TaskStatus | undefined
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t
-            nextSubtasks = t.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s))
-            nextStatus = deriveStatusFromSubtasks(t.status, nextSubtasks)
-            return { ...t, subtasks: nextSubtasks, status: nextStatus, updatedAt: now() }
+            const nextSubtasks = t.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s))
+            return { ...t, subtasks: nextSubtasks, status: deriveStatusFromSubtasks(t.status, nextSubtasks), updatedAt: now() }
           }),
         }))
-        fireAndForget(
-          supabase.from('tasks').update({ subtasks: nextSubtasks, status: nextStatus, updated_at: now() }).eq('id', taskId),
-        )
+        fireAndForget(supabase.rpc('task_toggle_subtask', { p_task_id: taskId, p_subtask_id: subtaskId }))
       },
       removeSubtask: (taskId, subtaskId) => {
-        let nextSubtasks: Subtask[] = []
-        let nextStatus: TaskStatus | undefined
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t
-            nextSubtasks = t.subtasks.filter((s) => s.id !== subtaskId)
-            nextStatus = deriveStatusFromSubtasks(t.status, nextSubtasks)
-            return { ...t, subtasks: nextSubtasks, status: nextStatus }
+            const nextSubtasks = t.subtasks.filter((s) => s.id !== subtaskId)
+            return { ...t, subtasks: nextSubtasks, status: deriveStatusFromSubtasks(t.status, nextSubtasks), updatedAt: now() }
           }),
         }))
-        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, status: nextStatus }).eq('id', taskId))
+        fireAndForget(supabase.rpc('task_remove_subtask', { p_task_id: taskId, p_subtask_id: subtaskId }))
       },
       reorderSubtasks: (taskId, orderedIds) => {
-        let nextSubtasks: Subtask[] = []
         set((state) => ({
           tasks: state.tasks.map((t) => {
             if (t.id !== taskId) return t
             const byId = new Map(t.subtasks.map((s) => [s.id, s]))
-            nextSubtasks = orderedIds.map((id) => byId.get(id)).filter((s): s is Subtask => s !== undefined)
+            const nextSubtasks = orderedIds.map((id) => byId.get(id)).filter((s): s is Subtask => s !== undefined)
             return { ...t, subtasks: nextSubtasks, updatedAt: now() }
           }),
         }))
-        fireAndForget(supabase.from('tasks').update({ subtasks: nextSubtasks, updated_at: now() }).eq('id', taskId))
+        fireAndForget(supabase.rpc('task_reorder_subtasks', { p_task_id: taskId, p_ordered_ids: orderedIds }))
       },
       addComment: (taskId, authorId, text) => {
         const userId = useAuthStore.getState().currentUserId!
-        let nextComments: Task['comments'] = []
+        const commentId = uuid()
+        const createdAt = now()
         set((state) => {
           const task = state.tasks.find((t) => t.id === taskId)
           return {
-            tasks: state.tasks.map((t) => {
-              if (t.id !== taskId) return t
-              nextComments = [...t.comments, { id: uuid(), authorId, text, createdAt: now() }]
-              return { ...t, comments: nextComments, updatedAt: now() }
-            }),
+            tasks: state.tasks.map((t) =>
+              t.id !== taskId ? t : { ...t, comments: [...t.comments, { id: commentId, authorId, text, createdAt }], updatedAt: now() },
+            ),
             notifications: task
               ? appendNotification(
                   state.notifications,
@@ -1707,7 +1703,15 @@ export const useDataStore = create<DataState>()(
               : state.notifications,
           }
         })
-        fireAndForget(supabase.from('tasks').update({ comments: nextComments, updated_at: now() }).eq('id', taskId))
+        fireAndForget(
+          supabase.rpc('task_add_comment', {
+            p_task_id: taskId,
+            p_comment_id: commentId,
+            p_author_id: authorId,
+            p_text: text,
+            p_created_at: createdAt,
+          }),
+        )
       },
 
       markNotificationRead: (id) => {
