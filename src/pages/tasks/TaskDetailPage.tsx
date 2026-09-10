@@ -21,7 +21,11 @@ export function TaskDetailPage() {
   const navigate = useNavigate()
   const task = useDataStore((s) => s.tasks.find((t) => t.id === id))
   const project = useDataStore((s) => s.projects.find((p) => p.id === task?.projectId))
-  const assignee = useDataStore((s) => s.team.find((m) => m.id === task?.assigneeId))
+  // Filtra no corpo do componente (não dentro do seletor do zustand): um
+  // `.filter()` ali criaria um array novo a cada notificação da store e
+  // entraria em loop de re-render ("Maximum update depth exceeded").
+  const team = useDataStore((s) => s.team)
+  const assignees = team.filter((m) => task?.assigneeIds.includes(m.id))
   const toggleTaskStatus = useDataStore((s) => s.toggleTaskStatus)
   const deleteTask = useDataStore((s) => s.deleteTask)
   const addSubtask = useDataStore((s) => s.addSubtask)
@@ -142,12 +146,15 @@ export function TaskDetailPage() {
               Prazo: {formatDate(task.dueDate)}
             </span>
           )}
-          {assignee && (
-            <span className="flex items-center gap-1.5 rounded-full bg-surface-alt py-1 pl-1 pr-2.5 text-xs font-semibold text-text-muted">
+          {assignees.map((assignee) => (
+            <span
+              key={assignee.id}
+              className="flex items-center gap-1.5 rounded-full bg-surface-alt py-1 pl-1 pr-2.5 text-xs font-semibold text-text-muted"
+            >
               <Avatar name={assignee.name} color={assignee.avatarColor} size="xs" />
               {assignee.name}
             </span>
-          )}
+          ))}
         </div>
 
         {task.description && (

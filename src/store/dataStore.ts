@@ -89,7 +89,7 @@ interface TaskRow {
   status: TaskStatus
   priority: Priority
   due_date: string | null
-  assignee_id: string | null
+  assignee_ids: string[]
   subtasks: Subtask[]
   comments: Task['comments']
   links: string[]
@@ -222,7 +222,7 @@ function mapTask(row: TaskRow): Task {
     priority: row.priority,
     projectId: row.project_id ?? undefined,
     dueDate: row.due_date ?? undefined,
-    assigneeId: row.assignee_id ?? undefined,
+    assigneeIds: row.assignee_ids ?? [],
     subtasks: row.subtasks ?? [],
     comments: row.comments ?? [],
     links: row.links ?? [],
@@ -264,7 +264,7 @@ function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
   if (patch.priority !== undefined) row.priority = patch.priority
   if (patch.projectId !== undefined) row.project_id = patch.projectId ?? null
   if (patch.dueDate !== undefined) row.due_date = patch.dueDate ?? null
-  if (patch.assigneeId !== undefined) row.assignee_id = patch.assigneeId ?? null
+  if (patch.assigneeIds !== undefined) row.assignee_ids = patch.assigneeIds
   if (patch.subtasks !== undefined) row.subtasks = patch.subtasks
   if (patch.comments !== undefined) row.comments = patch.comments
   if (patch.links !== undefined) row.links = patch.links
@@ -428,7 +428,7 @@ async function generateDueRecurrences(userId: string) {
         status: task.status,
         priority: task.priority,
         due_date: task.dueDate ?? null,
-        assignee_id: task.assigneeId ?? null,
+        assignee_ids: task.assigneeIds,
         subtasks: task.subtasks,
         comments: task.comments,
         links: task.links,
@@ -1059,13 +1059,20 @@ export const useDataStore = create<DataState>()(
         const member = get().team.find((m) => m.id === memberId)
         if (!member || member.isSelf) return
         if (get().workspaceRoles[member.workspaceId] !== 'owner') return
+        const unassignedTaskIds: string[] = []
         set((state) => ({
           team: state.team.filter((m) => m.id !== memberId),
-          tasks: state.tasks.map((t) =>
-            t.workspaceId === member.workspaceId && t.assigneeId === memberId ? { ...t, assigneeId: undefined } : t,
-          ),
+          tasks: state.tasks.map((t) => {
+            if (t.workspaceId !== member.workspaceId || !t.assigneeIds.includes(memberId)) return t
+            unassignedTaskIds.push(t.id)
+            return { ...t, assigneeIds: t.assigneeIds.filter((id) => id !== memberId) }
+          }),
         }))
         fireAndForget(supabase.from('team_members').delete().eq('id', memberId))
+        for (const taskId of unassignedTaskIds) {
+          const task = get().tasks.find((t) => t.id === taskId)
+          if (task) fireAndForget(supabase.from('tasks').update({ assignee_ids: task.assigneeIds }).eq('id', taskId))
+        }
         // Revoga o acesso de fato — sem isso a pessoa continuaria enxergando o
         // workspace via `workspace_members` mesmo tendo sumido do roster visual.
         if (member.linkedUserId) {
@@ -1427,7 +1434,7 @@ export const useDataStore = create<DataState>()(
           priority: data.priority ?? 'medium',
           projectId: data.projectId,
           dueDate: data.dueDate,
-          assigneeId: data.assigneeId,
+          assigneeIds: data.assigneeIds ?? [],
           subtasks: data.subtasks ?? [],
           comments: data.comments ?? [],
           links: data.links ?? [],
@@ -1441,22 +1448,32 @@ export const useDataStore = create<DataState>()(
         }
         set((state) => {
           const selfId = getSelfMember(state.team.filter((m) => m.workspaceId === workspaceId))?.id
-          const member = task.assigneeId && task.assigneeId !== selfId ? state.team.find((m) => m.id === task.assigneeId) : undefined
-          const isSelfAssigned = !!task.assigneeId && task.assigneeId === selfId
-          const notification = member
-            ? makeNotification(userId, workspaceId, 'task.assigned', 'Tarefa delegada', `"${task.title}" foi delegada para ${member.name}.`, {
-                type: 'task',
-                id: task.id,
-              })
-            : isSelfAssigned
-              ? makeNotification(userId, workspaceId, 'task.created', 'Tarefa criada', `"${task.title}" foi criada e atribuída a você.`, {
+          let notifications = state.notifications
+          for (const memberId of task.assigneeIds) {
+            if (memberId === selfId) {
+              notifications = appendNotification(
+                notifications,
+                makeNotification(userId, workspaceId, 'task.created', 'Tarefa criada', `"${task.title}" foi criada e atribuída a você.`, {
                   type: 'task',
                   id: task.id,
-                })
-              : undefined
+                }),
+              )
+              continue
+            }
+            const member = state.team.find((m) => m.id === memberId)
+            if (member) {
+              notifications = appendNotification(
+                notifications,
+                makeNotification(userId, workspaceId, 'task.assigned', 'Tarefa delegada', `"${task.title}" foi delegada para ${member.name}.`, {
+                  type: 'task',
+                  id: task.id,
+                }),
+              )
+            }
+          }
           return {
             tasks: [...state.tasks, task],
-            notifications: appendNotification(state.notifications, notification),
+            notifications,
           }
         })
         fireAndForget(
@@ -1469,7 +1486,7 @@ export const useDataStore = create<DataState>()(
             priority: task.priority,
             project_id: task.projectId ?? null,
             due_date: task.dueDate ?? null,
-            assignee_id: task.assigneeId ?? null,
+            assignee_ids: task.assigneeIds,
             subtasks: task.subtasks,
             comments: task.comments,
             links: task.links,
@@ -1491,10 +1508,12 @@ export const useDataStore = create<DataState>()(
         set((state) => {
           const existing = state.tasks.find((t) => t.id === id)
           const notifications = [...state.notifications]
-          if (existing) {
+          if (existing && patch.assigneeIds) {
             const selfId = getSelfMember(state.team.filter((m) => m.workspaceId === existing.workspaceId))?.id
-            if (patch.assigneeId && patch.assigneeId !== existing.assigneeId && patch.assigneeId !== selfId) {
-              const member = state.team.find((m) => m.id === patch.assigneeId)
+            const newlyAssignedIds = patch.assigneeIds.filter((memberId) => !existing.assigneeIds.includes(memberId))
+            for (const memberId of newlyAssignedIds) {
+              if (memberId === selfId) continue // "Você" já sabe que se atribuiu a tarefa
+              const member = state.team.find((m) => m.id === memberId)
               if (member) {
                 const notification = makeNotification(
                   userId,
@@ -1798,7 +1817,7 @@ export function useWorkspaceTeam() {
   const totalActive = activeTasks.length
   return members.map((m) => ({
     ...m,
-    workload: totalActive === 0 ? 0 : Math.round((activeTasks.filter((t) => t.assigneeId === m.id).length / totalActive) * 100),
+    workload: totalActive === 0 ? 0 : Math.round((activeTasks.filter((t) => t.assigneeIds.includes(m.id)).length / totalActive) * 100),
   }))
 }
 

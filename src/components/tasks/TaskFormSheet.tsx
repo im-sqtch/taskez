@@ -40,7 +40,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<Priority>('medium')
   const [projectId, setProjectId] = useState<string | undefined>(defaultProjectId)
-  const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined)
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [dueDate, setDueDate] = useState('')
   const [subtasks, setSubtasks] = useState<string[]>([])
   const [subtaskInput, setSubtaskInput] = useState('')
@@ -59,7 +59,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     setDescription(task?.description ?? '')
     setPriority(task?.priority ?? 'medium')
     setProjectId(task?.projectId ?? defaultProjectId)
-    setAssigneeId(task?.assigneeId)
+    setAssigneeIds(task?.assigneeIds ?? [])
     setDueDate(task?.dueDate ? task.dueDate.slice(0, 10) : '')
     setCalendarCursor(task?.dueDate ? keyToDate(task.dueDate.slice(0, 10)) : new Date())
     setSubtasks(task?.subtasks.map((s) => s.title) ?? [])
@@ -82,6 +82,10 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     setEditingSubtaskIndex(null)
   }
 
+  function toggleAssignee(memberId: string) {
+    setAssigneeIds((prev) => (prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]))
+  }
+
   function handleSubmit() {
     if (!title.trim()) return
     const payload = {
@@ -89,7 +93,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
       description: description.trim() || undefined,
       priority,
       projectId,
-      assigneeId,
+      assigneeIds,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       links: withDraft(links, linkDraft),
       // Recorrência de tarefa só faz sentido sem projeto — dentro de um
@@ -160,41 +164,46 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
         <div className="flex flex-col gap-1.5">
           <FieldLabel>Delegar para</FieldLabel>
           <div className="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1">
-            <button onClick={() => setAssigneeId(undefined)} className="flex shrink-0 flex-col items-center gap-1.5">
+            <button onClick={() => setAssigneeIds([])} className="flex shrink-0 flex-col items-center gap-1.5">
               <div
                 className={cn(
                   'flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed text-text-faint',
-                  !assigneeId ? 'border-accent text-accent' : 'border-border',
+                  assigneeIds.length === 0 ? 'border-accent text-accent' : 'border-border',
                 )}
               >
                 <UserX size={17} />
               </div>
-              <span className={cn('text-[11px] font-medium', !assigneeId ? 'text-accent' : 'text-text-faint')}>
+              <span className={cn('text-[11px] font-medium', assigneeIds.length === 0 ? 'text-accent' : 'text-text-faint')}>
                 Ninguém
               </span>
             </button>
-            {team.map((member) => (
-              <button
-                key={member.id}
-                onClick={() => setAssigneeId(member.id)}
-                className="flex shrink-0 flex-col items-center gap-1.5"
-              >
-                <Avatar
-                  name={member.name}
-                  color={member.avatarColor}
-                  size="md"
-                  className={cn(assigneeId === member.id && 'ring-2 ring-accent ring-offset-2 ring-offset-surface-alt')}
-                />
-                <span
-                  className={cn(
-                    'max-w-14 truncate text-[11px] font-medium',
-                    assigneeId === member.id ? 'text-accent' : 'text-text-faint',
-                  )}
+            {team.map((member) => {
+              const selected = assigneeIds.includes(member.id)
+              return (
+                <button
+                  key={member.id}
+                  onClick={() => toggleAssignee(member.id)}
+                  className="flex shrink-0 flex-col items-center gap-1.5"
                 >
-                  {member.name.split(' ')[0]}
-                </span>
-              </button>
-            ))}
+                  <div className="relative">
+                    <Avatar
+                      name={member.name}
+                      color={member.avatarColor}
+                      size="md"
+                      className={cn(selected && 'ring-2 ring-accent ring-offset-2 ring-offset-surface-alt')}
+                    />
+                    {selected && (
+                      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-white ring-2 ring-surface-alt">
+                        <Check size={10} strokeWidth={3} />
+                      </span>
+                    )}
+                  </div>
+                  <span className={cn('max-w-14 truncate text-[11px] font-medium', selected ? 'text-accent' : 'text-text-faint')}>
+                    {member.name.split(' ')[0]}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </div>
 

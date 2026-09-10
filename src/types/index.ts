@@ -39,7 +39,7 @@ export interface Task {
   priority: Priority
   projectId?: string
   dueDate?: string
-  assigneeId?: string
+  assigneeIds: string[]
   subtasks: Subtask[]
   comments: Comment[]
   links: string[]
