@@ -1393,8 +1393,19 @@ export const useDataStore = create<DataState>()(
           }
           return { files: state.files.filter((f) => f.id !== id), notifications }
         })
-        fireAndForget(supabase.from('files').delete().eq('id', id))
-        if (storagePath) fireAndForget(supabase.storage.from('project-files').remove([storagePath]))
+        // Remove o blob no Storage ANTES da linha em `files`: a policy de
+        // delete do bucket autoriza comparando o objeto com `files.storage_path`
+        // (quem enviou ou o dono do workspace) — se a linha já tivesse sumido
+        // primeiro, essa checagem não encontraria mais nada e o blob ficaria
+        // órfão no bucket para sempre.
+        async function cleanup() {
+          if (storagePath) {
+            const { error } = await supabase.storage.from('project-files').remove([storagePath])
+            if (error) console.error('[files] falha ao remover do storage', error)
+          }
+          fireAndForget(supabase.from('files').delete().eq('id', id))
+        }
+        void cleanup()
       },
       linkFileToProject: (fileId, projectId) => {
         const userId = useAuthStore.getState().currentUserId!

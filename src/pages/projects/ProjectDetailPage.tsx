@@ -56,6 +56,11 @@ export function ProjectDetailPage() {
   const team = project ? allTeam.filter((m) => m.workspaceId === project.workspaceId) : []
   const deleteProject = useDataStore((s) => s.deleteProject)
   const updateProject = useDataStore((s) => s.updateProject)
+  // Só o dono do workspace pode apagar um projeto (ver policy de delete em
+  // `projects`) — a UI espelha essa regra escondendo o botão pra quem não
+  // tem permissão, em vez de deixar clicar e a ação falhar silenciosa/
+  // visivelmente no banco.
+  const isWorkspaceOwner = useDataStore((s) => (project ? s.workspaceRoles[project.workspaceId] === 'owner' : false))
 
   const [tab, setTab] = useState<TabKey>('tasks')
   const [editOpen, setEditOpen] = useState(false)
@@ -126,9 +131,11 @@ export function ProjectDetailPage() {
           >
             {project.status === 'archived' ? <ArchiveRestore size={16} /> : <Archive size={16} />}
           </button>
-          <button onClick={handleDelete} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-danger">
-            <Trash2 size={16} />
-          </button>
+          {isWorkspaceOwner && (
+            <button onClick={handleDelete} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-danger">
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
       </header>
 

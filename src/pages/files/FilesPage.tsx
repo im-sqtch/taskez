@@ -26,6 +26,11 @@ export function FilesPage() {
   const addFile = useDataStore((s) => s.addFile)
   const removeFile = useDataStore((s) => s.removeFile)
   const currentUser = useAuthStore((s) => s.currentUser())
+  // Só quem enviou o arquivo ou o dono do workspace pode apagá-lo (ver policy
+  // de delete em `files`) — a UI espelha essa regra escondendo o botão pra
+  // quem não tem permissão.
+  const isWorkspaceOwner = useDataStore((s) => (workspace ? s.workspaceRoles[workspace.id] === 'owner' : false))
+  const canRemove = (file: ProjectFile) => isWorkspaceOwner || file.uploadedBy === currentUser?.id
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -148,13 +153,15 @@ export function FilesPage() {
                   >
                     <Download size={16} />
                   </button>
-                  <button
-                    onClick={() => handleRemove(file)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-danger"
-                    aria-label={`Excluir ${file.name}`}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {canRemove(file) && (
+                    <button
+                      onClick={() => handleRemove(file)}
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-danger"
+                      aria-label={`Excluir ${file.name}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               )
             })}
