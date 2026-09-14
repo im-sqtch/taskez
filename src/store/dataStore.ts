@@ -8,6 +8,7 @@ import { WIDGET_CATALOG, WIDGET_TYPES } from '@/lib/widgetCatalog'
 import { NOTIFICATION_EVENTS, type NotificationEvent } from '@/lib/notificationCatalog'
 import { isNotificationEventEnabled } from '@/store/notificationPrefsStore'
 import { applyOffset, dueOccurrence, offsetDays } from '@/lib/recurrence'
+import { dateKey, keyToDate } from '@/lib/calendar'
 import type {
   ChatMessage,
   DashboardLayout,
@@ -295,11 +296,13 @@ function getSelfMember(team: TeamMember[]): TeamMember | undefined {
 }
 
 // Gera o próximo ciclo de cada projeto/tarefa recorrente vencido. Roda dentro
-// de `seedIfEmpty` (sem nenhum job em segundo plano) — cada vez que o
-// workspace é recarregado, checa se alguma série já passou da data de
-// aparição prevista. Idempotente: um projeto/tarefa só "dispara" enquanto seu
-// `recurrence` estiver preenchido; ao gerar o sucessor, o registro antigo tem
-// `recurrence` zerado e sai da lista de vencidos nas próximas checagens.
+// de `seedIfEmpty` (ao carregar o workspace) e também via `checkDueRecurrences`
+// (chamada quando a aba volta a ficar visível, ver AppShell) — não há job em
+// segundo plano de verdade, então é isso que garante a checagem mesmo com o
+// app deixado aberto passando da meia-noite. Idempotente: um projeto/tarefa só
+// "dispara" enquanto seu `recurrence` estiver preenchido; ao gerar o sucessor,
+// o registro antigo tem `recurrence` zerado e sai da lista de vencidos nas
+// próximas checagens.
 async function generateDueRecurrences(userId: string) {
   const state = useDataStore.getState()
   const today = new Date()
@@ -319,57 +322,70 @@ async function generateDueRecurrences(userId: string) {
   const closedTaskIds = new Set<string>()
   const notifications: Notification[] = []
 
+  // Âncora normalizada para meia-noite local do dia de criação (não a hora
+  // exata) — senão um item criado às 22h14 só "vence" a partir das 22h14 do
+  // dia seguinte em vez de à meia-noite, fazendo o novo ciclo aparecer ou não
+  // dependendo puramente da hora em que o app é reaberto.
+  const localMidnightAnchor = (createdAt: string) => keyToDate(dateKey(new Date(createdAt)))
+
   for (const project of state.projects) {
     if (!project.recurrence) continue
-    const appearance = dueOccurrence(project.recurrence, new Date(project.createdAt), today)
-    if (!appearance) continue
-    // `createdAt` do novo ciclo é a própria data de aparição (não `now()`) —
-    // é o que mantém o deslocamento em dias de cada prazo exato e faz o
-    // índice único (series_id, created_at) deduplicar gerações concorrentes.
-    // `appearance` já é meia-noite local daquele dia (não usar `applyOffset`
-    // aqui: esse helper serve para `dueDate`, que é lido de volta via
-    // `dueDateToLocalDate`; `createdAt` é lido de volta com `new Date(iso)`
-    // comum, então precisa ser um instante real, não meia-noite UTC).
-    const cycleCreatedAt = appearance.toISOString()
-    const newProjectId = uuid()
-    const newProject: Project = {
-      ...project,
-      id: newProjectId,
-      createdAt: cycleCreatedAt,
-      dueDate: project.dueDate ? applyOffset(appearance, offsetDays(project.dueDate, project.createdAt)) : undefined,
-      status: 'active',
-      completionAck: false,
-      order: orderFor(project.workspaceId),
-      seriesId: project.seriesId ?? project.id,
-    }
-    newProjects.push(newProject)
-    closedProjectIds.add(project.id)
-    const notification = makeNotification(
-      userId,
-      project.workspaceId,
-      'project.created',
-      'Novo ciclo do projeto',
-      `"${project.name}" começou um novo ciclo.`,
-      { type: 'project', id: newProjectId },
-    )
-    if (notification) notifications.push(notification)
-
-    for (const task of state.tasks) {
-      if (task.projectId !== project.id) continue
-      newTasks.push({
-        ...task,
-        id: uuid(),
-        projectId: newProjectId,
-        status: 'todo',
-        completedAt: undefined,
-        comments: [],
-        subtasks: task.subtasks.map((s) => ({ ...s, done: false })),
-        dueDate: task.dueDate ? applyOffset(appearance, offsetDays(task.dueDate, project.createdAt)) : undefined,
+    try {
+      const appearance = dueOccurrence(project.recurrence, localMidnightAnchor(project.createdAt), today)
+      if (!appearance) continue
+      // `createdAt` do novo ciclo é a própria data de aparição (não `now()`) —
+      // é o que mantém o deslocamento em dias de cada prazo exato e faz o
+      // índice único (series_id, created_at) deduplicar gerações concorrentes.
+      // `appearance` já é meia-noite local daquele dia (não usar `applyOffset`
+      // aqui: esse helper serve para `dueDate`, que é lido de volta via
+      // `dueDateToLocalDate`; `createdAt` é lido de volta com `new Date(iso)`
+      // comum, então precisa ser um instante real, não meia-noite UTC).
+      const cycleCreatedAt = appearance.toISOString()
+      const newProjectId = uuid()
+      const newProject: Project = {
+        ...project,
+        id: newProjectId,
         createdAt: cycleCreatedAt,
-        updatedAt: cycleCreatedAt,
-        recurrence: undefined,
-        seriesId: task.seriesId ?? task.id,
-      })
+        dueDate: project.dueDate ? applyOffset(appearance, offsetDays(project.dueDate, project.createdAt)) : undefined,
+        status: 'active',
+        completionAck: false,
+        order: orderFor(project.workspaceId),
+        seriesId: project.seriesId ?? project.id,
+      }
+      newProjects.push(newProject)
+      closedProjectIds.add(project.id)
+      const notification = makeNotification(
+        userId,
+        project.workspaceId,
+        'project.created',
+        'Novo ciclo do projeto',
+        `"${project.name}" começou um novo ciclo.`,
+        { type: 'project', id: newProjectId },
+      )
+      if (notification) notifications.push(notification)
+
+      for (const task of state.tasks) {
+        if (task.projectId !== project.id) continue
+        newTasks.push({
+          ...task,
+          id: uuid(),
+          projectId: newProjectId,
+          status: 'todo',
+          completedAt: undefined,
+          comments: [],
+          subtasks: task.subtasks.map((s) => ({ ...s, done: false })),
+          dueDate: task.dueDate ? applyOffset(appearance, offsetDays(task.dueDate, project.createdAt)) : undefined,
+          createdAt: cycleCreatedAt,
+          updatedAt: cycleCreatedAt,
+          recurrence: undefined,
+          seriesId: task.seriesId ?? task.id,
+        })
+      }
+    } catch (error) {
+      // Uma regra malformada em um item não pode travar a geração de todos os
+      // outros — sem isso, um único projeto com dado inválido fazia a
+      // recorrência parar de funcionar para a conta inteira, em toda sessão.
+      console.error(`Falha ao gerar recorrência do projeto ${project.id}:`, error)
     }
   }
 
@@ -377,23 +393,27 @@ async function generateDueRecurrences(userId: string) {
   // recorrente a cadência é a do projeto, não da tarefa (ver acima).
   for (const task of state.tasks) {
     if (!task.recurrence || task.projectId) continue
-    const appearance = dueOccurrence(task.recurrence, new Date(task.createdAt), today)
-    if (!appearance) continue
-    const cycleCreatedAt = appearance.toISOString()
-    newTasks.push({
-      ...task,
-      id: uuid(),
-      status: 'todo',
-      completedAt: undefined,
-      comments: [],
-      subtasks: task.subtasks.map((s) => ({ ...s, done: false })),
-      dueDate: task.dueDate ? applyOffset(appearance, offsetDays(task.dueDate, task.createdAt)) : undefined,
-      createdAt: cycleCreatedAt,
-      updatedAt: cycleCreatedAt,
-      recurrence: task.recurrence,
-      seriesId: task.seriesId ?? task.id,
-    })
-    closedTaskIds.add(task.id)
+    try {
+      const appearance = dueOccurrence(task.recurrence, localMidnightAnchor(task.createdAt), today)
+      if (!appearance) continue
+      const cycleCreatedAt = appearance.toISOString()
+      newTasks.push({
+        ...task,
+        id: uuid(),
+        status: 'todo',
+        completedAt: undefined,
+        comments: [],
+        subtasks: task.subtasks.map((s) => ({ ...s, done: false })),
+        dueDate: task.dueDate ? applyOffset(appearance, offsetDays(task.dueDate, task.createdAt)) : undefined,
+        createdAt: cycleCreatedAt,
+        updatedAt: cycleCreatedAt,
+        recurrence: task.recurrence,
+        seriesId: task.seriesId ?? task.id,
+      })
+      closedTaskIds.add(task.id)
+    } catch (error) {
+      console.error(`Falha ao gerar recorrência da tarefa ${task.id}:`, error)
+    }
   }
 
   if (newProjects.length === 0 && newTasks.length === 0) return
@@ -607,6 +627,10 @@ interface DataState {
   trashLoading: boolean
 
   seedIfEmpty: () => Promise<void>
+  // Reavalia recorrências vencidas sem recarregar o workspace inteiro do
+  // Supabase — chamada quando a aba volta a ficar visível (ver AppShell), já
+  // que `seedIfEmpty` só roda uma vez, no mount do Dashboard.
+  checkDueRecurrences: () => void
   resetWorkspaceData: () => void
   migrateProfileSizeIfNeeded: () => void
   // Chamado pelo authStore quando o usuário edita nome/cor do avatar em
@@ -987,6 +1011,17 @@ export const useDataStore = create<DataState>()(
           linked_user_id: userId,
         })
         setupRealtime()
+      },
+
+      // Versão leve de checagem de recorrência: usa o que já está em memória
+      // (sem refetch do workspace inteiro). `loading`/ausência de workspace
+      // carregado servem de guarda para não rodar antes do primeiro
+      // `seedIfEmpty` ou em cima de um recarregamento em andamento.
+      checkDueRecurrences: () => {
+        if (get().loading) return
+        const userId = useAuthStore.getState().currentUserId
+        if (!userId || get().workspaces.length === 0) return
+        void generateDueRecurrences(userId)
       },
 
       resetWorkspaceData: () => {
