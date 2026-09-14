@@ -1973,9 +1973,12 @@ export const useDataStore = create<DataState>()(
       // Só o que é genuinamente local (não colaborativo) é persistido — o resto
       // (workspaces, equipe, projetos, tarefas, chat, arquivos, notificações) já
       // vive no Supabase e é recarregado via `seedIfEmpty()` a cada sessão.
+      // currentWorkspaceId também é local: lembra a última workspace aberta
+      // entre sessões; seedIfEmpty() valida se ela ainda existe ao recarregar.
       partialize: (state) => ({
         profileSizeMigrated: state.profileSizeMigrated,
         layouts: state.layouts,
+        currentWorkspaceId: state.currentWorkspaceId,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
