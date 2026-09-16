@@ -1,20 +1,19 @@
-import { Bell, Search } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { WorkspaceDropdown } from '@/components/workspace/WorkspaceDropdown'
 import { WorkspaceSwitcherSheet } from '@/components/workspace/WorkspaceSwitcherSheet'
 import { useAuthStore } from '@/store/authStore'
 import { usePendingInvites } from '@/store/contactsStore'
-import { useCurrentWorkspace, useWorkspaceNotifications } from '@/store/dataStore'
+import { useCurrentWorkspace, useCurrentWorkspaceNotifications } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
 import { greeting } from '@/lib/utils'
 
 export function DashboardHeader() {
   const user = useAuthStore((s) => s.currentUser())
   const currentWorkspace = useCurrentWorkspace()
-  const notifications = useWorkspaceNotifications()
+  const notifications = useCurrentWorkspaceNotifications()
   const pendingInvites = usePendingInvites(user?.id)
-  const openSearch = useUiStore((s) => s.openSearch)
   const openNotifications = useUiStore((s) => s.openNotifications)
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
@@ -64,16 +63,9 @@ export function DashboardHeader() {
 
       <div className="flex items-center gap-2">
         <button
-          onClick={openSearch}
-          aria-label="Buscar"
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
-        >
-          <Search size={19} />
-        </button>
-        <button
           onClick={openNotifications}
           aria-label="Notificações"
-          className="relative flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
+          className="relative flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text lg:hidden"
         >
           <Bell size={19} />
           {unreadCount > 0 && (

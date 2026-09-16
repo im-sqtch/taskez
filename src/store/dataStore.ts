@@ -1964,20 +1964,19 @@ export const useDataStore = create<DataState>()(
         }))
         fireAndForget(supabase.from('notifications').delete().eq('id', id))
       },
-      // Marca TODAS as notificações do usuário como lidas, não só as da
-      // workspace atual — o filtro por workspace era um bug: a lista exibida
-      // em NotificationsSheet e o contador do sininho (useWorkspaceNotifications,
-      // apesar do nome) já mostram notificações de TODAS as workspaces juntas,
-      // de propósito (é como o feed de atividade sincroniza entre dispositivos
-      // e contextos da mesma pessoa). Com o filtro, "marcar tudo como lido"
-      // deixava notificações de outras workspaces destacadas na lista e no
-      // contador mesmo depois do clique — parecia que o botão não fazia nada.
+      // Marca como lidas só as notificações que a aba de Notificações
+      // realmente mostra: as da workspace ativa, mais as sem workspace (são de
+      // conta, ex. convite de contato aceito). Precisa espelhar exatamente o
+      // filtro de useCurrentWorkspaceNotifications — senão o botão "marcar
+      // tudo como lido" mexe em itens que o usuário nem está vendo (ou deixa
+      // de marcar algo que está na tela), o que parece bug de um jeito ou de
+      // outro.
       markAllNotificationsRead: () => {
-        const ids = get()
-          .notifications.filter((n) => !n.read)
-          .map((n) => n.id)
+        const workspaceId = get().currentWorkspaceId
+        const isInScope = (n: Notification) => !n.read && (!n.workspaceId || n.workspaceId === workspaceId)
+        const ids = get().notifications.filter(isInScope).map((n) => n.id)
         set((state) => ({
-          notifications: state.notifications.map((n) => (n.read ? n : { ...n, read: true })),
+          notifications: state.notifications.map((n) => (isInScope(n) ? { ...n, read: true } : n)),
         }))
         if (ids.length > 0) fireAndForget(supabase.from('notifications').update({ read: true }).in('id', ids))
       },
@@ -2123,8 +2122,15 @@ export function useWorkspaceLayout(): DashboardLayout {
   return layouts[currentWorkspaceId] ?? FALLBACK_LAYOUT
 }
 
-export function useWorkspaceNotifications() {
-  return useDataStore((s) => s.notifications)
+// Notificações relevantes pra workspace ativa: as que pertencem a ela, mais as
+// que não têm workspace (ex.: convite de contato aceito) — essas são de conta,
+// não de workspace, e por isso aparecem independentemente de qual está ativa.
+// O filtro é feito aqui fora, no corpo do hook (não dentro do seletor do
+// zustand), pra não criar um array novo a cada notificação da store.
+export function useCurrentWorkspaceNotifications() {
+  const notifications = useDataStore((s) => s.notifications)
+  const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
+  return notifications.filter((n) => !n.workspaceId || n.workspaceId === currentWorkspaceId)
 }
 
 export function useCurrentWorkspace() {

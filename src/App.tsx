@@ -7,6 +7,7 @@ import { SignupPage } from '@/pages/auth/SignupPage'
 import { UsagePickerPage } from '@/pages/auth/UsagePickerPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
 import { FilesPage } from '@/pages/files/FilesPage'
+import { NotificationUnavailablePage } from '@/pages/notifications/NotificationUnavailablePage'
 import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 import { ProfilePage } from '@/pages/profile/ProfilePage'
 import { ProjectDetailPage } from '@/pages/projects/ProjectDetailPage'
@@ -115,6 +116,7 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/trash" element={<TrashPage />} />
+          <Route path="/notifications/unavailable" element={<NotificationUnavailablePage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

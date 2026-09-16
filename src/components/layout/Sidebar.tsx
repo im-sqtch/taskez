@@ -1,4 +1,5 @@
 import {
+  Bell,
   CheckSquare,
   ChevronsLeft,
   ChevronsRight,
@@ -6,9 +7,11 @@ import {
   House,
   Paperclip,
   Plus,
+  Search,
   Settings,
   Trash2,
   User,
+  type LucideIcon,
 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
@@ -16,17 +19,11 @@ import { Avatar } from '@/components/ui/Avatar'
 import { WorkspaceDropdown } from '@/components/workspace/WorkspaceDropdown'
 import { WorkspaceSwitcherSheet } from '@/components/workspace/WorkspaceSwitcherSheet'
 import { useAuthStore } from '@/store/authStore'
-import { useCurrentWorkspace } from '@/store/dataStore'
+import { usePendingInvites } from '@/store/contactsStore'
+import { useCurrentWorkspace, useCurrentWorkspaceNotifications } from '@/store/dataStore'
 import { useLayoutStore } from '@/store/layoutStore'
 import { useUiStore } from '@/store/uiStore'
 import { cn } from '@/lib/utils'
-
-const mainNav = [
-  { to: '/dashboard', label: 'Início', icon: House },
-  { to: '/projects', label: 'Projetos', icon: FolderKanban },
-  { to: '/tasks', label: 'Tarefas', icon: CheckSquare },
-  { to: '/files', label: 'Arquivos', icon: Paperclip },
-]
 
 const secondaryNav = [
   { to: '/profile', label: 'Perfil', icon: User },
@@ -34,22 +31,46 @@ const secondaryNav = [
   { to: '/trash', label: 'Lixeira', icon: Trash2 },
 ]
 
-function NavItem({ to, label, icon: Icon, collapsed }: (typeof mainNav)[number] & { collapsed: boolean }) {
-  return (
-    <NavLink
-      to={to}
-      title={collapsed ? label : undefined}
-      className={({ isActive }) =>
-        cn(
-          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-          collapsed && 'justify-center px-0',
-          isActive ? 'bg-accent-soft text-accent' : 'text-text-muted hover:bg-surface-alt hover:text-text',
-        )
-      }
-    >
-      <Icon size={19} strokeWidth={2} className="shrink-0" />
+interface SidebarItemProps {
+  icon: LucideIcon
+  label: string
+  collapsed: boolean
+  to?: string
+  onClick?: () => void
+  active?: boolean
+  badge?: boolean
+}
+
+function SidebarItem({ icon: Icon, label, collapsed, to, onClick, active, badge }: SidebarItemProps) {
+  const content = (
+    <>
+      <span className="relative shrink-0">
+        <Icon size={19} strokeWidth={2} />
+        {badge && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-danger ring-2 ring-base-alt" />}
+      </span>
       {!collapsed && <span className="truncate">{label}</span>}
-    </NavLink>
+    </>
+  )
+
+  const className = (isActive: boolean) =>
+    cn(
+      'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+      collapsed && 'justify-center px-0',
+      isActive ? 'bg-accent-soft text-accent' : 'text-text-muted hover:bg-surface-alt hover:text-text',
+    )
+
+  if (to) {
+    return (
+      <NavLink to={to} title={collapsed ? label : undefined} onClick={onClick} className={({ isActive }) => className(isActive)}>
+        {content}
+      </NavLink>
+    )
+  }
+
+  return (
+    <button type="button" onClick={onClick} title={collapsed ? label : undefined} className={className(Boolean(active))}>
+      {content}
+    </button>
   )
 }
 
@@ -57,12 +78,32 @@ export function Sidebar() {
   const user = useAuthStore((s) => s.currentUser())
   const currentWorkspace = useCurrentWorkspace()
   const openQuickCreate = useUiStore((s) => s.openQuickCreate)
+  const openSearch = useUiStore((s) => s.openSearch)
+  const desktopNotificationsOpen = useUiStore((s) => s.desktopNotificationsOpen)
+  const toggleDesktopNotifications = useUiStore((s) => s.toggleDesktopNotifications)
+  const closeDesktopNotifications = useUiStore((s) => s.closeDesktopNotifications)
   const collapsed = useLayoutStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar)
+
+  const notifications = useCurrentWorkspaceNotifications()
+  const pendingInvites = usePendingInvites(user?.id)
+  const unreadCount = notifications.filter((n) => !n.read).length + pendingInvites.length
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const [workspaceSheetOpen, setWorkspaceSheetOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Navegar pra qualquer outro item da sidebar fecha o painel de notificações
+  // encaixado — ele só fica aberto "por cima" enquanto o usuário não troca de
+  // seção pela própria sidebar.
+  function handleNavigate() {
+    closeDesktopNotifications()
+  }
+
+  function handleSearch() {
+    closeDesktopNotifications()
+    openSearch()
+  }
 
   return (
     <aside
@@ -111,12 +152,24 @@ export function Sidebar() {
       </button>
 
       <nav className="mt-6 flex w-full flex-1 flex-col gap-1 overflow-y-auto">
-        {mainNav.map((item) => (
-          <NavItem key={item.to} {...item} collapsed={collapsed} />
-        ))}
+        <SidebarItem label="Pesquisar" icon={Search} collapsed={collapsed} onClick={handleSearch} />
+        <SidebarItem to="/dashboard" label="Início" icon={House} collapsed={collapsed} onClick={handleNavigate} />
+        <SidebarItem to="/projects" label="Projetos" icon={FolderKanban} collapsed={collapsed} onClick={handleNavigate} />
+        <SidebarItem to="/tasks" label="Tarefas" icon={CheckSquare} collapsed={collapsed} onClick={handleNavigate} />
+        <SidebarItem to="/files" label="Arquivos" icon={Paperclip} collapsed={collapsed} onClick={handleNavigate} />
+        <SidebarItem
+          label="Notificações"
+          icon={Bell}
+          collapsed={collapsed}
+          active={desktopNotificationsOpen}
+          badge={unreadCount > 0}
+          onClick={toggleDesktopNotifications}
+        />
+
         <div className={cn('my-2 border-t border-border-soft', collapsed && 'w-8 self-center')} />
+
         {secondaryNav.map((item) => (
-          <NavItem key={item.to} {...item} collapsed={collapsed} />
+          <SidebarItem key={item.to} {...item} collapsed={collapsed} onClick={handleNavigate} />
         ))}
       </nav>
 
