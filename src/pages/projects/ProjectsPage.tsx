@@ -27,10 +27,11 @@ export function ProjectsPage() {
 
   function progressFor(projectId: string) {
     const projectTasks = tasks.filter((t) => t.projectId === projectId)
-    if (projectTasks.length === 0) return { pct: 0, total: 0 }
+    if (projectTasks.length === 0) return { pct: 0, total: 0, todo: 0 }
     return {
       pct: Math.round((projectTasks.filter((t) => t.status === 'done').length / projectTasks.length) * 100),
       total: projectTasks.length,
+      todo: projectTasks.filter((t) => t.status === 'todo').length,
     }
   }
 
@@ -87,7 +88,7 @@ export function ProjectsPage() {
           />
         ) : (
           filtered.map((p) => {
-            const { pct, total } = progressFor(p.id)
+            const { pct, total, todo } = progressFor(p.id)
             return (
               <button
                 key={p.id}
@@ -110,7 +111,9 @@ export function ProjectsPage() {
                       {p.dueDate && <p className="text-xs text-text-faint">Prazo: {formatDate(p.dueDate)}</p>}
                     </div>
                   </div>
-                  <span className="shrink-0 text-xs font-semibold text-text-muted">{total} tarefas</span>
+                  <span className="shrink-0 text-xs font-semibold text-text-muted">
+                    {todo} a fazer · {total} tarefas
+                  </span>
                 </div>
                 <ProgressBar value={pct} color={p.color} />
               </button>
