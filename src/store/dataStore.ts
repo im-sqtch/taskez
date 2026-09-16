@@ -1963,15 +1963,20 @@ export const useDataStore = create<DataState>()(
         }))
         fireAndForget(supabase.from('notifications').delete().eq('id', id))
       },
+      // Marca TODAS as notificações do usuário como lidas, não só as da
+      // workspace atual — o filtro por workspace era um bug: a lista exibida
+      // em NotificationsSheet e o contador do sininho (useWorkspaceNotifications,
+      // apesar do nome) já mostram notificações de TODAS as workspaces juntas,
+      // de propósito (é como o feed de atividade sincroniza entre dispositivos
+      // e contextos da mesma pessoa). Com o filtro, "marcar tudo como lido"
+      // deixava notificações de outras workspaces destacadas na lista e no
+      // contador mesmo depois do clique — parecia que o botão não fazia nada.
       markAllNotificationsRead: () => {
-        const state = get()
-        const ids = state.notifications
-          .filter((n) => (n.workspaceId === state.currentWorkspaceId || n.workspaceId === undefined) && !n.read)
+        const ids = get()
+          .notifications.filter((n) => !n.read)
           .map((n) => n.id)
         set((state) => ({
-          notifications: state.notifications.map((n) =>
-            n.workspaceId === state.currentWorkspaceId || n.workspaceId === undefined ? { ...n, read: true } : n,
-          ),
+          notifications: state.notifications.map((n) => (n.read ? n : { ...n, read: true })),
         }))
         if (ids.length > 0) fireAndForget(supabase.from('notifications').update({ read: true }).in('id', ids))
       },
