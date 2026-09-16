@@ -39,7 +39,7 @@ export function NotificationsBody({ onNavigate }: NotificationsBodyProps) {
   const navigate = useNavigate()
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
-  const sorted = [...notifications].sort((a, b) => (a.read === b.read ? 0 : a.read ? 1 : -1))
+  const sorted = [...notifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   const isEmpty = notifications.length === 0 && pendingInvites.length === 0
 
   // Quando a notificação aponta pra uma tarefa/projeto que já foi excluído,

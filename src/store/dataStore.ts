@@ -28,6 +28,20 @@ import type {
 
 const now = () => new Date().toISOString()
 
+// Notificações sem workspace são de conta (ex.: contato aceitou convite) e
+// por isso aparecem/são afetadas independentemente de qual workspace está
+// ativa — usado por "marcar tudo como lido" e "excluir todas" pra bater
+// exatamente com o que useCurrentWorkspaceNotifications mostra na tela.
+function isNotificationInWorkspaceScope(n: Notification, workspaceId: string): boolean {
+  return !n.workspaceId || n.workspaceId === workspaceId
+}
+
+const NOTIFICATION_RETENTION_DAYS = 15
+
+function isNotificationStale(n: Notification): boolean {
+  return Date.now() - new Date(n.createdAt).getTime() > NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000
+}
+
 // Com 2+ subtarefas, o status da tarefa reflete o progresso delas: nenhuma
 // concluída ainda é "a fazer"; havendo alguma concluída — mesmo que sejam
 // todas — a tarefa em si só é "concluída" quando marcada manualmente, então
@@ -714,6 +728,7 @@ interface DataState {
   markNotificationUnread: (id: string) => void
   markAllNotificationsRead: () => void
   deleteNotification: (id: string) => void
+  deleteAllNotifications: () => void
   // Ponto de entrada público para outras stores (ex.: contactsStore) gerarem uma
   // notificação sem duplicar a lógica de criação — usado para eventos de conta que
   // não pertencem a nenhum workspace específico (ex.: contato aceitou convite).
@@ -942,6 +957,11 @@ export const useDataStore = create<DataState>()(
             supabase.from('notifications').select('*').order('created_at', { ascending: true }),
             supabase.from('dashboard_layouts').select('*').eq('user_id', userId).in('workspace_id', workspaceIds),
           ])
+          const allNotifications = (notificationRows ?? []).map((r) => mapNotification(r as NotificationRow))
+          const staleNotificationIds = allNotifications.filter(isNotificationStale).map((n) => n.id)
+          if (staleNotificationIds.length > 0) {
+            fireAndForget(supabase.from('notifications').delete().in('id', staleNotificationIds))
+          }
           set((state) => ({
             loading: false,
             workspaces,
@@ -952,7 +972,7 @@ export const useDataStore = create<DataState>()(
             tasks: (taskRows ?? []).map((r) => mapTask(r as TaskRow)),
             chatMessages: (chatRows ?? []).map((r) => mapChatMessage(r as ChatMessageRow)),
             files: (fileRows ?? []).map((r) => mapProjectFile(r as ProjectFileRow)),
-            notifications: (notificationRows ?? []).map((r) => mapNotification(r as NotificationRow)),
+            notifications: allNotifications.filter((n) => !isNotificationStale(n)),
             // Preserva rascunhos locais (persistidos no localStorage) de workspaces
             // que ainda não têm linha no Supabase; sobrescreve com o que já está
             // sincronizado para as demais.
@@ -994,6 +1014,9 @@ export const useDataStore = create<DataState>()(
           isSelf: true,
         }
         const { data: notificationRows } = await supabase.from('notifications').select('*').order('created_at', { ascending: true })
+        const freshNotifications = (notificationRows ?? [])
+          .map((r) => mapNotification(r as NotificationRow))
+          .filter((n) => !isNotificationStale(n))
         set({
           loading: false,
           workspaces: [workspace],
@@ -1004,7 +1027,7 @@ export const useDataStore = create<DataState>()(
           tasks: [],
           chatMessages: [],
           files: [],
-          notifications: (notificationRows ?? []).map((r) => mapNotification(r as NotificationRow)),
+          notifications: freshNotifications,
         })
         await supabase.from('workspaces').insert({ id: workspaceId, name: workspace.name, color: workspace.color, created_by: userId })
         await supabase.from('workspace_members').insert({ workspace_id: workspaceId, user_id: userId, role: 'owner' })
@@ -1021,15 +1044,22 @@ export const useDataStore = create<DataState>()(
         setupRealtime()
       },
 
-      // Versão leve de checagem de recorrência: usa o que já está em memória
-      // (sem refetch do workspace inteiro). `loading`/ausência de workspace
-      // carregado servem de guarda para não rodar antes do primeiro
-      // `seedIfEmpty` ou em cima de um recarregamento em andamento.
+      // Versão leve de checagem de recorrência (mais purga de notificações
+      // velhas): usa o que já está em memória (sem refetch do workspace
+      // inteiro). `loading`/ausência de workspace carregado servem de guarda
+      // para não rodar antes do primeiro `seedIfEmpty` ou em cima de um
+      // recarregamento em andamento.
       checkDueRecurrences: () => {
         if (get().loading) return
         const userId = useAuthStore.getState().currentUserId
         if (!userId || get().workspaces.length === 0) return
         void generateDueRecurrences(userId)
+
+        const staleIds = get().notifications.filter(isNotificationStale).map((n) => n.id)
+        if (staleIds.length > 0) {
+          set((state) => ({ notifications: state.notifications.filter((n) => !staleIds.includes(n.id)) }))
+          fireAndForget(supabase.from('notifications').delete().in('id', staleIds))
+        }
       },
 
       resetWorkspaceData: () => {
@@ -1973,12 +2003,22 @@ export const useDataStore = create<DataState>()(
       // outro.
       markAllNotificationsRead: () => {
         const workspaceId = get().currentWorkspaceId
-        const isInScope = (n: Notification) => !n.read && (!n.workspaceId || n.workspaceId === workspaceId)
+        const isInScope = (n: Notification) => !n.read && isNotificationInWorkspaceScope(n, workspaceId)
         const ids = get().notifications.filter(isInScope).map((n) => n.id)
         set((state) => ({
           notifications: state.notifications.map((n) => (isInScope(n) ? { ...n, read: true } : n)),
         }))
         if (ids.length > 0) fireAndForget(supabase.from('notifications').update({ read: true }).in('id', ids))
+      },
+      // Mesmo escopo de markAllNotificationsRead (workspace ativa + sem
+      // workspace) — exclui direto, sem diálogo de confirmação.
+      deleteAllNotifications: () => {
+        const workspaceId = get().currentWorkspaceId
+        const isInScope = (n: Notification) => isNotificationInWorkspaceScope(n, workspaceId)
+        const ids = get().notifications.filter(isInScope).map((n) => n.id)
+        if (ids.length === 0) return
+        set((state) => ({ notifications: state.notifications.filter((n) => !isInScope(n)) }))
+        fireAndForget(supabase.from('notifications').delete().in('id', ids))
       },
       addNotification: (event, title, body, workspaceId) => {
         const userId = useAuthStore.getState().currentUserId!

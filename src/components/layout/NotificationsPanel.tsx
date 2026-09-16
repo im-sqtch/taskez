@@ -1,5 +1,6 @@
-import { CheckCheck, X } from 'lucide-react'
+import { CheckCheck, Trash2, X } from 'lucide-react'
 import { NotificationsBody } from '@/components/layout/NotificationsBody'
+import { confirmAction } from '@/store/confirmStore'
 import { useCurrentWorkspaceNotifications, useDataStore } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
 
@@ -7,6 +8,17 @@ export function NotificationsPanel() {
   const close = useUiStore((s) => s.closeDesktopNotifications)
   const notifications = useCurrentWorkspaceNotifications()
   const markAllRead = useDataStore((s) => s.markAllNotificationsRead)
+  const deleteAll = useDataStore((s) => s.deleteAllNotifications)
+
+  function handleDeleteAll() {
+    confirmAction({
+      title: 'Excluir todas as notificações',
+      description: 'Excluir todas as notificações? Essa ação não pode ser desfeita.',
+      confirmLabel: 'Excluir todas',
+      danger: true,
+      onConfirm: deleteAll,
+    })
+  }
 
   return (
     <div className="sticky top-0 flex h-screen w-[360px] shrink-0 flex-col border-r border-border-soft bg-base-alt">
@@ -14,14 +26,24 @@ export function NotificationsPanel() {
         <h2 className="text-lg font-bold text-text">Notificações</h2>
         <div className="flex items-center gap-2">
           {notifications.length > 0 && (
-            <button
-              onClick={markAllRead}
-              aria-label="Marcar tudo como lido"
-              title="Marcar tudo como lido"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white"
-            >
-              <CheckCheck size={18} />
-            </button>
+            <>
+              <button
+                onClick={markAllRead}
+                aria-label="Marcar tudo como lido"
+                title="Marcar tudo como lido"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white"
+              >
+                <CheckCheck size={18} />
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                aria-label="Excluir todas as notificações"
+                title="Excluir todas as notificações"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger-soft text-danger"
+              >
+                <Trash2 size={18} />
+              </button>
+            </>
           )}
           <button
             onClick={close}
