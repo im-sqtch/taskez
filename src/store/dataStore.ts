@@ -47,6 +47,7 @@ interface WorkspaceRow {
   id: string
   name: string
   color: string
+  default_assignee_id: string | null
   created_by: string
   created_at: string
 }
@@ -115,7 +116,13 @@ interface DashboardLayoutRow {
 }
 
 function mapWorkspace(row: WorkspaceRow): Workspace {
-  return { id: row.id, name: row.name, color: row.color, createdAt: row.created_at }
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color,
+    defaultAssigneeId: row.default_assignee_id ?? undefined,
+    createdAt: row.created_at,
+  }
 }
 
 function mapTeamMember(row: TeamMemberRow, currentUserId: string | null): TeamMember {
@@ -494,10 +501,10 @@ function maybeAutoCompleteProject(get: () => DataState, projectId: string | unde
   get().updateProject(projectId, { status: 'completed' })
 }
 
-// Reabrir uma tarefa quebra o "100% concluído" que levou o projeto a ficar
-// concluído (ou a ter a decisão de "manter em ativos" registrada) — o projeto
-// volta a ativos e a próxima conclusão total volta a pedir uma decisão nova.
-function reactivateProjectOnTaskReopened(get: () => DataState, projectId: string | undefined) {
+// Uma tarefa pendente quebra o "100% concluído" que levou o projeto a ficar
+// concluído (ou a ter a decisão de "manter em ativos" registrada). Vale para
+// tarefas reabertas, recém-criadas e recém-vinculadas ao projeto.
+function reactivateProjectForPendingTask(get: () => DataState, projectId: string | undefined) {
   if (!projectId) return
   const project = get().projects.find((p) => p.id === projectId)
   if (!project) return
@@ -642,7 +649,7 @@ interface DataState {
   // Workspaces
   addWorkspace: (name: string, color: string) => string
   switchWorkspace: (id: string) => void
-  renameWorkspace: (id: string, name: string) => void
+  updateWorkspace: (id: string, patch: { name?: string; defaultAssigneeId?: string }) => void
   deleteWorkspace: (id: string) => void
 
   // Equipe do workspace
@@ -1123,11 +1130,27 @@ export const useDataStore = create<DataState>()(
         return id
       },
       switchWorkspace: (id) => set({ currentWorkspaceId: id }),
-      renameWorkspace: (id, name) => {
+      updateWorkspace: (id, patch) => {
         set((state) => ({
-          workspaces: state.workspaces.map((w) => (w.id === id ? { ...w, name: name.trim() } : w)),
+          workspaces: state.workspaces.map((w) =>
+            w.id === id
+              ? {
+                  ...w,
+                  ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+                  ...('defaultAssigneeId' in patch ? { defaultAssigneeId: patch.defaultAssigneeId } : {}),
+                }
+              : w,
+          ),
         }))
-        fireAndForget(supabase.from('workspaces').update({ name: name.trim() }).eq('id', id))
+        fireAndForget(
+          supabase
+            .from('workspaces')
+            .update({
+              ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+              ...('defaultAssigneeId' in patch ? { default_assignee_id: patch.defaultAssigneeId ?? null } : {}),
+            })
+            .eq('id', id),
+        )
       },
       deleteWorkspace: (id) => {
         set((state) => {
@@ -1608,6 +1631,7 @@ export const useDataStore = create<DataState>()(
             series_id: task.seriesId ?? null,
           }),
         )
+        if (task.status !== 'done') reactivateProjectForPendingTask(get, task.projectId)
         return id
       },
       updateTask: (id, patch) => {
@@ -1646,8 +1670,10 @@ export const useDataStore = create<DataState>()(
           }
         })
         fireAndForget(supabase.from('tasks').update({ ...taskPatchToRow(patch), updated_at: now() }).eq('id', id))
-        if (taskBeforePatch?.status === 'done' && patch.status !== undefined && patch.status !== 'done') {
-          reactivateProjectOnTaskReopened(get, taskBeforePatch.projectId)
+        const resultingStatus = patch.status ?? taskBeforePatch?.status
+        const resultingProjectId = patch.projectId ?? taskBeforePatch?.projectId
+        if (resultingStatus !== 'done') {
+          reactivateProjectForPendingTask(get, resultingProjectId)
         } else if (taskBeforePatch?.status !== 'done' && patch.status === 'done') {
           maybeAutoCompleteProject(get, taskBeforePatch?.projectId)
         }
@@ -1711,7 +1737,7 @@ export const useDataStore = create<DataState>()(
             .eq('id', id),
         )
         if (reopening) {
-          reactivateProjectOnTaskReopened(get, task.projectId)
+          reactivateProjectForPendingTask(get, task.projectId)
         } else if (becomingDone) {
           maybeAutoCompleteProject(get, task.projectId)
         }
@@ -1809,7 +1835,7 @@ export const useDataStore = create<DataState>()(
           supabase.from('tasks').update({ status, not_fulfilled: false, completed_at: completedAt ?? null, updated_at: now() }).eq('id', id),
         )
         if (task?.status === 'done' && status !== 'done') {
-          reactivateProjectOnTaskReopened(get, task.projectId)
+          reactivateProjectForPendingTask(get, task.projectId)
         } else if (becomingDone) {
           maybeAutoCompleteProject(get, task?.projectId)
         }

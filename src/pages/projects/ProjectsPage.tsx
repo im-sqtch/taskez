@@ -120,7 +120,7 @@ export function ProjectsPage() {
       </div>
 
       <ProjectFormSheet open={formOpen} onClose={() => setFormOpen(false)} onCreated={(id) => navigate(`/projects/${id}`)} />
-      <ReorderProjectsSheet open={reorderOpen} onClose={() => setReorderOpen(false)} />
+      <ReorderProjectsSheet open={reorderOpen} onClose={() => setReorderOpen(false)} projects={filtered} />
     </div>
   )
 }

@@ -38,6 +38,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
   const addTask = useDataStore((s) => s.addTask)
   const updateTask = useDataStore((s) => s.updateTask)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
+  const defaultAssigneeId = useDataStore((s) => s.workspaces.find((w) => w.id === s.currentWorkspaceId)?.defaultAssigneeId)
   const allProjects = useDataStore((s) => s.projects)
   // A sheet pode ser aberta a partir de um projeto de outra workspace (a lista
   // de projetos do formulário é a da workspace atual, mas o projeto de origem
@@ -68,7 +69,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     setDescription(task?.description ?? '')
     setPriority(task?.priority ?? 'medium')
     setProjectId(task?.projectId ?? defaultProjectId)
-    setAssigneeIds(task?.assigneeIds ?? [])
+    setAssigneeIds(task?.assigneeIds ?? (defaultAssigneeId ? [defaultAssigneeId] : []))
     setDueDate(task?.dueDate ? task.dueDate.slice(0, 10) : '')
     setCalendarCursor(task?.dueDate ? keyToDate(task.dueDate.slice(0, 10)) : new Date())
     setSubtasks(task?.subtasks.map((s) => s.title) ?? [])
@@ -77,7 +78,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     setLinks(task?.links ?? [])
     setLinkDraft('')
     setRecurrence(task?.recurrence)
-  }, [open, task, defaultProjectId])
+  }, [open, task, defaultProjectId, defaultAssigneeId])
 
   function addSubtaskDraft() {
     if (!subtaskInput.trim()) return

@@ -1,5 +1,6 @@
 import { Check, FolderKanban, Layers, LogOut, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Input'
 import { Sheet } from '@/components/ui/Sheet'
@@ -20,9 +21,10 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
   const workspaceRoles = useDataStore((s) => s.workspaceRoles)
   const projects = useDataStore((s) => s.projects)
+  const team = useDataStore((s) => s.team)
   const switchWorkspace = useDataStore((s) => s.switchWorkspace)
   const addWorkspace = useDataStore((s) => s.addWorkspace)
-  const renameWorkspace = useDataStore((s) => s.renameWorkspace)
+  const updateWorkspace = useDataStore((s) => s.updateWorkspace)
   const deleteWorkspace = useDataStore((s) => s.deleteWorkspace)
   const leaveWorkspace = useDataStore((s) => s.leaveWorkspace)
 
@@ -30,6 +32,7 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
   const [editing, setEditing] = useState<Workspace | undefined>(undefined)
   const [name, setName] = useState('')
   const [color, setColor] = useState(COLORS[0]!)
+  const [defaultAssigneeId, setDefaultAssigneeId] = useState<string>()
 
   useEffect(() => {
     if (!open) setView('list')
@@ -39,6 +42,7 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
     setEditing(undefined)
     setName('')
     setColor(COLORS[Math.floor(Math.random() * COLORS.length)]!)
+    setDefaultAssigneeId(undefined)
     setView('form')
   }
 
@@ -47,6 +51,7 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
     setEditing(workspace)
     setName(workspace.name)
     setColor(workspace.color)
+    setDefaultAssigneeId(workspace.defaultAssigneeId)
     setView('form')
   }
 
@@ -76,7 +81,7 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
   function handleSubmit() {
     if (!name.trim()) return
     if (editing) {
-      renameWorkspace(editing.id, name.trim())
+      updateWorkspace(editing.id, { name: name.trim(), defaultAssigneeId })
       setView('list')
     } else {
       addWorkspace(name.trim(), color)
@@ -113,6 +118,43 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
                     {color === c && <Check size={18} className="text-white" />}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+          {editing && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium text-text-muted">Responsável padrão</p>
+              <p className="text-xs text-text-faint">Será pré-marcado ao criar uma tarefa ou projeto.</p>
+              <div className="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1">
+                <button onClick={() => setDefaultAssigneeId(undefined)} className="flex shrink-0 flex-col items-center gap-1.5">
+                  <div
+                    className={cn(
+                      'flex h-10 w-10 items-center justify-center rounded-full bg-surface-alt text-xs font-semibold text-text-faint',
+                      !defaultAssigneeId && 'ring-2 ring-accent ring-offset-2 ring-offset-surface-alt',
+                    )}
+                  >
+                    —
+                  </div>
+                  <span className={cn('text-[11px] font-medium', !defaultAssigneeId ? 'text-accent' : 'text-text-faint')}>Nenhum</span>
+                </button>
+                {team
+                  .filter((member) => member.workspaceId === editing.id)
+                  .map((member) => {
+                    const selected = defaultAssigneeId === member.id
+                    return (
+                      <button key={member.id} onClick={() => setDefaultAssigneeId(member.id)} className="flex shrink-0 flex-col items-center gap-1.5">
+                        <Avatar
+                          name={member.name}
+                          color={member.avatarColor}
+                          size="md"
+                          className={cn(!selected && 'opacity-50', selected && 'ring-2 ring-accent ring-offset-2 ring-offset-surface-alt')}
+                        />
+                        <span className={cn('max-w-14 truncate text-[11px] font-medium', selected ? 'text-accent' : 'text-text-faint')}>
+                          {member.name.split(' ')[0]}
+                        </span>
+                      </button>
+                    )
+                  })}
               </div>
             </div>
           )}

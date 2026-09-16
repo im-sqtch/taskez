@@ -30,6 +30,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
   const addProject = useDataStore((s) => s.addProject)
   const updateProject = useDataStore((s) => s.updateProject)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
+  const defaultAssigneeId = useDataStore((s) => s.workspaces.find((w) => w.id === s.currentWorkspaceId)?.defaultAssigneeId)
   const team = useWorkspaceTeam()
   const currentUser = useAuthStore((s) => s.currentUser())
   const mentionWorkspaceId = project?.workspaceId ?? currentWorkspaceId
@@ -53,14 +54,15 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
     setDueDate(project?.dueDate ? project.dueDate.slice(0, 10) : '')
     setCalendarCursor(project?.dueDate ? keyToDate(project.dueDate.slice(0, 10)) : new Date())
     const selfId = team.find((m) => m.isSelf)?.id
-    setMemberIds(project?.memberIds ?? (currentUser && selfId ? [selfId] : []))
+    const validDefaultId = team.some((m) => m.id === defaultAssigneeId) ? defaultAssigneeId : undefined
+    setMemberIds(project?.memberIds ?? (validDefaultId ? [validDefaultId] : currentUser && selfId ? [selfId] : []))
     setLinks(project?.links ?? [])
     setLinkDraft('')
     setRecurrence(project?.recurrence)
     // `team` de propósito fora das deps: useWorkspaceTeam() devolve um array novo a
     // cada render, e incluí-lo aqui resetaria a seleção do usuário a cada re-render
     // enquanto o sheet está aberto.
-  }, [open, project, currentUser])
+  }, [open, project, currentUser, defaultAssigneeId])
 
   function toggleMember(memberId: string) {
     setMemberIds((prev) => (prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]))

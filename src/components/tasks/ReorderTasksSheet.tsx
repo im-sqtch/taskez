@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, ListTodo } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn } from '@/lib/utils'
@@ -9,32 +9,34 @@ import type { Task } from '@/types'
 interface ReorderTasksSheetProps {
   open: boolean
   onClose: () => void
-  projectId: string
+  tasks: Task[]
 }
 
-export function ReorderTasksSheet({ open, onClose, projectId }: ReorderTasksSheetProps) {
-  const tasks = useDataStore((s) => s.tasks)
+export function ReorderTasksSheet({ open, onClose, tasks }: ReorderTasksSheetProps) {
   const reorderTasks = useDataStore((s) => s.reorderTasks)
   const [draft, setDraft] = useState<Task[]>([])
+  const [highlightedId, setHighlightedId] = useState<string>()
+  const highlightTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  // Não inclui `tasks` nas deps: filtrar/ordenar de novo a cada render
-  // reiniciaria o rascunho a cada movimento do usuário dentro da sheet.
+  // Não inclui `tasks` nas deps: a página pode devolver um array novo a cada
+  // render, o que reiniciaria o rascunho a cada movimento do usuário.
   useEffect(() => {
-    if (open) {
-      setDraft(
-        tasks.filter((t) => t.projectId === projectId).sort((a, b) => a.order - b.order),
-      )
-    }
-  }, [open, projectId])
+    if (open) setDraft(tasks)
+    return () => clearTimeout(highlightTimer.current)
+  }, [open])
 
   function move(index: number, direction: -1 | 1) {
     const targetIndex = index + direction
     if (targetIndex < 0 || targetIndex >= draft.length) return
+    const movedId = draft[index]!.id
     setDraft((prev) => {
       const next = [...prev]
       ;[next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!]
       return next
     })
+    setHighlightedId(movedId)
+    clearTimeout(highlightTimer.current)
+    highlightTimer.current = setTimeout(() => setHighlightedId(undefined), 650)
   }
 
   function handleSave() {
@@ -56,7 +58,12 @@ export function ReorderTasksSheet({ open, onClose, projectId }: ReorderTasksShee
     >
       <div className="flex flex-col gap-2">
         {draft.map((task, index) => (
-          <div key={task.id} className="flex items-center gap-3 rounded-xl bg-surface p-3">
+          <div
+            key={task.id}
+            className={`flex items-center gap-3 rounded-xl p-3 transition-colors duration-300 ${
+              highlightedId === task.id ? 'bg-accent-soft' : 'bg-surface'
+            }`}
+          >
             <div className="flex flex-col">
               <button
                 onClick={() => move(index, -1)}

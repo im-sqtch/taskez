@@ -13,7 +13,7 @@ import {
   UserX,
   Users,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { InviteMemberSheet } from '@/components/projects/InviteMemberSheet'
 import { ProjectChat } from '@/components/projects/ProjectChat'
@@ -24,13 +24,15 @@ import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
 import { TaskRow } from '@/components/tasks/TaskRow'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
+import { CollapsibleDescription } from '@/components/ui/CollapsibleDescription'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { LinksList } from '@/components/ui/LinksField'
-import { MentionText } from '@/components/ui/MentionText'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { cn, formatDate } from '@/lib/utils'
 import { confirmAction } from '@/store/confirmStore'
+import { useChatReadStore, useLastChatReadAt } from '@/store/chatReadStore'
 import { useDataStore } from '@/store/dataStore'
+import { useAuthStore } from '@/store/authStore'
 
 const tabs = [
   { key: 'overview', label: 'Visão geral' },
@@ -48,6 +50,10 @@ export function ProjectDetailPage() {
   const project = useDataStore((s) => s.projects.find((p) => p.id === id))
   const allTasks = useDataStore((s) => s.tasks)
   const allTeam = useDataStore((s) => s.team)
+  const chatMessages = useDataStore((s) => s.chatMessages)
+  const currentUserId = useAuthStore((s) => s.currentUserId)
+  const lastChatReadAt = useLastChatReadAt(currentUserId ?? undefined, id)
+  const markChatRead = useChatReadStore((s) => s.markChatRead)
   // Filtra por `project.workspaceId` (não pela workspace "atual" do usuário):
   // um membro pode ter sido convidado para um projeto de uma workspace que não
   // é a que está selecionada no momento, e ainda assim precisa ver as tarefas
@@ -67,6 +73,17 @@ export function ProjectDetailPage() {
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [reorderOpen, setReorderOpen] = useState(false)
+
+  const latestChatMessageAt = chatMessages
+    .filter((message) => message.projectId === id)
+    .reduce<string | undefined>((latest, message) => (!latest || message.createdAt > latest ? message.createdAt : latest), undefined)
+  const hasUnreadChat = Boolean(latestChatMessageAt && (!lastChatReadAt || latestChatMessageAt > lastChatReadAt))
+
+  useEffect(() => {
+    if (tab === 'chat' && currentUserId && id && latestChatMessageAt) {
+      markChatRead(currentUserId, id, latestChatMessageAt)
+    }
+  }, [tab, currentUserId, id, latestChatMessageAt, markChatRead])
 
   if (!project) {
     return (
@@ -153,9 +170,7 @@ export function ProjectDetailPage() {
           </div>
         </div>
         {project.description && (
-          <p className="whitespace-pre-wrap text-sm text-text-muted">
-            <MentionText text={project.description} workspaceId={project.workspaceId} />
-          </p>
+          <CollapsibleDescription key={project.description} text={project.description} workspaceId={project.workspaceId} />
         )}
         <div className="flex flex-col gap-1.5">
           <ProgressBar value={pct} color={project.color} />
@@ -173,7 +188,12 @@ export function ProjectDetailPage() {
               tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-faint',
             )}
           >
-            {t.label}
+            <span className="relative inline-flex items-center gap-1.5">
+              {t.label}
+              {t.key === 'chat' && hasUnreadChat && tab !== 'chat' && (
+                <span className="h-2 w-2 rounded-full bg-danger" aria-label="Nova mensagem" />
+              )}
+            </span>
           </button>
         ))}
       </div>
@@ -300,7 +320,7 @@ export function ProjectDetailPage() {
       <ProjectFormSheet open={editOpen} onClose={() => setEditOpen(false)} project={project} />
       <TaskFormSheet open={taskFormOpen} onClose={() => setTaskFormOpen(false)} defaultProjectId={project.id} />
       <InviteMemberSheet open={inviteOpen} onClose={() => setInviteOpen(false)} project={project} />
-      <ReorderTasksSheet open={reorderOpen} onClose={() => setReorderOpen(false)} projectId={project.id} />
+      <ReorderTasksSheet open={reorderOpen} onClose={() => setReorderOpen(false)} tasks={tasks} />
     </div>
   )
 }

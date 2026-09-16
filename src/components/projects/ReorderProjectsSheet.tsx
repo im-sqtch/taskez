@@ -1,35 +1,41 @@
 import { ChevronDown, ChevronUp, FolderKanban } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Sheet } from '@/components/ui/Sheet'
-import { useDataStore, useWorkspaceProjects } from '@/store/dataStore'
+import { useDataStore } from '@/store/dataStore'
 import type { Project } from '@/types'
 
 interface ReorderProjectsSheetProps {
   open: boolean
   onClose: () => void
+  projects: Project[]
 }
 
-export function ReorderProjectsSheet({ open, onClose }: ReorderProjectsSheetProps) {
-  const projects = useWorkspaceProjects()
+export function ReorderProjectsSheet({ open, onClose, projects }: ReorderProjectsSheetProps) {
   const reorderProjects = useDataStore((s) => s.reorderProjects)
   const [draft, setDraft] = useState<Project[]>([])
+  const [highlightedId, setHighlightedId] = useState<string>()
+  const highlightTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  // Não inclui `projects` nas deps: o hook devolve um array novo a cada render
-  // (filter + sort), então reagir a ele reiniciaria o rascunho a cada movimento
-  // do usuário dentro da sheet.
+  // Não inclui `projects` nas deps: a página devolve um array filtrado novo a
+  // cada render, então reagir a ele reiniciaria o rascunho a cada movimento.
   useEffect(() => {
     if (open) setDraft(projects)
+    return () => clearTimeout(highlightTimer.current)
   }, [open])
 
   function move(index: number, direction: -1 | 1) {
     const targetIndex = index + direction
     if (targetIndex < 0 || targetIndex >= draft.length) return
+    const movedId = draft[index]!.id
     setDraft((prev) => {
       const next = [...prev]
       ;[next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!]
       return next
     })
+    setHighlightedId(movedId)
+    clearTimeout(highlightTimer.current)
+    highlightTimer.current = setTimeout(() => setHighlightedId(undefined), 650)
   }
 
   function handleSave() {
@@ -51,7 +57,12 @@ export function ReorderProjectsSheet({ open, onClose }: ReorderProjectsSheetProp
     >
       <div className="flex flex-col gap-2">
         {draft.map((project, index) => (
-          <div key={project.id} className="flex items-center gap-3 rounded-xl bg-surface p-3">
+          <div
+            key={project.id}
+            className={`flex items-center gap-3 rounded-xl p-3 transition-colors duration-300 ${
+              highlightedId === project.id ? 'bg-accent-soft' : 'bg-surface'
+            }`}
+          >
             <div className="flex flex-col">
               <button
                 onClick={() => move(index, -1)}

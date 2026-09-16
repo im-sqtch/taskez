@@ -7,6 +7,7 @@ import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
 import { Avatar } from '@/components/ui/Avatar'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { CollapsibleDescription } from '@/components/ui/CollapsibleDescription'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { LinksList } from '@/components/ui/LinksField'
 import { MentionText } from '@/components/ui/MentionText'
@@ -162,9 +163,7 @@ export function TaskDetailPage() {
         </div>
 
         {task.description && (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-muted">
-            <MentionText text={task.description} workspaceId={task.workspaceId} />
-          </p>
+          <CollapsibleDescription key={task.description} text={task.description} workspaceId={task.workspaceId} />
         )}
         <LinksList links={task.links} />
       </div>
