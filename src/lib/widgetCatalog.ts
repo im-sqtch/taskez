@@ -26,7 +26,7 @@ export const WIDGET_CATALOG: Record<WidgetType, WidgetCatalogEntry> = {
     label: 'Resumo de Produtividade',
     description: 'Progresso da semana, streak e histórico de conclusão.',
     icon: LayoutGrid,
-    allowedSizes: ['S', 'M', 'L'],
+    allowedSizes: ['S', 'M', 'L', 'LH'],
     defaultSize: 'L',
   },
   tasks: {
@@ -34,7 +34,7 @@ export const WIDGET_CATALOG: Record<WidgetType, WidgetCatalogEntry> = {
     label: 'Tarefas do Dia',
     description: 'Próximas tarefas pendentes, por prazo.',
     icon: CheckSquare,
-    allowedSizes: ['S', 'M', 'L'],
+    allowedSizes: ['S', 'M', 'L', 'LH'],
     defaultSize: 'M',
   },
   calendar: {
@@ -42,7 +42,7 @@ export const WIDGET_CATALOG: Record<WidgetType, WidgetCatalogEntry> = {
     label: 'Calendário',
     description: 'Prazos das tarefas por dia. Toque em um dia para ver a lista.',
     icon: CalendarDays,
-    allowedSizes: ['S', 'M', 'L'],
+    allowedSizes: ['S', 'M', 'L', 'LH'],
     defaultSize: 'L',
   },
   projects: {
@@ -50,7 +50,7 @@ export const WIDGET_CATALOG: Record<WidgetType, WidgetCatalogEntry> = {
     label: 'Projetos Ativos',
     description: 'Progresso dos projetos em andamento.',
     icon: FolderKanban,
-    allowedSizes: ['S', 'M', 'L'],
+    allowedSizes: ['S', 'M', 'L', 'LH', 'LS'],
     defaultSize: 'M',
   },
   team: {
@@ -83,7 +83,7 @@ export const WIDGET_CATALOG: Record<WidgetType, WidgetCatalogEntry> = {
     label: 'Sequência & Foco',
     description: 'Sua sequência de dias e timers de pomodoro e descanso.',
     icon: Flame,
-    allowedSizes: ['S', 'M', 'L'],
+    allowedSizes: ['S', 'M', 'L', 'LH'],
     defaultSize: 'M',
   },
 }
@@ -93,12 +93,22 @@ export const WIDGET_TYPES = Object.keys(WIDGET_CATALOG) as WidgetType[]
 export const SIZE_LABELS: Record<WidgetSize, string> = {
   S: 'Pequeno',
   M: 'Médio',
-  L: 'Grande',
+  L: 'Grande · Inteiro',
+  LH: 'Grande · Metade',
+  LS: 'Grande · Dividido',
 }
 
 export function nextSize(current: WidgetSize, allowed: WidgetSize[]): WidgetSize {
-  const order: WidgetSize[] = ['S', 'M', 'L']
+  const order: WidgetSize[] = ['S', 'M', 'L', 'LH', 'LS']
   const allowedInOrder = order.filter((s) => allowed.includes(s))
   const idx = allowedInOrder.indexOf(current)
   return allowedInOrder[(idx + 1) % allowedInOrder.length]!
+}
+
+// L, LH e LS mostram o mesmo conteúdo "grande" do widget — só o espaço que
+// ocupam no grid do desktop (e, no caso do projects, o número de colunas
+// internas) muda. Os componentes de widget usam isto pra decidir o que
+// renderizar sem precisar conhecer as variantes de layout.
+export function widgetContentSize(size: WidgetSize): 'S' | 'M' | 'L' {
+  return size === 'LH' || size === 'LS' ? 'L' : size
 }

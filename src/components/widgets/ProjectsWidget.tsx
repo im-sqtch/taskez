@@ -3,11 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ProgressBar } from '@/components/ui/ProgressBar'
-import { formatDate } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
+import { widgetContentSize } from '@/lib/widgetCatalog'
 import { useWorkspaceProjects, useWorkspaceTasks } from '@/store/dataStore'
 import type { WidgetSize } from '@/types'
 
 export function ProjectsWidget({ size }: { size: WidgetSize }) {
+  const content = widgetContentSize(size)
+  // "Grande · Dividido" mostra a mesma lista do "Grande" (L/LH), só que em
+  // duas colunas — por isso é um flag à parte, não uma variação de `content`.
+  const split = size === 'LS'
   const allProjects = useWorkspaceProjects()
   const tasks = useWorkspaceTasks()
   const projects = allProjects.filter((p) => p.status === 'active')
@@ -19,7 +24,7 @@ export function ProjectsWidget({ size }: { size: WidgetSize }) {
     return Math.round((projectTasks.filter((t) => t.status === 'done').length / projectTasks.length) * 100)
   }
 
-  if (size === 'S') {
+  if (content === 'S') {
     return (
       <Card className="flex items-center justify-between" onClick={() => navigate('/projects')}>
         <div className="flex items-center gap-2.5">
@@ -44,8 +49,8 @@ export function ProjectsWidget({ size }: { size: WidgetSize }) {
 
       {projects.length === 0 ? (
         <EmptyState icon={<FolderKanban size={22} />} title="Nenhum projeto ativo" />
-      ) : size === 'L' ? (
-        <div className="flex flex-col gap-2.5">
+      ) : content === 'L' ? (
+        <div className={cn('flex flex-col gap-2.5', split && 'lg:grid lg:grid-cols-2')}>
           {projects.map((p) => {
             const progress = progressFor(p.id)
             return (

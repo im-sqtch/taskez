@@ -1,6 +1,7 @@
 import { Flame, Pause, Play, RotateCcw } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { computeStats } from '@/lib/stats'
+import { widgetContentSize } from '@/lib/widgetCatalog'
 import { useWorkspaceTasks } from '@/store/dataStore'
 import { usePomodoroStore } from '@/store/pomodoroStore'
 import type { WidgetSize } from '@/types'
@@ -64,10 +65,11 @@ function FocusTimer({ id, label, totalSeconds }: { id: string; label: string; to
 }
 
 export function UtilityWidget({ size }: { size: WidgetSize }) {
+  const content = widgetContentSize(size)
   const tasks = useWorkspaceTasks()
   const stats = computeStats(tasks)
 
-  if (size === 'S') {
+  if (content === 'S') {
     return (
       <Card className="flex flex-col gap-3.5">
         <StreakRow streak={stats.streak} />
@@ -77,7 +79,7 @@ export function UtilityWidget({ size }: { size: WidgetSize }) {
 
   return (
     <Card className="flex flex-col gap-3.5">
-      {size === 'L' && <StreakRow streak={stats.streak} />}
+      {content === 'L' && <StreakRow streak={stats.streak} />}
       <FocusTimer id="pomodoro" label="Pomodoro" totalSeconds={25 * 60} />
       <FocusTimer id="break" label="Descanso" totalSeconds={5 * 60} />
     </Card>

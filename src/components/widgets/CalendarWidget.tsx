@@ -16,6 +16,7 @@ import {
   weekGrid,
 } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
+import { widgetContentSize } from '@/lib/widgetCatalog'
 import { useDataStore, useWorkspaceTasks } from '@/store/dataStore'
 import type { Task, WidgetSize } from '@/types'
 
@@ -84,6 +85,7 @@ function DayCell({ date, tasks, selected, isToday, muted, colorOf, onSelect }: D
 }
 
 export function CalendarWidget({ size }: { size: WidgetSize }) {
+  const content = widgetContentSize(size)
   const tasks = useWorkspaceTasks()
   const projects = useDataStore((s) => s.projects)
   const [cursor, setCursor] = useState(() => new Date())
@@ -114,7 +116,7 @@ export function CalendarWidget({ size }: { size: WidgetSize }) {
     const key = dateKey(date)
     setSelectedKey((current) => (current === key ? null : key))
     // Clicar num dia que "transborda" do mês exibido leva a grade junto.
-    if (size === 'L' && date.getMonth() !== cursor.getMonth()) setCursor(new Date(date))
+    if (content === 'L' && date.getMonth() !== cursor.getMonth()) setCursor(new Date(date))
   }
 
   // Trocar de período limpa a seleção: o dia destacado deixaria de estar à vista.
@@ -132,7 +134,7 @@ export function CalendarWidget({ size }: { size: WidgetSize }) {
     </div>
   )
 
-  if (size === 'S') {
+  if (content === 'S') {
     const today = new Date()
     const todayTasks = tasksByDay.get(todayKey) ?? []
     const pendingCount = todayTasks.filter((t) => t.status !== 'done').length
@@ -165,9 +167,9 @@ export function CalendarWidget({ size }: { size: WidgetSize }) {
     )
   }
 
-  const days = size === 'L' ? monthGrid(cursor) : weekGrid(cursor)
-  const title = size === 'L' ? formatMonthTitle(cursor) : formatWeekTitle(days)
-  const step = size === 'L' ? (delta: number) => addMonths(cursor, delta) : (delta: number) => addDays(cursor, delta * 7)
+  const days = content === 'L' ? monthGrid(cursor) : weekGrid(cursor)
+  const title = content === 'L' ? formatMonthTitle(cursor) : formatWeekTitle(days)
+  const step = content === 'L' ? (delta: number) => addMonths(cursor, delta) : (delta: number) => addDays(cursor, delta * 7)
 
   return (
     <Card className="flex flex-col gap-3">
@@ -176,14 +178,14 @@ export function CalendarWidget({ size }: { size: WidgetSize }) {
         <div className="flex items-center gap-1">
           <button
             onClick={() => moveCursor(step(-1))}
-            aria-label={size === 'L' ? 'Mês anterior' : 'Semana anterior'}
+            aria-label={content === 'L' ? 'Mês anterior' : 'Semana anterior'}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-alt text-text-muted transition-colors hover:text-text"
           >
             <ChevronLeft size={16} />
           </button>
           <button
             onClick={() => moveCursor(step(1))}
-            aria-label={size === 'L' ? 'Próximo mês' : 'Próxima semana'}
+            aria-label={content === 'L' ? 'Próximo mês' : 'Próxima semana'}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-alt text-text-muted transition-colors hover:text-text"
           >
             <ChevronRight size={16} />
@@ -206,7 +208,7 @@ export function CalendarWidget({ size }: { size: WidgetSize }) {
               tasks={tasksByDay.get(key) ?? []}
               selected={selectedKey === key}
               isToday={key === todayKey}
-              muted={size === 'L' && date.getMonth() !== cursor.getMonth()}
+              muted={content === 'L' && date.getMonth() !== cursor.getMonth()}
               colorOf={colorOf}
               onSelect={toggleDay}
             />

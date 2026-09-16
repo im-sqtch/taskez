@@ -22,6 +22,7 @@ import type {
   Task,
   TaskStatus,
   TeamMember,
+  WidgetSize,
   Workspace,
 } from '@/types'
 
@@ -722,7 +723,7 @@ interface DataState {
   setLayout: (layout: DashboardLayout) => void
   resetLayout: () => void
   toggleWidgetVisible: (widgetId: string) => void
-  resizeWidget: (widgetId: string, size: 'S' | 'M' | 'L') => void
+  resizeWidget: (widgetId: string, size: WidgetSize) => void
   reorderWidgets: (orderedIds: string[]) => void
 }
 

@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/Card'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { cn } from '@/lib/utils'
 import { computeStats, weeklyHistory } from '@/lib/stats'
+import { widgetContentSize } from '@/lib/widgetCatalog'
 import { useWorkspaceTasks } from '@/store/dataStore'
 import type { WidgetSize } from '@/types'
 
@@ -17,6 +18,7 @@ function StatPill({ icon, value, label }: { icon: React.ReactNode; value: number
 }
 
 export function SummaryWidget({ size }: { size: WidgetSize }) {
+  const content = widgetContentSize(size)
   const tasks = useWorkspaceTasks()
   const stats = computeStats(tasks)
   const history = weeklyHistory(tasks)
@@ -39,14 +41,14 @@ export function SummaryWidget({ size }: { size: WidgetSize }) {
 
         <div className="flex items-end justify-between">
           <p className="text-4xl font-extrabold">{stats.weekProgress}%</p>
-          {size !== 'S' && (
+          {content !== 'S' && (
             <p className="pb-1 text-xs font-medium text-white/70">das tarefas da semana concluídas</p>
           )}
         </div>
 
-        {size !== 'S' && <ProgressBar value={stats.weekProgress} color="white" trackClassName="bg-white/20" />}
+        {content !== 'S' && <ProgressBar value={stats.weekProgress} color="white" trackClassName="bg-white/20" />}
 
-        {size === 'M' && (
+        {content === 'M' && (
           <div className="flex gap-3 pt-1">
             <div className="flex flex-1 items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5">
               <ListChecks size={16} />
@@ -65,7 +67,7 @@ export function SummaryWidget({ size }: { size: WidgetSize }) {
           </div>
         )}
 
-        {size === 'L' && (
+        {content === 'L' && (
           <>
             <div className="flex gap-3 pt-1">
               <StatPill icon={<CheckCircle2 size={16} />} value={`${stats.completedToday}`} label={`de ${stats.totalTasks} totais`} />

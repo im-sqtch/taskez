@@ -88,7 +88,7 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 lg:mx-auto lg:w-full lg:max-w-3xl">
       <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
         <h1 className="text-2xl font-bold text-text">Perfil</h1>
         <button onClick={() => navigate('/settings')} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">

@@ -181,7 +181,10 @@ export type WidgetType =
   | 'shortcuts'
   | 'utility'
 
-export type WidgetSize = 'S' | 'M' | 'L'
+// L = Grande · Inteiro (ocupa a linha toda), LH = Grande · Metade (mesmo
+// conteúdo do L, mas ocupa só uma coluna no grid desktop), LS = Grande ·
+// Dividido (só no widget de projetos: linha toda, com os itens em 2 colunas).
+export type WidgetSize = 'S' | 'M' | 'L' | 'LH' | 'LS'
 
 export interface DashboardWidget {
   id: string

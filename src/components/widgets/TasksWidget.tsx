@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { formatDate, isOverdue } from '@/lib/utils'
+import { widgetContentSize } from '@/lib/widgetCatalog'
 import { useDataStore, useWorkspaceTasks } from '@/store/dataStore'
 import type { WidgetSize } from '@/types'
 
-const LIMIT_BY_SIZE: Record<WidgetSize, number> = { S: 0, M: 4, L: 8 }
+const LIMIT_BY_SIZE: Record<'S' | 'M' | 'L', number> = { S: 0, M: 4, L: 8 }
 
 export function TasksWidget({ size }: { size: WidgetSize }) {
+  const content = widgetContentSize(size)
   const tasks = useWorkspaceTasks()
   const toggleTaskStatus = useDataStore((s) => s.toggleTaskStatus)
   const navigate = useNavigate()
@@ -21,7 +23,7 @@ export function TasksWidget({ size }: { size: WidgetSize }) {
       return aDue - bDue
     })
 
-  if (size === 'S') {
+  if (content === 'S') {
     return (
       <Card className="flex items-center justify-between" onClick={() => navigate('/tasks')}>
         <div className="flex items-center gap-2.5">
@@ -35,7 +37,7 @@ export function TasksWidget({ size }: { size: WidgetSize }) {
     )
   }
 
-  const upcoming = pending.slice(0, LIMIT_BY_SIZE[size])
+  const upcoming = pending.slice(0, LIMIT_BY_SIZE[content])
 
   return (
     <Card className="flex flex-col gap-3.5">

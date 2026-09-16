@@ -40,11 +40,18 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-5">
       <DashboardHeader />
-      <div className="flex flex-col gap-4 px-5">
-        <DashboardToolbarCard onEdit={() => setCustomizeOpen(true)} />
+      <div className="grid grid-cols-1 gap-4 px-5 lg:grid-cols-2">
+        <div className="lg:col-span-2">
+          <DashboardToolbarCard onEdit={() => setCustomizeOpen(true)} />
+        </div>
         {visibleWidgets.map((w) => {
           const Widget = widgetComponents[w.type]
-          return <Widget key={w.id} size={w.size} />
+          const fullWidth = w.size === 'L' || w.size === 'LS'
+          return (
+            <div key={w.id} className={fullWidth ? 'lg:col-span-2' : undefined}>
+              <Widget size={w.size} />
+            </div>
+          )
         })}
       </div>
       <CustomizeDashboardSheet open={customizeOpen} onClose={() => setCustomizeOpen(false)} />

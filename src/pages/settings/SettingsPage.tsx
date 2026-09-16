@@ -168,7 +168,7 @@ export function SettingsPage() {
 
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 lg:mx-auto lg:w-full lg:max-w-3xl">
       <header className="flex items-center gap-3 px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
         <button onClick={() => navigate(-1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
           <ArrowLeft size={19} />
