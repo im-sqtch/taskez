@@ -17,15 +17,16 @@ export function Sheet({ open, onClose, title, subtitle, headerAction, children, 
   if (!open) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center lg:items-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
         className={cn(
           'relative flex max-h-[88vh] w-full max-w-md flex-col rounded-t-2xl border-t border-border bg-surface-alt pb-[env(safe-area-inset-bottom)]',
+          'lg:max-h-[85vh] lg:rounded-2xl lg:border lg:pb-0 lg:shadow-2xl',
           'animate-[sheet-in_0.25s_ease-out]',
         )}
       >
-        <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-border" />
+        <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-border lg:hidden" />
         {title && (
           <div className="flex shrink-0 items-start justify-between px-5 pt-4">
             <div className="flex flex-col gap-0.5">

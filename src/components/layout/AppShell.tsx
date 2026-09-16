@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { QuickCreateSheet } from '@/components/layout/QuickCreateSheet'
+import { Sidebar } from '@/components/layout/Sidebar'
 import { TabBar } from '@/components/layout/TabBar'
 import { NotificationsSheet } from '@/components/layout/NotificationsSheet'
 import { SearchOverlay } from '@/components/layout/SearchOverlay'
@@ -26,11 +27,20 @@ export function AppShell() {
   }, [checkDueRecurrences])
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col bg-base">
-      <div className="flex-1 pb-28">
-        <Outlet />
+    <div className="flex w-full flex-1 bg-base">
+      <div className="hidden lg:flex">
+        <Sidebar />
       </div>
-      <TabBar />
+
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col lg:max-w-none">
+        <div className="flex-1 pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
+          <Outlet />
+        </div>
+        <div className="lg:hidden">
+          <TabBar />
+        </div>
+      </div>
+
       <QuickCreateSheet />
       <NotificationsSheet />
       <SearchOverlay />
