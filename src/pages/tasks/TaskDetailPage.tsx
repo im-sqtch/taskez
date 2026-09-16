@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, Circle, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useMatch, useNavigate, useParams } from 'react-router-dom'
 import { ReorderSubtasksSheet } from '@/components/tasks/ReorderSubtasksSheet'
@@ -255,9 +255,6 @@ export function TaskDetailPage() {
           sendLabel="Enviar comentário"
           workspaceId={task.workspaceId}
         />
-        <div className="flex items-center gap-2 text-xs text-text-faint">
-          <Paperclip size={13} /> Anexos chegam em uma próxima fase do TaskEz.
-        </div>
       </div>
 
       <TaskFormSheet open={editOpen} onClose={() => setEditOpen(false)} task={task} />
