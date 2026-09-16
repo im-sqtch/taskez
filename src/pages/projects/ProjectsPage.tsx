@@ -15,7 +15,7 @@ const filters: { value: ProjectStatus; label: string }[] = [
   { value: 'archived', label: 'Arquivados' },
 ]
 
-export function ProjectsPage() {
+export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
   const projects = useWorkspaceProjects()
   const tasks = useWorkspaceTasks()
   const [filter, setFilter] = useState<ProjectStatus>('active')
@@ -93,7 +93,10 @@ export function ProjectsPage() {
               <button
                 key={p.id}
                 onClick={() => navigate(`/projects/${p.id}`)}
-                className="flex flex-col gap-3 rounded-xl border border-border-soft bg-surface p-4 text-left"
+                className={cn(
+                  'flex flex-col gap-3 rounded-xl border p-4 text-left transition-colors',
+                  p.id === selectedId ? 'border-accent bg-accent-soft' : 'border-border-soft bg-surface',
+                )}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">

@@ -1,6 +1,6 @@
 import { ArrowLeft, Check, CheckCheck, Circle, Paperclip, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useMatch, useNavigate, useParams } from 'react-router-dom'
 import { ReorderSubtasksSheet } from '@/components/tasks/ReorderSubtasksSheet'
 import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
 import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
@@ -19,7 +19,10 @@ import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
 
 export function TaskDetailPage() {
-  const { id } = useParams<{ id: string }>()
+  const params = useParams<{ id?: string; taskId?: string }>()
+  const id = params.taskId ?? params.id
+  const projectContext = useMatch('/projects/:projectId/tasks/:taskId')
+  const closeTo = projectContext ? `/projects/${projectContext.params.projectId}` : '/tasks'
   const navigate = useNavigate()
   const task = useDataStore((s) => s.tasks.find((t) => t.id === id))
   const project = useDataStore((s) => s.projects.find((p) => p.id === task?.projectId))
@@ -64,7 +67,7 @@ export function TaskDetailPage() {
       danger: true,
       onConfirm: () => {
         deleteTask(task.id)
-        navigate(-1)
+        navigate(closeTo)
       },
     })
   }
@@ -95,7 +98,7 @@ export function TaskDetailPage() {
   return (
     <div className="flex flex-col gap-5">
       <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
-        <button onClick={() => navigate(-1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
+        <button onClick={() => navigate(closeTo)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
           <ArrowLeft size={19} />
         </button>
         <div className="flex gap-2">

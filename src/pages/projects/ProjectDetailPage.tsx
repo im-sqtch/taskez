@@ -134,7 +134,7 @@ export function ProjectDetailPage() {
   return (
     <div className="flex flex-col gap-5">
       <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
-        <button onClick={() => navigate(-1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
+        <button onClick={() => navigate('/projects')} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
           <ArrowLeft size={19} />
         </button>
         <div className="flex gap-2">
@@ -275,7 +275,7 @@ export function ProjectDetailPage() {
             ) : (
               <div className="flex flex-col gap-1">
                 {tasks.map((t) => (
-                  <TaskRow key={t.id} task={t} />
+                  <TaskRow key={t.id} task={t} to={`/projects/${project.id}/tasks/${t.id}`} />
                 ))}
               </div>
             )}

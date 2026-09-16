@@ -10,10 +10,10 @@ import { FilesPage } from '@/pages/files/FilesPage'
 import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
 import { ProfilePage } from '@/pages/profile/ProfilePage'
 import { ProjectDetailPage } from '@/pages/projects/ProjectDetailPage'
-import { ProjectsPage } from '@/pages/projects/ProjectsPage'
+import { ProjectsLayout } from '@/pages/projects/ProjectsLayout'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { TaskDetailPage } from '@/pages/tasks/TaskDetailPage'
-import { TasksPage } from '@/pages/tasks/TasksPage'
+import { TasksLayout } from '@/pages/tasks/TasksLayout'
 import { TrashPage } from '@/pages/trash/TrashPage'
 import { useAuthStore } from '@/store/authStore'
 import { useThemeStore } from '@/store/themeStore'
@@ -104,11 +104,14 @@ export default function App() {
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/projects/:id" element={<ProjectDetailPage />} />
+          <Route path="/projects" element={<ProjectsLayout />}>
+            <Route path=":id" element={<ProjectDetailPage />} />
+            <Route path=":projectId/tasks/:taskId" element={<TaskDetailPage />} />
+          </Route>
           <Route path="/files" element={<FilesPage />} />
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/tasks/:id" element={<TaskDetailPage />} />
+          <Route path="/tasks" element={<TasksLayout />}>
+            <Route path=":id" element={<TaskDetailPage />} />
+          </Route>
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/trash" element={<TrashPage />} />

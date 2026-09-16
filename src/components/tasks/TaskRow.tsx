@@ -5,7 +5,7 @@ import { cn, formatDate, isOverdue } from '@/lib/utils'
 import { useDataStore } from '@/store/dataStore'
 import type { Task } from '@/types'
 
-export function TaskRow({ task }: { task: Task }) {
+export function TaskRow({ task, active, to }: { task: Task; active?: boolean; to?: string }) {
   const toggleTaskStatus = useDataStore((s) => s.toggleTaskStatus)
   const project = useDataStore((s) => s.projects.find((p) => p.id === task.projectId))
   const navigate = useNavigate()
@@ -14,7 +14,7 @@ export function TaskRow({ task }: { task: Task }) {
   const recurring = Boolean(task.recurrence ?? project?.recurrence)
 
   return (
-    <div className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-alt">
+    <div className={cn('flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-alt', active && 'bg-accent-soft')}>
       <button
         onClick={() => toggleTaskStatus(task.id)}
         className={cn(
@@ -34,7 +34,7 @@ export function TaskRow({ task }: { task: Task }) {
         )}
       </button>
 
-      <button onClick={() => navigate(`/tasks/${task.id}`)} className="flex flex-1 flex-col items-start gap-1 text-left min-w-0">
+      <button onClick={() => navigate(to ?? `/tasks/${task.id}`)} className="flex flex-1 flex-col items-start gap-1 text-left min-w-0">
         <p className={cn('text-sm font-medium leading-tight text-text', task.status === 'done' && 'line-through text-text-faint')}>
           {task.title}
         </p>

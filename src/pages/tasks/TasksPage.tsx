@@ -24,7 +24,7 @@ const groupLabels: Record<TaskStatus, string> = {
   done: 'Concluídas',
 }
 
-export function TasksPage() {
+export function TasksPage({ selectedId }: { selectedId?: string } = {}) {
   const tasks = useWorkspaceTasks()
   const [view, setView] = useState<ViewMode>('list')
   const [filter, setFilter] = useState<FilterMode>('all')
@@ -104,7 +104,7 @@ export function TasksPage() {
                   {groupLabels[status]} · {grouped[status].length}
                 </p>
                 {grouped[status].map((t) => (
-                  <TaskRow key={t.id} task={t} />
+                  <TaskRow key={t.id} task={t} active={t.id === selectedId} />
                 ))}
               </div>
             ),
