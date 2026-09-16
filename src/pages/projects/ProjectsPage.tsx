@@ -112,7 +112,7 @@ export function ProjectsPage() {
                     </div>
                   </div>
                   <span className="shrink-0 text-xs font-semibold text-text-muted">
-                    {todo} a fazer · {total} tarefas
+                    {todo}/{total} tarefas
                   </span>
                 </div>
                 <ProgressBar value={pct} color={p.color} />
