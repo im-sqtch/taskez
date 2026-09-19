@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, FolderKanban, ListTodo, Search, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -24,8 +25,6 @@ export function SearchOverlay() {
     }
   }, [query, tasks, projects])
 
-  if (!open) return null
-
   const hasResults = results.tasks.length > 0 || results.projects.length > 0
 
   function handleClose() {
@@ -34,13 +33,26 @@ export function SearchOverlay() {
   }
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex flex-col bg-base lg:items-center lg:justify-start lg:bg-black/60 lg:pt-[10vh] lg:backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) handleClose()
-      }}
-    >
-      <div className="flex w-full flex-1 flex-col lg:max-h-[70vh] lg:w-full lg:max-w-xl lg:flex-none lg:overflow-hidden lg:rounded-2xl lg:border lg:border-border lg:bg-surface-alt lg:shadow-2xl">
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex flex-col bg-base lg:items-center lg:justify-start lg:bg-black/60 lg:pt-[10vh]"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) handleClose()
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+        >
+          <motion.div
+            className="flex w-full flex-1 flex-col lg:max-h-[70vh] lg:w-full lg:max-w-xl lg:flex-none lg:overflow-hidden lg:rounded-2xl lg:border lg:border-border lg:bg-surface-alt lg:shadow-2xl"
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 40, opacity: 0 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+            style={{ willChange: 'transform, opacity' }}
+          >
         <div className="flex shrink-0 items-center gap-2 border-b border-border-soft px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 lg:pt-4">
           <button
             onClick={handleClose}
@@ -121,8 +133,10 @@ export function SearchOverlay() {
             </div>
           )}
         </div>
-      </div>
-    </div>,
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   )
 }

@@ -34,6 +34,7 @@ import { confirmAction } from '@/store/confirmStore'
 import { useChatReadStore, useLastChatReadAt } from '@/store/chatReadStore'
 import { useDataStore } from '@/store/dataStore'
 import { useAuthStore } from '@/store/authStore'
+import { useGroupDoneLast, useTaskSortStore } from '@/store/taskSortStore'
 
 const tabs = [
   { key: 'overview', label: 'Visão geral' },
@@ -74,7 +75,8 @@ export function ProjectDetailPage() {
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [reorderOpen, setReorderOpen] = useState(false)
-  const [groupDoneLast, setGroupDoneLast] = useState(false)
+  const groupDoneLast = useGroupDoneLast(id ?? '')
+  const toggleGroupDoneLast = useTaskSortStore((s) => s.toggleGroupDoneLast)
 
   const latestChatMessageAt = chatMessages
     .filter((message) => message.projectId === id)
@@ -277,7 +279,7 @@ export function ProjectDetailPage() {
               )}
               {tasks.length > 1 && (
                 <button
-                  onClick={() => setGroupDoneLast((v) => !v)}
+                  onClick={() => toggleGroupDoneLast(project.id)}
                   className={cn(
                     'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
                     groupDoneLast ? 'bg-accent text-white' : 'bg-surface-alt text-text',

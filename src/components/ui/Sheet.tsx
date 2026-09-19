@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -14,47 +15,54 @@ interface SheetProps {
 }
 
 export function Sheet({ open, onClose, title, subtitle, headerAction, children, footer }: SheetProps) {
-  if (!open) return null
-
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center lg:items-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div
-        className={cn(
-          'relative flex max-h-[88vh] w-full max-w-md flex-col rounded-t-2xl border-t border-border bg-surface-alt pb-[env(safe-area-inset-bottom)]',
-          'lg:max-h-[85vh] lg:rounded-2xl lg:border lg:pb-0 lg:shadow-2xl',
-          'animate-[sheet-in_0.25s_ease-out]',
-        )}
-      >
-        <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-border lg:hidden" />
-        {title && (
-          <div className="flex shrink-0 items-start justify-between px-5 pt-4">
-            <div className="flex flex-col gap-0.5">
-              <h2 className="text-lg font-bold text-text">{title}</h2>
-              {subtitle && <p className="text-sm text-text-muted">{subtitle}</p>}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {headerAction}
-              <button
-                onClick={onClose}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
-                aria-label="Fechar"
-              >
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-        )}
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="shrink-0 border-t border-border-soft px-5 py-4">{footer}</div>}
-      </div>
-      <style>{`
-        @keyframes sheet-in {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
-        }
-      `}</style>
-    </div>,
+    <AnimatePresence>
+      {open && (
+        <motion.div className="fixed inset-0 z-50 flex items-end justify-center lg:items-center">
+          <motion.div
+            className="absolute inset-0 bg-black/60"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+          />
+          <motion.div
+            className={cn(
+              'relative flex max-h-[88vh] w-full max-w-md flex-col rounded-t-2xl border-t border-border bg-surface-alt pb-[env(safe-area-inset-bottom)]',
+              'lg:max-h-[85vh] lg:rounded-2xl lg:border lg:pb-0 lg:shadow-2xl',
+            )}
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 40, opacity: 0 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+            style={{ willChange: 'transform, opacity' }}
+          >
+            <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-border lg:hidden" />
+            {title && (
+              <div className="flex shrink-0 items-start justify-between px-5 pt-4">
+                <div className="flex flex-col gap-0.5">
+                  <h2 className="text-lg font-bold text-text">{title}</h2>
+                  {subtitle && <p className="text-sm text-text-muted">{subtitle}</p>}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {headerAction}
+                  <button
+                    onClick={onClose}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:text-text"
+                    aria-label="Fechar"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+            {footer && <div className="shrink-0 border-t border-border-soft px-5 py-4">{footer}</div>}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   )
 }

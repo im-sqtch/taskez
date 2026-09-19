@@ -1,5 +1,6 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { FolderKanban, Plus, Repeat, SlidersHorizontal, Upload } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ProjectFormSheet } from '@/components/projects/ProjectFormSheet'
 import { ReorderProjectsSheet } from '@/components/projects/ReorderProjectsSheet'
@@ -32,6 +33,16 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
     reordered.unshift(selected)
     return reordered
   }, [projects, filter, selectedId])
+
+  // No desktop, escolher um projeto reordena a lista (ele vai pro topo).
+  // Rola a tela pro topo junto, pra o usuário acompanhar o item que "subiu"
+  // em vez de a mudança acontecer fora da área visível.
+  useEffect(() => {
+    if (!selectedId) return
+    if (!window.matchMedia('(min-width: 1024px)').matches) return
+    if (window.scrollY === 0) return
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [selectedId])
 
   function progressFor(projectId: string) {
     const projectTasks = tasks.filter((t) => t.projectId === projectId)
@@ -95,41 +106,49 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
             description="Crie um novo projeto para começar a organizar seu trabalho."
           />
         ) : (
-          filtered.map((p) => {
-            const { pct, total, todo } = progressFor(p.id)
-            return (
-              <button
-                key={p.id}
-                onClick={() => navigate(`/projects/${p.id}`)}
-                className={cn(
-                  'flex flex-col gap-3 rounded-xl border p-4 text-left transition-colors',
-                  p.id === selectedId ? 'border-accent bg-accent-soft' : 'border-border-soft bg-surface',
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
-                      style={{ backgroundColor: p.color }}
-                    >
-                      <FolderKanban size={18} />
+          <AnimatePresence initial={false}>
+            {filtered.map((p) => {
+              const { pct, total, todo } = progressFor(p.id)
+              return (
+                <motion.button
+                  key={p.id}
+                  layout
+                  layoutId={p.id}
+                  transition={{ type: 'spring', stiffness: 500, damping: 40, mass: 0.8 }}
+                  initial={{ opacity: 0, y: -12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => navigate(`/projects/${p.id}`)}
+                  className={cn(
+                    'flex flex-col gap-3 rounded-xl border p-4 text-left transition-colors',
+                    p.id === selectedId ? 'border-accent bg-accent-soft' : 'border-border-soft bg-surface',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
+                        style={{ backgroundColor: p.color }}
+                      >
+                        <FolderKanban size={18} />
+                      </div>
+                      <div>
+                        <p className="flex items-center gap-1.5 font-semibold text-text">
+                          {p.name}
+                          {p.recurrence && <Repeat size={12} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
+                        </p>
+                        {p.dueDate && <p className="text-xs text-text-faint">Prazo: {formatDate(p.dueDate)}</p>}
+                      </div>
                     </div>
-                    <div>
-                      <p className="flex items-center gap-1.5 font-semibold text-text">
-                        {p.name}
-                        {p.recurrence && <Repeat size={12} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
-                      </p>
-                      {p.dueDate && <p className="text-xs text-text-faint">Prazo: {formatDate(p.dueDate)}</p>}
-                    </div>
+                    <span className="shrink-0 text-xs font-semibold text-text-muted">
+                      {todo} · {total} tarefas
+                    </span>
                   </div>
-                  <span className="shrink-0 text-xs font-semibold text-text-muted">
-                    {todo} · {total} tarefas
-                  </span>
-                </div>
-                <ProgressBar value={pct} color={p.color} />
-              </button>
-            )
-          })
+                  <ProgressBar value={pct} color={p.color} />
+                </motion.button>
+              )
+            })}
+          </AnimatePresence>
         )}
       </div>
 

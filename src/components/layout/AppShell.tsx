@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { NotificationsPanel } from '@/components/layout/NotificationsPanel'
@@ -35,11 +36,29 @@ export function AppShell() {
         <Sidebar />
       </div>
 
-      {desktopNotificationsOpen && (
-        <div className="hidden lg:flex">
-          <NotificationsPanel />
-        </div>
-      )}
+      <AnimatePresence>
+        {desktopNotificationsOpen && (
+          <motion.div
+            key="notifications-panel"
+            className="hidden lg:flex"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 360, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 42, mass: 0.8 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <motion.div
+              initial={{ x: -40 }}
+              animate={{ x: 0 }}
+              exit={{ x: -40 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 42, mass: 0.8 }}
+              className="w-[360px] shrink-0"
+            >
+              <NotificationsPanel />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col lg:max-w-none">
         <div className="flex-1 pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
