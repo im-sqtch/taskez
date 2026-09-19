@@ -23,7 +23,15 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
   const [reorderOpen, setReorderOpen] = useState(false)
   const navigate = useNavigate()
 
-  const filtered = useMemo(() => projects.filter((p) => p.status === filter), [projects, filter])
+  const filtered = useMemo(() => {
+    const list = projects.filter((p) => p.status === filter)
+    const selectedIndex = selectedId ? list.findIndex((p) => p.id === selectedId) : -1
+    if (selectedIndex <= 0) return list
+    const reordered = [...list]
+    const [selected] = reordered.splice(selectedIndex, 1)
+    reordered.unshift(selected)
+    return reordered
+  }, [projects, filter, selectedId])
 
   function progressFor(projectId: string) {
     const projectTasks = tasks.filter((t) => t.projectId === projectId)
