@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
+  ListChecks,
   Pencil,
   Plus,
   Repeat,
@@ -73,6 +74,7 @@ export function ProjectDetailPage() {
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [reorderOpen, setReorderOpen] = useState(false)
+  const [groupDoneLast, setGroupDoneLast] = useState(false)
 
   const latestChatMessageAt = chatMessages
     .filter((message) => message.projectId === id)
@@ -92,6 +94,10 @@ export function ProjectDetailPage() {
       </div>
     )
   }
+
+  const displayedTasks = groupDoneLast
+    ? [...tasks].sort((a, b) => Number(a.status === 'done') - Number(b.status === 'done'))
+    : tasks
 
   const done = tasks.filter((t) => t.status === 'done').length
   const pct = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100)
@@ -269,12 +275,25 @@ export function ProjectDetailPage() {
                   <SlidersHorizontal size={16} />
                 </button>
               )}
+              {tasks.length > 1 && (
+                <button
+                  onClick={() => setGroupDoneLast((v) => !v)}
+                  className={cn(
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+                    groupDoneLast ? 'bg-accent text-white' : 'bg-surface-alt text-text',
+                  )}
+                  aria-label="Agrupar tarefas concluídas no fim"
+                  aria-pressed={groupDoneLast}
+                >
+                  <ListChecks size={16} />
+                </button>
+              )}
             </div>
             {tasks.length === 0 ? (
               <EmptyState icon={<Calendar size={22} />} title="Nenhuma tarefa neste projeto" />
             ) : (
               <div className="flex flex-col gap-1">
-                {tasks.map((t) => (
+                {displayedTasks.map((t) => (
                   <TaskRow key={t.id} task={t} to={`/projects/${project.id}/tasks/${t.id}`} />
                 ))}
               </div>
