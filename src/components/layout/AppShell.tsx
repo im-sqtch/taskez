@@ -10,10 +10,20 @@ import { SearchOverlay } from '@/components/layout/SearchOverlay'
 import { useDataStore } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
 
-const mobileTabSlideVariants = {
-  enter: (direction: number) => ({ opacity: 0, x: direction > 0 ? 48 : -48 }),
-  center: { opacity: 1, x: 0 },
-  exit: (direction: number) => ({ opacity: 0, x: direction > 0 ? -48 : 48 }),
+type TabSlide = { direction: number; isMobile: boolean }
+
+const tabSlideVariants = {
+  enter: ({ direction, isMobile }: TabSlide) => ({
+    opacity: 0,
+    x: isMobile ? (direction > 0 ? 48 : -48) : 0,
+    y: isMobile ? 0 : direction > 0 ? 48 : -48,
+  }),
+  center: { opacity: 1, x: 0, y: 0 },
+  exit: ({ direction, isMobile }: TabSlide) => ({
+    opacity: 0,
+    x: isMobile ? (direction > 0 ? -48 : 48) : 0,
+    y: isMobile ? 0 : direction > 0 ? -48 : 48,
+  }),
 }
 
 function tabIndexForPath(pathname: string) {
@@ -30,6 +40,7 @@ export function AppShell() {
   const currentTabIndex = tabIndexForPath(location.pathname)
   const [tabTransition, setTabTransition] = useState({ index: currentTabIndex, direction: 1 })
   const [isMobile, setIsMobile] = useState(() => !window.matchMedia('(min-width: 1024px)').matches)
+  const slide = { direction: tabTransition.direction, isMobile }
 
   if (tabTransition.index !== currentTabIndex) {
     setTabTransition({
@@ -93,15 +104,15 @@ export function AppShell() {
 
       <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col overflow-x-clip lg:max-w-none">
         <div className="min-w-0 flex-1 pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
-          <AnimatePresence initial={false} custom={tabTransition.direction} mode="wait">
+          <AnimatePresence initial={false} custom={slide} mode="wait">
             <motion.div
-              key={isMobile ? currentTabIndex : 'desktop'}
-              custom={tabTransition.direction}
-              variants={mobileTabSlideVariants}
-              initial={isMobile ? 'enter' : false}
+              key={currentTabIndex}
+              custom={slide}
+              variants={tabSlideVariants}
+              initial="enter"
               animate="center"
-              exit={isMobile ? 'exit' : undefined}
-              transition={{ duration: isMobile ? 0.22 : 0, ease: [0.22, 1, 0.36, 1] }}
+              exit="exit"
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             >
               <Outlet />
             </motion.div>
