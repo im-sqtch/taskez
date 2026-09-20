@@ -32,6 +32,7 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
   const [formOpen, setFormOpen] = useState(false)
   const [reorderOpen, setReorderOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
+  const [cardLayoutEnabled, setCardLayoutEnabled] = useState(false)
   const navigate = useNavigate()
 
   const filtered = useMemo(() => {
@@ -50,6 +51,16 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
     mediaQuery.addEventListener('change', updateViewport)
     return () => mediaQuery.removeEventListener('change', updateViewport)
   }, [])
+
+  // A projeção de layout do Framer Motion tenta compensar a posição dos cards
+  // enquanto o AppShell ainda move a página no eixo Y, fazendo-os parecer andar
+  // no sentido contrário. Ela só é necessária depois da entrada, para animar a
+  // reordenação do projeto selecionado no desktop.
+  useEffect(() => {
+    if (!isDesktop) return
+    const timer = window.setTimeout(() => setCardLayoutEnabled(true), 240)
+    return () => window.clearTimeout(timer)
+  }, [isDesktop])
 
   // No desktop, escolher um projeto reordena a lista (ele vai pro topo).
   // Rola a tela pro topo junto, pra o usuário acompanhar o item que "subiu"
@@ -147,8 +158,8 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
               return (
                 <motion.button
                   key={p.id}
-                  layout={isDesktop}
-                  layoutId={isDesktop ? p.id : undefined}
+                  layout={isDesktop && cardLayoutEnabled}
+                  layoutId={isDesktop && cardLayoutEnabled ? p.id : undefined}
                   transition={{ type: 'spring', stiffness: 500, damping: 40, mass: 0.8 }}
                   // No desktop, o AppShell já anima a página inteira no eixo Y.
                   // Um segundo deslocamento vertical no card competia com essa
