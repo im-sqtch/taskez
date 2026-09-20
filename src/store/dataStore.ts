@@ -664,7 +664,10 @@ interface DataState {
   // Workspaces
   addWorkspace: (name: string, color: string) => string
   switchWorkspace: (id: string) => void
-  updateWorkspace: (id: string, patch: { name?: string; defaultAssigneeId?: string }) => void
+  updateWorkspace: (
+    id: string,
+    patch: { name?: string; color?: string; defaultAssigneeId?: string },
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
   deleteWorkspace: (id: string) => void
 
   // Equipe do workspace
@@ -1161,27 +1164,30 @@ export const useDataStore = create<DataState>()(
         return id
       },
       switchWorkspace: (id) => set({ currentWorkspaceId: id }),
-      updateWorkspace: (id, patch) => {
+      updateWorkspace: async (id, patch) => {
+        const { data, error } = await supabase
+          .from('workspaces')
+          .update({
+            ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+            ...(patch.color !== undefined ? { color: patch.color } : {}),
+            ...('defaultAssigneeId' in patch ? { default_assignee_id: patch.defaultAssigneeId ?? null } : {}),
+          })
+          .eq('id', id)
+          .select()
+          .single()
+
+        if (error || !data) {
+          console.error('[updateWorkspace] não foi possível atualizar a workspace', error)
+          return { ok: false, error: 'Não foi possível salvar a workspace. Verifique sua conexão e tente novamente.' }
+        }
+
+        const updatedWorkspace = mapWorkspace(data as WorkspaceRow)
         set((state) => ({
-          workspaces: state.workspaces.map((w) =>
-            w.id === id
-              ? {
-                  ...w,
-                  ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-                  ...('defaultAssigneeId' in patch ? { defaultAssigneeId: patch.defaultAssigneeId } : {}),
-                }
-              : w,
+          workspaces: state.workspaces.map((workspace) =>
+            workspace.id === id ? updatedWorkspace : workspace,
           ),
         }))
-        fireAndForget(
-          supabase
-            .from('workspaces')
-            .update({
-              ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-              ...('defaultAssigneeId' in patch ? { default_assignee_id: patch.defaultAssigneeId ?? null } : {}),
-            })
-            .eq('id', id),
-        )
+        return { ok: true }
       },
       deleteWorkspace: (id) => {
         set((state) => {

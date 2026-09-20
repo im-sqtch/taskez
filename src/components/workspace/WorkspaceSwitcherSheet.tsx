@@ -33,6 +33,8 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
   const [name, setName] = useState('')
   const [color, setColor] = useState(COLORS[0]!)
   const [defaultAssigneeId, setDefaultAssigneeId] = useState<string>()
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string>()
 
   useEffect(() => {
     if (!open) setView('list')
@@ -43,6 +45,7 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
     setName('')
     setColor(COLORS[Math.floor(Math.random() * COLORS.length)]!)
     setDefaultAssigneeId(undefined)
+    setSaveError(undefined)
     setView('form')
   }
 
@@ -52,6 +55,7 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
     setName(workspace.name)
     setColor(workspace.color)
     setDefaultAssigneeId(workspace.defaultAssigneeId)
+    setSaveError(undefined)
     setView('form')
   }
 
@@ -78,10 +82,17 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
     })
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!name.trim()) return
     if (editing) {
-      updateWorkspace(editing.id, { name: name.trim(), defaultAssigneeId })
+      setSaving(true)
+      setSaveError(undefined)
+      const result = await updateWorkspace(editing.id, { name: name.trim(), color, defaultAssigneeId })
+      setSaving(false)
+      if (!result.ok) {
+        setSaveError(result.error)
+        return
+      }
       setView('list')
     } else {
       addWorkspace(name.trim(), color)
@@ -96,31 +107,30 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
         onClose={onClose}
         title={editing ? 'Editar workspace' : 'Novo workspace'}
         footer={
-          <Button fullWidth size="lg" onClick={handleSubmit} disabled={!name.trim()}>
-            {editing ? 'Salvar alterações' : 'Criar workspace'}
+          <Button fullWidth size="lg" onClick={handleSubmit} disabled={!name.trim() || saving}>
+            {saving ? 'Salvando...' : editing ? 'Salvar alterações' : 'Criar workspace'}
           </Button>
         }
       >
         <div className="flex flex-col gap-4">
           <Field label="Nome do workspace" placeholder="Ex: Projetos Pessoais" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          {!editing && (
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium text-text-muted">Cor</p>
-              <div className="flex gap-3">
-                {COLORS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setColor(c)}
-                    className="flex h-10 w-10 items-center justify-center rounded-full transition-transform active:scale-90"
-                    style={{ backgroundColor: c }}
-                    aria-label={c}
-                  >
-                    {color === c && <Check size={18} className="text-white" />}
-                  </button>
-                ))}
-              </div>
+          {saveError && <p className="text-sm text-danger">{saveError}</p>}
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium text-text-muted">Cor</p>
+            <div className="flex gap-3">
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full transition-transform active:scale-90"
+                  style={{ backgroundColor: c }}
+                  aria-label={c}
+                >
+                  {color === c && <Check size={18} className="text-white" />}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
           {editing && (
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium text-text-muted">Responsável padrão</p>

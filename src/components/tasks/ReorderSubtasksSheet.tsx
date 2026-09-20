@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, ListTodo } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn } from '@/lib/utils'
@@ -16,21 +16,28 @@ export function ReorderSubtasksSheet({ open, onClose, taskId }: ReorderSubtasksS
   const subtasks = useDataStore((s) => s.tasks.find((t) => t.id === taskId)?.subtasks)
   const reorderSubtasks = useDataStore((s) => s.reorderSubtasks)
   const [draft, setDraft] = useState<Subtask[]>([])
+  const [highlightedId, setHighlightedId] = useState<string>()
+  const highlightTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   // Não inclui `subtasks` nas deps: reiniciaria o rascunho a cada movimento
   // do usuário dentro da sheet (mesma ideia de ReorderTasksSheet).
   useEffect(() => {
     if (open) setDraft(subtasks ?? [])
+    return () => clearTimeout(highlightTimer.current)
   }, [open, taskId])
 
   function move(index: number, direction: -1 | 1) {
     const targetIndex = index + direction
     if (targetIndex < 0 || targetIndex >= draft.length) return
+    const movedId = draft[index]!.id
     setDraft((prev) => {
       const next = [...prev]
       ;[next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!]
       return next
     })
+    setHighlightedId(movedId)
+    clearTimeout(highlightTimer.current)
+    highlightTimer.current = setTimeout(() => setHighlightedId(undefined), 650)
   }
 
   function handleSave() {
@@ -52,7 +59,13 @@ export function ReorderSubtasksSheet({ open, onClose, taskId }: ReorderSubtasksS
     >
       <div className="flex flex-col gap-2">
         {draft.map((subtask, index) => (
-          <div key={subtask.id} className="flex items-center gap-3 rounded-xl bg-surface p-3">
+          <div
+            key={subtask.id}
+            className={cn(
+              'flex items-center gap-3 rounded-xl p-3 transition-colors duration-300',
+              highlightedId === subtask.id ? 'bg-accent-soft' : 'bg-surface',
+            )}
+          >
             <div className="flex flex-col">
               <button
                 onClick={() => move(index, -1)}

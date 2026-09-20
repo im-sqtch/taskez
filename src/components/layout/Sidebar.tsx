@@ -13,10 +13,9 @@ import {
   User,
   type LucideIcon,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
-import { WorkspaceDropdown } from '@/components/workspace/WorkspaceDropdown'
 import { WorkspaceSwitcherSheet } from '@/components/workspace/WorkspaceSwitcherSheet'
 import { useAuthStore } from '@/store/authStore'
 import { usePendingInvites } from '@/store/contactsStore'
@@ -89,9 +88,7 @@ export function Sidebar() {
   const pendingInvites = usePendingInvites(user?.id)
   const unreadCount = notifications.filter((n) => !n.read).length + pendingInvites.length
 
-  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const [workspaceSheetOpen, setWorkspaceSheetOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
 
   // Navegar pra qualquer outro item da sidebar fecha o painel de notificações
   // encaixado — ele só fica aberto "por cima" enquanto o usuário não troca de
@@ -113,9 +110,9 @@ export function Sidebar() {
         'py-4',
       )}
     >
-      <div ref={menuRef} className={cn('relative w-full', collapsed ? 'flex justify-center' : '')}>
+      <div className={cn('relative w-full', collapsed ? 'flex justify-center' : '')}>
         <button
-          onClick={() => setWorkspaceMenuOpen((v) => !v)}
+          onClick={() => setWorkspaceSheetOpen(true)}
           className={cn(
             'flex items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-surface-alt',
             collapsed ? 'justify-center' : 'w-full text-left',
@@ -129,12 +126,6 @@ export function Sidebar() {
             </div>
           )}
         </button>
-        {workspaceMenuOpen && !collapsed && (
-          <WorkspaceDropdown
-            onClose={() => setWorkspaceMenuOpen(false)}
-            onManageWorkspaces={() => setWorkspaceSheetOpen(true)}
-          />
-        )}
       </div>
 
       <WorkspaceSwitcherSheet open={workspaceSheetOpen} onClose={() => setWorkspaceSheetOpen(false)} />

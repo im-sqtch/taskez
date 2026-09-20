@@ -1,7 +1,6 @@
 import { Bell } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
-import { WorkspaceDropdown } from '@/components/workspace/WorkspaceDropdown'
 import { WorkspaceSwitcherSheet } from '@/components/workspace/WorkspaceSwitcherSheet'
 import { useAuthStore } from '@/store/authStore'
 import { usePendingInvites } from '@/store/contactsStore'
@@ -16,33 +15,15 @@ export function DashboardHeader() {
   const pendingInvites = usePendingInvites(user?.id)
   const openNotifications = useUiStore((s) => s.openNotifications)
 
-  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const [workspaceSheetOpen, setWorkspaceSheetOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
 
   const unreadCount = notifications.filter((n) => !n.read).length + pendingInvites.length
   const firstName = user?.name.split(' ')[0] ?? ''
 
-  useEffect(() => {
-    if (!workspaceMenuOpen) return
-    function handlePointerDown(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setWorkspaceMenuOpen(false)
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setWorkspaceMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [workspaceMenuOpen])
-
   return (
     <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)] pb-2">
-      <div ref={menuRef} className="relative">
-        <button onClick={() => setWorkspaceMenuOpen((v) => !v)} className="flex items-center gap-3">
+      <div>
+        <button onClick={() => setWorkspaceSheetOpen(true)} className="flex items-center gap-3">
           {user && <Avatar name={user.name} color={user.avatarColor} size="md" />}
           <div className="text-left">
             <p className="text-xs text-text-muted">
@@ -51,12 +32,6 @@ export function DashboardHeader() {
             <p className="font-bold leading-tight text-text">{currentWorkspace?.name}</p>
           </div>
         </button>
-        {workspaceMenuOpen && (
-          <WorkspaceDropdown
-            onClose={() => setWorkspaceMenuOpen(false)}
-            onManageWorkspaces={() => setWorkspaceSheetOpen(true)}
-          />
-        )}
       </div>
 
       <WorkspaceSwitcherSheet open={workspaceSheetOpen} onClose={() => setWorkspaceSheetOpen(false)} />
