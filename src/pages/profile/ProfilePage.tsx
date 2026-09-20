@@ -226,6 +226,17 @@ export function ProfilePage() {
         <ChevronRight size={18} className="text-text-faint" />
       </button>
 
+      <button
+        onClick={() => navigate('/trash')}
+        className="mx-5 flex items-center justify-between rounded-xl bg-surface p-4 text-left lg:hidden"
+      >
+        <span className="flex items-center gap-3 font-semibold text-text">
+          <Trash2 size={17} className="text-text-muted" />
+          Lixeira
+        </span>
+        <ChevronRight size={18} className="text-text-faint" />
+      </button>
+
       <WorkspaceSwitcherSheet open={workspaceSheetOpen} onClose={() => setWorkspaceSheetOpen(false)} />
       <AddTeamMemberSheet open={addMemberOpen} onClose={() => setAddMemberOpen(false)} />
       <AddContactSheet open={addContactOpen} onClose={() => setAddContactOpen(false)} />
