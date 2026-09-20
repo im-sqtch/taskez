@@ -31,6 +31,7 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
   const [slideDirection, setSlideDirection] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [reorderOpen, setReorderOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
   const navigate = useNavigate()
 
   const filtered = useMemo(() => {
@@ -43,15 +44,22 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
     return reordered
   }, [projects, filter, selectedId])
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)')
+    const updateViewport = () => setIsDesktop(mediaQuery.matches)
+    mediaQuery.addEventListener('change', updateViewport)
+    return () => mediaQuery.removeEventListener('change', updateViewport)
+  }, [])
+
   // No desktop, escolher um projeto reordena a lista (ele vai pro topo).
   // Rola a tela pro topo junto, pra o usuário acompanhar o item que "subiu"
   // em vez de a mudança acontecer fora da área visível.
   useEffect(() => {
     if (!selectedId) return
-    if (!window.matchMedia('(min-width: 1024px)').matches) return
+    if (!isDesktop) return
     if (window.scrollY === 0) return
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [selectedId])
+  }, [selectedId, isDesktop])
 
   function progressFor(projectId: string) {
     const projectTasks = tasks.filter((t) => t.projectId === projectId)
@@ -139,8 +147,8 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
               return (
                 <motion.button
                   key={p.id}
-                  layout
-                  layoutId={p.id}
+                  layout={isDesktop}
+                  layoutId={isDesktop ? p.id : undefined}
                   transition={{ type: 'spring', stiffness: 500, damping: 40, mass: 0.8 }}
                   initial={{ opacity: 0, y: -12 }}
                   animate={{ opacity: 1, y: 0 }}
