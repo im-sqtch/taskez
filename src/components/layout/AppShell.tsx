@@ -26,10 +26,20 @@ const tabSlideVariants = {
   }),
 }
 
-function tabIndexForPath(pathname: string) {
-  if (pathname.startsWith('/projects') || pathname.startsWith('/files')) return 1
+function tabIndexForPath(pathname: string, isMobile: boolean) {
+  if (isMobile) {
+    if (pathname.startsWith('/projects') || pathname.startsWith('/files')) return 1
+    if (pathname.startsWith('/tasks')) return 2
+    if (pathname.startsWith('/profile') || pathname.startsWith('/settings') || pathname.startsWith('/trash')) return 3
+    return 0
+  }
+
+  if (pathname.startsWith('/projects')) return 1
   if (pathname.startsWith('/tasks')) return 2
-  if (pathname.startsWith('/profile') || pathname.startsWith('/settings') || pathname.startsWith('/trash')) return 3
+  if (pathname.startsWith('/files')) return 3
+  if (pathname.startsWith('/profile')) return 4
+  if (pathname.startsWith('/settings')) return 5
+  if (pathname.startsWith('/trash')) return 6
   return 0
 }
 
@@ -37,9 +47,9 @@ export function AppShell() {
   const checkDueRecurrences = useDataStore((s) => s.checkDueRecurrences)
   const desktopNotificationsOpen = useUiStore((s) => s.desktopNotificationsOpen)
   const location = useLocation()
-  const currentTabIndex = tabIndexForPath(location.pathname)
-  const [tabTransition, setTabTransition] = useState({ index: currentTabIndex, direction: 1 })
   const [isMobile, setIsMobile] = useState(() => !window.matchMedia('(min-width: 1024px)').matches)
+  const currentTabIndex = tabIndexForPath(location.pathname, isMobile)
+  const [tabTransition, setTabTransition] = useState({ index: currentTabIndex, direction: 1 })
   const slide = { direction: tabTransition.direction, isMobile }
 
   if (tabTransition.index !== currentTabIndex) {
