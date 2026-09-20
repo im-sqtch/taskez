@@ -51,7 +51,7 @@ export function ProjectChat({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       {messages.length === 0 ? (
         <EmptyState icon={<MessageCircle size={22} />} title="Nenhuma mensagem ainda" description="Converse com a equipe deste projeto." />
       ) : (
@@ -60,9 +60,9 @@ export function ProjectChat({ projectId }: { projectId: string }) {
             const own = isOwnMessage(m.authorId)
             const author = authorFor(m.authorId)
             return (
-              <div key={m.id} className={cn('flex items-end gap-2', own && 'flex-row-reverse')}>
+              <div key={m.id} className={cn('flex min-w-0 items-end gap-2', own && 'flex-row-reverse')}>
                 <Avatar name={author.name} color={author.avatarColor} size="xs" />
-                <div className={cn('flex max-w-[75%] flex-col gap-0.5', own && 'items-end')}>
+                <div className={cn('flex min-w-0 max-w-[75%] flex-col gap-0.5', own && 'items-end')}>
                   {!own && <span className="px-1 text-[11px] font-medium text-text-faint">{author.name.split(' ')[0]}</span>}
                   <div
                     className={cn(

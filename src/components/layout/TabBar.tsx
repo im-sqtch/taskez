@@ -19,7 +19,7 @@ function TabLink({ to, label, icon: Icon }: (typeof tabs)[number]) {
       to={to}
       className={({ isActive }) =>
         cn(
-          'flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors',
+          'flex min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors',
           isActive ? 'text-accent' : 'text-text-faint',
         )
       }
@@ -27,7 +27,7 @@ function TabLink({ to, label, icon: Icon }: (typeof tabs)[number]) {
       {({ isActive }) => (
         <>
           <Icon size={22} fill={isActive ? 'currentColor' : 'none'} strokeWidth={isActive ? 0 : 2} />
-          <span>{label}</span>
+          <span className="max-w-full truncate">{label}</span>
         </>
       )}
     </NavLink>
@@ -38,7 +38,7 @@ export function TabBar() {
   const openQuickCreate = useUiStore((s) => s.openQuickCreate)
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto flex w-full max-w-md items-center border-t border-border-soft bg-base-alt/90 px-2 pb-[calc(env(safe-area-inset-bottom)+4px)] pt-1 backdrop-blur-lg">
+    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto flex w-full max-w-md items-center overflow-x-clip border-t border-border-soft bg-base-alt/90 px-2 pb-[calc(env(safe-area-inset-bottom)+4px)] pt-1 backdrop-blur-lg">
       {tabs.map((tab) => (
         <TabLink key={tab.to} {...tab} />
       ))}

@@ -140,7 +140,7 @@ export function ProjectDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex w-full min-w-0 flex-col gap-5 overflow-x-clip">
       <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
         <button onClick={() => navigate('/projects')} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
           <ArrowLeft size={19} />
@@ -165,13 +165,13 @@ export function ProjectDetailPage() {
       </header>
 
       <div className="flex flex-col gap-3 px-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: project.color }}>
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: project.color }}>
             <Calendar size={20} />
           </div>
-          <div>
-            <h1 className="flex items-center gap-1.5 text-xl font-bold text-text">
-              {project.name}
+          <div className="min-w-0 flex-1">
+            <h1 className="flex min-w-0 items-center gap-1.5 break-words text-xl font-bold text-text">
+              <span className="min-w-0 break-words">{project.name}</span>
               {project.recurrence && <Repeat size={15} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
             </h1>
             {project.dueDate && <p className="text-sm text-text-faint">Prazo: {formatDate(project.dueDate)}</p>}
@@ -186,18 +186,18 @@ export function ProjectDetailPage() {
         </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b border-border-soft px-5">
+      <div className="grid w-full min-w-0 grid-cols-5 border-b border-border-soft px-2 sm:px-5">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={cn(
-              'shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors',
+              'min-w-0 border-b-2 px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs',
               tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-faint',
             )}
           >
-            <span className="relative inline-flex items-center gap-1.5">
-              {t.label}
+            <span className="relative inline-flex max-w-full items-center gap-1">
+              <span className="truncate">{t.label}</span>
               {t.key === 'chat' && hasUnreadChat && tab !== 'chat' && (
                 <span className="h-2 w-2 rounded-full bg-danger" aria-label="Nova mensagem" />
               )}
@@ -206,7 +206,7 @@ export function ProjectDetailPage() {
         ))}
       </div>
 
-      <div className="px-5">
+      <div className="min-w-0 px-5">
         {tab === 'overview' && (
           <div className="flex flex-col gap-3">
             {allTasksDone && (
@@ -216,7 +216,7 @@ export function ProjectDetailPage() {
                   <p className="text-sm font-semibold text-text">Todas as tarefas do projeto foram concluídas</p>
                 </div>
                 <p className="mb-3 text-sm text-text-muted">Deseja marcar esse projeto como concluído ou mantê-lo em ativos?</p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant={project.completionAck ? 'secondary' : 'primary'}
                     size="sm"
@@ -315,9 +315,9 @@ export function ProjectDetailPage() {
                 {members.map((m) => (
                   <div key={m.id} className="flex items-center gap-3 rounded-xl bg-surface p-3">
                     <Avatar name={m.name} color={m.avatarColor} size="sm" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-text">{m.name}</p>
-                      <p className="text-xs text-text-faint">{m.role}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-text">{m.name}</p>
+                      <p className="truncate text-xs text-text-faint">{m.role}</p>
                     </div>
                     <button
                       onClick={() => handleRemoveMember(m.id)}

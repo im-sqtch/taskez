@@ -87,9 +87,9 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       <input ref={inputRef} type="file" onChange={handleFileChange} className="hidden" />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="secondary"
           size="sm"

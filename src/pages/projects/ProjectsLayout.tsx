@@ -13,7 +13,7 @@ export function ProjectsLayout() {
   const hasDetail = Boolean(selectedId)
 
   return (
-    <div className="lg:flex lg:items-start lg:gap-8">
+    <div className="w-full min-w-0 overflow-x-clip lg:flex lg:items-start lg:gap-8">
       <div className={cn('lg:w-[380px] lg:shrink-0 lg:border-r lg:border-border-soft lg:pr-8', hasDetail && 'hidden lg:block')}>
         <ProjectsPage selectedId={selectedId} />
       </div>

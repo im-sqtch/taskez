@@ -65,10 +65,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   overscroll-behavior-y: none;
+  overflow-x: clip;
 }
 
 #root {
   min-height: 100svh;
+  min-width: 0;
+  width: 100%;
+  overflow-x: clip;
   display: flex;
   flex-direction: column;
 }

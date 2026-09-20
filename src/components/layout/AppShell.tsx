@@ -31,7 +31,7 @@ export function AppShell() {
   }, [checkDueRecurrences])
 
   return (
-    <div className="flex w-full flex-1 bg-base">
+    <div className="flex w-full min-w-0 flex-1 overflow-x-clip bg-base">
       <div className="hidden lg:flex">
         <Sidebar />
       </div>
@@ -60,8 +60,8 @@ export function AppShell() {
         )}
       </AnimatePresence>
 
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col lg:max-w-none">
-        <div className="flex-1 pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
+      <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col overflow-x-clip lg:max-w-none">
+        <div className="min-w-0 flex-1 pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
           <Outlet />
         </div>
         <div className="lg:hidden">

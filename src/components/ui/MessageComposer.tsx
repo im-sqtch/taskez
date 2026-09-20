@@ -51,7 +51,7 @@ export function MessageComposer({ value, onChange, onSubmit, placeholder, sendLa
   }
 
   return (
-    <div className="flex items-end gap-2">
+    <div className="flex min-w-0 items-end gap-2">
       <textarea
         ref={ref}
         rows={1}
@@ -65,7 +65,7 @@ export function MessageComposer({ value, onChange, onSubmit, placeholder, sendLa
         enterKeyHint={touchKeyboard ? 'enter' : 'send'}
         placeholder={placeholder}
         className={cn(
-          'min-h-11 flex-1 resize-none overflow-y-auto rounded-xl border border-border bg-surface px-3.5 py-[10px]',
+          'min-h-11 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-border bg-surface px-3.5 py-[10px]',
           'text-sm leading-[22px] text-text placeholder:text-text-faint outline-none focus:border-accent',
         )}
       />
