@@ -117,6 +117,7 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
         <AnimatePresence initial={false} custom={slideDirection} mode="wait">
           <motion.div
             key={filter}
+            inherit={false}
             custom={slideDirection}
             variants={slideVariants}
             initial="enter"
