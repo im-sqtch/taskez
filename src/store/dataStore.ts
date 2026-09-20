@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { v4 as uuid } from 'uuid'
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { fireAndForget, setFireAndForgetErrorHandler, supabase } from '@/lib/supabase'
+import { getDashboardViewport, useDashboardViewport, type DashboardViewport } from '@/lib/dashboardViewport'
 import { useAuthStore } from '@/store/authStore'
 import { WIDGET_CATALOG, WIDGET_TYPES } from '@/lib/widgetCatalog'
 import { NOTIFICATION_EVENTS, type NotificationEvent } from '@/lib/notificationCatalog'
@@ -126,6 +127,7 @@ interface TaskRow {
 interface DashboardLayoutRow {
   user_id: string
   workspace_id: string
+  viewport: DashboardViewport
   widgets: DashboardWidget[]
   updated_at: string
 }
@@ -616,11 +618,16 @@ function normalizeLayout(layout: DashboardLayout): DashboardLayout {
   return { widgets: [...fixedSizes, ...appended] }
 }
 
-function persistLayout(userId: string, workspaceId: string, layout: DashboardLayout) {
+type WorkspaceLayouts = Partial<Record<DashboardViewport, DashboardLayout>>
+
+function persistLayout(userId: string, workspaceId: string, viewport: DashboardViewport, layout: DashboardLayout) {
   fireAndForget(
     supabase
       .from('dashboard_layouts')
-      .upsert({ user_id: userId, workspace_id: workspaceId, widgets: layout.widgets, updated_at: now() }, { onConflict: 'user_id,workspace_id' }),
+      .upsert(
+        { user_id: userId, workspace_id: workspaceId, viewport, widgets: layout.widgets, updated_at: now() },
+        { onConflict: 'user_id,workspace_id,viewport' },
+      ),
   )
 }
 
@@ -638,9 +645,9 @@ interface DataState {
   notifications: Notification[]
   chatMessages: ChatMessage[]
   files: ProjectFile[]
-  // Layout do painel modular por workspace — cada workspace tem sua própria
-  // configuração de widgets, sincronizada via Supabase (tabela `dashboard_layouts`).
-  layouts: Record<string, DashboardLayout>
+  // Layout do painel modular por workspace e viewport — mobile e desktop têm
+  // organizações independentes, sincronizadas via Supabase.
+  layouts: Record<string, WorkspaceLayouts>
   // Itens apagados (deleted_at preenchido) da workspace atual — carregados sob
   // demanda por `fetchTrash()` (não faz parte da carga normal do workspace),
   // ficam disponíveis por 30 dias até a purga automática. Ver Etapa 2 da
@@ -857,9 +864,16 @@ function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_layouts' }, (payload) => {
       const p = payload as RealtimePostgresChangesPayload<DashboardLayoutRow>
       if (p.eventType === 'DELETE') {
-        const oldWorkspaceId = (p.old as { workspace_id?: string }).workspace_id
-        if (!oldWorkspaceId) return
+        const oldRow = p.old as { workspace_id?: string; viewport?: DashboardViewport }
+        const oldWorkspaceId = oldRow.workspace_id
+        const oldViewport = oldRow.viewport
+        if (!oldWorkspaceId || !oldViewport) return
         useDataStore.setState((state) => {
+          const workspaceLayouts = { ...state.layouts[oldWorkspaceId] }
+          delete workspaceLayouts[oldViewport]
+          if (Object.keys(workspaceLayouts).length > 0) {
+            return { layouts: { ...state.layouts, [oldWorkspaceId]: workspaceLayouts } }
+          }
           const { [oldWorkspaceId]: _removed, ...rest } = state.layouts
           return { layouts: rest }
         })
@@ -867,7 +881,12 @@ function setupRealtime() {
       }
       const row = p.new as DashboardLayoutRow
       const layout = normalizeLayout({ widgets: row.widgets })
-      useDataStore.setState((state) => ({ layouts: { ...state.layouts, [row.workspace_id]: layout } }))
+      useDataStore.setState((state) => ({
+        layouts: {
+          ...state.layouts,
+          [row.workspace_id]: { ...state.layouts[row.workspace_id], [row.viewport]: layout },
+        },
+      }))
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (payload) => {
       const p = payload as RealtimePostgresChangesPayload<NotificationRow>
@@ -961,6 +980,14 @@ export const useDataStore = create<DataState>()(
             supabase.from('dashboard_layouts').select('*').eq('user_id', userId).in('workspace_id', workspaceIds),
           ])
           const allNotifications = (notificationRows ?? []).map((r) => mapNotification(r as NotificationRow))
+          const syncedLayouts = (layoutRows ?? []).reduce<Record<string, WorkspaceLayouts>>((result, value) => {
+            const row = value as DashboardLayoutRow
+            result[row.workspace_id] = {
+              ...result[row.workspace_id],
+              [row.viewport]: normalizeLayout({ widgets: row.widgets }),
+            }
+            return result
+          }, {})
           const staleNotificationIds = allNotifications.filter(isNotificationStale).map((n) => n.id)
           if (staleNotificationIds.length > 0) {
             fireAndForget(supabase.from('notifications').delete().in('id', staleNotificationIds))
@@ -982,9 +1009,9 @@ export const useDataStore = create<DataState>()(
             layouts: {
               ...state.layouts,
               ...Object.fromEntries(
-                (layoutRows ?? []).map((r) => [
-                  (r as DashboardLayoutRow).workspace_id,
-                  normalizeLayout({ widgets: (r as DashboardLayoutRow).widgets }),
+                Object.entries(syncedLayouts).map(([workspaceId, layouts]) => [
+                  workspaceId,
+                  { ...state.layouts[workspaceId], ...layouts },
                 ]),
               ),
             },
@@ -1112,13 +1139,18 @@ export const useDataStore = create<DataState>()(
         set((state) => ({
           profileSizeMigrated: true,
           layouts: Object.fromEntries(
-            Object.entries(state.layouts).map(([workspaceId, layout]) => [
+            Object.entries(state.layouts).map(([workspaceId, layouts]) => [
               workspaceId,
-              {
-                widgets: layout.widgets.map((w) =>
-                  w.type === 'profile' && w.size === 'M' ? { ...w, size: 'S' as const } : w,
-                ),
-              },
+              Object.fromEntries(
+                Object.entries(layouts).map(([viewport, layout]) => [
+                  viewport,
+                  {
+                    widgets: layout.widgets.map((w) =>
+                      w.type === 'profile' && w.size === 'M' ? { ...w, size: 'S' as const } : w,
+                    ),
+                  },
+                ]),
+              ),
             ]),
           ),
         }))
@@ -2035,38 +2067,63 @@ export const useDataStore = create<DataState>()(
 
       setLayout: (layout) => {
         const workspaceId = get().currentWorkspaceId
-        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        const viewport = getDashboardViewport()
+        set((state) => ({
+          layouts: {
+            ...state.layouts,
+            [workspaceId]: { ...state.layouts[workspaceId], [viewport]: layout },
+          },
+        }))
         const userId = useAuthStore.getState().currentUserId
-        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+        if (userId && workspaceId) persistLayout(userId, workspaceId, viewport, layout)
       },
       resetLayout: () => {
         const workspaceId = get().currentWorkspaceId
+        const viewport = getDashboardViewport()
         const layout = defaultLayout()
-        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        set((state) => ({
+          layouts: {
+            ...state.layouts,
+            [workspaceId]: { ...state.layouts[workspaceId], [viewport]: layout },
+          },
+        }))
         const userId = useAuthStore.getState().currentUserId
-        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+        if (userId && workspaceId) persistLayout(userId, workspaceId, viewport, layout)
       },
       toggleWidgetVisible: (widgetId) => {
         const workspaceId = get().currentWorkspaceId
-        const current = get().layouts[workspaceId] ?? defaultLayout()
+        const viewport = getDashboardViewport()
+        const current = get().layouts[workspaceId]?.[viewport] ?? defaultLayout()
         const layout = {
           widgets: current.widgets.map((w) => (w.id === widgetId ? { ...w, visible: !w.visible } : w)),
         }
-        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        set((state) => ({
+          layouts: {
+            ...state.layouts,
+            [workspaceId]: { ...state.layouts[workspaceId], [viewport]: layout },
+          },
+        }))
         const userId = useAuthStore.getState().currentUserId
-        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+        if (userId && workspaceId) persistLayout(userId, workspaceId, viewport, layout)
       },
       resizeWidget: (widgetId, size) => {
         const workspaceId = get().currentWorkspaceId
-        const current = get().layouts[workspaceId] ?? defaultLayout()
+        const viewport = getDashboardViewport()
+        const current = get().layouts[workspaceId]?.[viewport] ?? defaultLayout()
         const layout = { widgets: current.widgets.map((w) => (w.id === widgetId ? { ...w, size } : w)) }
-        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        set((state) => ({
+          layouts: {
+            ...state.layouts,
+            [workspaceId]: { ...state.layouts[workspaceId], [viewport]: layout },
+          },
+        }))
         const userId = useAuthStore.getState().currentUserId
-        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+        if (userId && workspaceId) persistLayout(userId, workspaceId, viewport, layout)
       },
       reorderWidgets: (orderedIds) => {
         const workspaceId = get().currentWorkspaceId
-        const current = get().layouts[workspaceId] ?? defaultLayout()
+        const viewport = getDashboardViewport()
+        const current = get().layouts[workspaceId]?.[viewport] ?? defaultLayout()
         const layout = {
           widgets: orderedIds
             .map((id, index) => {
@@ -2075,9 +2132,14 @@ export const useDataStore = create<DataState>()(
             })
             .filter((w): w is NonNullable<typeof w> => Boolean(w)),
         }
-        set((state) => ({ layouts: { ...state.layouts, [workspaceId]: layout } }))
+        set((state) => ({
+          layouts: {
+            ...state.layouts,
+            [workspaceId]: { ...state.layouts[workspaceId], [viewport]: layout },
+          },
+        }))
         const userId = useAuthStore.getState().currentUserId
-        if (userId && workspaceId) persistLayout(userId, workspaceId, layout)
+        if (userId && workspaceId) persistLayout(userId, workspaceId, viewport, layout)
       },
     }),
     {
@@ -2095,7 +2157,20 @@ export const useDataStore = create<DataState>()(
       onRehydrateStorage: () => (state) => {
         if (!state) return
         state.layouts = Object.fromEntries(
-          Object.entries(state.layouts).map(([workspaceId, layout]) => [workspaceId, normalizeLayout(layout)]),
+          Object.entries(state.layouts).map(([workspaceId, storedLayouts]) => {
+            // Converte o formato antigo (um layout por workspace) para os dois
+            // viewports, preservando a organização existente em ambos.
+            if ('widgets' in storedLayouts) {
+              const layout = normalizeLayout(storedLayouts as unknown as DashboardLayout)
+              return [workspaceId, { mobile: layout, desktop: layout }]
+            }
+            return [
+              workspaceId,
+              Object.fromEntries(
+                Object.entries(storedLayouts).map(([viewport, layout]) => [viewport, normalizeLayout(layout)]),
+              ),
+            ]
+          }),
         )
       },
     },
@@ -2165,7 +2240,8 @@ const FALLBACK_LAYOUT = defaultLayout()
 export function useWorkspaceLayout(): DashboardLayout {
   const layouts = useDataStore((s) => s.layouts)
   const currentWorkspaceId = useDataStore((s) => s.currentWorkspaceId)
-  return layouts[currentWorkspaceId] ?? FALLBACK_LAYOUT
+  const viewport = useDashboardViewport()
+  return layouts[currentWorkspaceId]?.[viewport] ?? FALLBACK_LAYOUT
 }
 
 // Notificações relevantes pra workspace ativa: as que pertencem a ela, mais as
