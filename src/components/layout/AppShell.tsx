@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 import { NotificationsPanel } from '@/components/layout/NotificationsPanel'
 import { QuickCreateSheet } from '@/components/layout/QuickCreateSheet'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -10,9 +10,40 @@ import { SearchOverlay } from '@/components/layout/SearchOverlay'
 import { useDataStore } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
 
+const mobileTabSlideVariants = {
+  enter: (direction: number) => ({ opacity: 0, x: direction > 0 ? 48 : -48 }),
+  center: { opacity: 1, x: 0 },
+  exit: (direction: number) => ({ opacity: 0, x: direction > 0 ? -48 : 48 }),
+}
+
+function tabIndexForPath(pathname: string) {
+  if (pathname.startsWith('/projects') || pathname.startsWith('/files')) return 1
+  if (pathname.startsWith('/tasks')) return 2
+  if (pathname.startsWith('/profile') || pathname.startsWith('/settings') || pathname.startsWith('/trash')) return 3
+  return 0
+}
+
 export function AppShell() {
   const checkDueRecurrences = useDataStore((s) => s.checkDueRecurrences)
   const desktopNotificationsOpen = useUiStore((s) => s.desktopNotificationsOpen)
+  const location = useLocation()
+  const currentTabIndex = tabIndexForPath(location.pathname)
+  const [tabTransition, setTabTransition] = useState({ index: currentTabIndex, direction: 1 })
+  const [isMobile, setIsMobile] = useState(() => !window.matchMedia('(min-width: 1024px)').matches)
+
+  if (tabTransition.index !== currentTabIndex) {
+    setTabTransition({
+      index: currentTabIndex,
+      direction: currentTabIndex > tabTransition.index ? 1 : -1,
+    })
+  }
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)')
+    const updateViewport = () => setIsMobile(!mediaQuery.matches)
+    mediaQuery.addEventListener('change', updateViewport)
+    return () => mediaQuery.removeEventListener('change', updateViewport)
+  }, [])
 
   // Fica montado durante toda a sessão (trocar de aba só troca a rota dentro
   // do Outlet), então é o lugar certo para reavaliar recorrências quando o
@@ -62,7 +93,19 @@ export function AppShell() {
 
       <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col overflow-x-clip lg:max-w-none">
         <div className="min-w-0 flex-1 pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
-          <Outlet />
+          <AnimatePresence initial={false} custom={tabTransition.direction} mode="wait">
+            <motion.div
+              key={isMobile ? currentTabIndex : 'desktop'}
+              custom={tabTransition.direction}
+              variants={mobileTabSlideVariants}
+              initial={isMobile ? 'enter' : false}
+              animate="center"
+              exit={isMobile ? 'exit' : undefined}
+              transition={{ duration: isMobile ? 0.22 : 0, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </div>
         <div className="lg:hidden">
           <TabBar />
