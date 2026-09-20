@@ -150,7 +150,11 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
                   layout={isDesktop}
                   layoutId={isDesktop ? p.id : undefined}
                   transition={{ type: 'spring', stiffness: 500, damping: 40, mass: 0.8 }}
-                  initial={{ opacity: 0, y: -12 }}
+                  // No desktop, o AppShell já anima a página inteira no eixo Y.
+                  // Um segundo deslocamento vertical no card competia com essa
+                  // direção ao entrar em Projetos. No mobile ele continua útil
+                  // para inclusões na lista, onde a navegação principal é lateral.
+                  initial={isDesktop ? false : { opacity: 0, y: -12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   onClick={() => navigate(`/projects/${p.id}`)}
