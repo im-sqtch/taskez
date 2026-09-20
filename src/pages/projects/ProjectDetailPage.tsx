@@ -14,6 +14,7 @@ import {
   UserX,
   Users,
 } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { InviteMemberSheet } from '@/components/projects/InviteMemberSheet'
@@ -46,6 +47,14 @@ const tabs = [
 
 type TabKey = (typeof tabs)[number]['key']
 
+const tabOrder = tabs.map((tab) => tab.key)
+
+const slideVariants = {
+  enter: (direction: number) => ({ opacity: 0, x: direction > 0 ? 48 : -48 }),
+  center: { opacity: 1, x: 0 },
+  exit: (direction: number) => ({ opacity: 0, x: direction > 0 ? -48 : 48 }),
+}
+
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -71,6 +80,7 @@ export function ProjectDetailPage() {
   const isWorkspaceOwner = useDataStore((s) => (project ? s.workspaceRoles[project.workspaceId] === 'owner' : false))
 
   const [tab, setTab] = useState<TabKey>('tasks')
+  const [slideDirection, setSlideDirection] = useState(1)
   const [editOpen, setEditOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -139,6 +149,12 @@ export function ProjectDetailPage() {
     updateProject(project.id, { memberIds: project.memberIds.filter((id) => id !== memberId) })
   }
 
+  function selectTab(nextTab: TabKey) {
+    if (nextTab === tab) return
+    setSlideDirection(tabOrder.indexOf(nextTab) > tabOrder.indexOf(tab) ? 1 : -1)
+    setTab(nextTab)
+  }
+
   return (
     <div className="flex w-full min-w-0 flex-col gap-5 overflow-x-clip">
       <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
@@ -190,7 +206,7 @@ export function ProjectDetailPage() {
         {tabs.map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => selectTab(t.key)}
             className={cn(
               'min-w-0 border-b-2 px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs',
               tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-faint',
@@ -206,7 +222,17 @@ export function ProjectDetailPage() {
         ))}
       </div>
 
-      <div className="min-w-0 px-5">
+      <div className="min-w-0 overflow-hidden px-5">
+        <AnimatePresence initial={false} custom={slideDirection} mode="wait">
+          <motion.div
+            key={tab}
+            custom={slideDirection}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          >
         {tab === 'overview' && (
           <div className="flex flex-col gap-3">
             {allTasksDone && (
@@ -336,6 +362,8 @@ export function ProjectDetailPage() {
         {tab === 'files' && <ProjectFiles projectId={project.id} />}
 
         {tab === 'chat' && <ProjectChat projectId={project.id} />}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       <ProjectFormSheet open={editOpen} onClose={() => setEditOpen(false)} project={project} />
