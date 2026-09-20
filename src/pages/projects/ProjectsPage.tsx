@@ -16,10 +16,19 @@ const filters: { value: ProjectStatus; label: string }[] = [
   { value: 'archived', label: 'Arquivados' },
 ]
 
+const filterOrder = filters.map((filter) => filter.value)
+
+const slideVariants = {
+  enter: (direction: number) => ({ opacity: 0, x: direction > 0 ? 48 : -48 }),
+  center: { opacity: 1, x: 0 },
+  exit: (direction: number) => ({ opacity: 0, x: direction > 0 ? -48 : 48 }),
+}
+
 export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
   const projects = useWorkspaceProjects()
   const tasks = useWorkspaceTasks()
   const [filter, setFilter] = useState<ProjectStatus>('active')
+  const [slideDirection, setSlideDirection] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [reorderOpen, setReorderOpen] = useState(false)
   const navigate = useNavigate()
@@ -52,6 +61,12 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
       total: projectTasks.length,
       todo: projectTasks.filter((t) => t.status === 'todo').length,
     }
+  }
+
+  function selectFilter(nextFilter: ProjectStatus) {
+    if (nextFilter === filter) return
+    setSlideDirection(filterOrder.indexOf(nextFilter) > filterOrder.indexOf(filter) ? 1 : -1)
+    setFilter(nextFilter)
   }
 
   return (
@@ -87,7 +102,7 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
         {filters.map((f) => (
           <button
             key={f.value}
-            onClick={() => setFilter(f.value)}
+            onClick={() => selectFilter(f.value)}
             className={cn(
               'rounded-full px-4 py-2 text-sm font-semibold transition-colors',
               filter === f.value ? 'bg-accent text-white' : 'bg-surface text-text-muted',
@@ -98,7 +113,18 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
         ))}
       </div>
 
-      <div className="flex flex-col gap-3 px-5">
+      <div className="overflow-hidden px-5">
+        <AnimatePresence initial={false} custom={slideDirection} mode="wait">
+          <motion.div
+            key={filter}
+            custom={slideDirection}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="flex flex-col gap-3"
+          >
         {filtered.length === 0 ? (
           <EmptyState
             icon={<FolderKanban size={24} />}
@@ -150,6 +176,8 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
             })}
           </AnimatePresence>
         )}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       <ProjectFormSheet open={formOpen} onClose={() => setFormOpen(false)} onCreated={(id) => navigate(`/projects/${id}`)} />
