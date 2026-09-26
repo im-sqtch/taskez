@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { v4 as uuid } from 'uuid'
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { fireAndForget, setFireAndForgetErrorHandler, supabase } from '@/lib/supabase'
+import { publishTaskComment, subscribeTaskComments } from '@/lib/taskCommentChannel'
 import { getDashboardViewport, useDashboardViewport, type DashboardViewport } from '@/lib/dashboardViewport'
 import { useAuthStore } from '@/store/authStore'
 import { WIDGET_CATALOG, WIDGET_TYPES } from '@/lib/widgetCatalog'
@@ -2003,6 +2004,7 @@ export const useDataStore = create<DataState>()(
               : state.notifications,
           }
         })
+        publishTaskComment({ userId, taskId, comment: { id: commentId, authorId, text, createdAt } })
         fireAndForget(
           supabase.rpc('task_add_comment', {
             p_task_id: taskId,
@@ -2184,6 +2186,19 @@ export const useDataStore = create<DataState>()(
 // `fireAndForget` agora loga todo erro real (ver lib/supabase.ts) e chama
 // este handler para também avisar visualmente, sem precisar tornar cada uma
 // das ~50 chamadas async só para checar `{ error }` individualmente.
+// A RPC de comentários atualiza um JSON dentro de `tasks`. O Realtime continua
+// responsável por outros dispositivos, enquanto este canal deixa a atualização
+// imediata entre abas do mesmo navegador, como já ocorre visualmente no chat.
+subscribeTaskComments(({ userId, taskId, comment }) => {
+  if (useAuthStore.getState().currentUserId !== userId) return
+  useDataStore.setState((state) => ({
+    tasks: state.tasks.map((task) => {
+      if (task.id !== taskId || task.comments.some((item) => item.id === comment.id)) return task
+      return { ...task, comments: [...task.comments, comment], updatedAt: comment.createdAt }
+    }),
+  }))
+})
+
 setFireAndForgetErrorHandler(() => {
   if (!useAuthStore.getState().currentUserId) return
   useDataStore
