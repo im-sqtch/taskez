@@ -20,7 +20,7 @@ const tabSlideVariants = {
   }),
   center: { x: 0 },
   exit: ({ direction }: TabSlide) => ({
-    x: direction > 0 ? '-28%' : '28%',
+    x: direction > 0 ? '-100%' : '100%',
     position: 'absolute' as const,
     inset: 0,
     width: '100%',
