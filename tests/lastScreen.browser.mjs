@@ -50,6 +50,15 @@ try {
     const headingsDuringSlide = await page.locator('h1').allTextContents()
     assert.ok(headingsDuringSlide.includes('Arquivos'))
     assert.ok(headingsDuringSlide.includes('Tarefas'))
+    const slideOffset = await page.locator('[data-screen-panel]').last().evaluate((panel) => {
+      const matrix = new DOMMatrix(getComputedStyle(panel).transform)
+      return { x: Math.abs(matrix.m41), y: Math.abs(matrix.m42) }
+    })
+    if (viewport.width >= 1024) {
+      assert.ok(slideOffset.y > 1 && slideOffset.x < 1, `expected vertical desktop slide: ${JSON.stringify(slideOffset)}`)
+    } else {
+      assert.ok(slideOffset.x > 1 && slideOffset.y < 1, `expected horizontal mobile slide: ${JSON.stringify(slideOffset)}`)
+    }
     await page.getByRole('heading', { name: 'Arquivos', exact: true }).waitFor({ state: 'detached' })
 
     // A navigation during the session must still be allowed to open the dashboard.

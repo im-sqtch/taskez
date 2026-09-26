@@ -12,15 +12,17 @@ import { useUiStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { saveLastScreen } from '@/lib/lastScreen'
 
-type TabSlide = { direction: number }
+type TabSlide = { direction: number; isMobile: boolean }
 
 const tabSlideVariants = {
-  enter: ({ direction }: TabSlide) => ({
-    x: direction > 0 ? '100%' : '-100%',
+  enter: ({ direction, isMobile }: TabSlide) => ({
+    x: isMobile ? (direction > 0 ? '100%' : '-100%') : 0,
+    y: isMobile ? 0 : direction > 0 ? '100%' : '-100%',
   }),
-  center: { x: 0 },
-  exit: ({ direction }: TabSlide) => ({
-    x: direction > 0 ? '-100%' : '100%',
+  center: { x: 0, y: 0 },
+  exit: ({ direction, isMobile }: TabSlide) => ({
+    x: isMobile ? (direction > 0 ? '-100%' : '100%') : 0,
+    y: isMobile ? 0 : direction > 0 ? '-100%' : '100%',
     position: 'absolute' as const,
     inset: 0,
     width: '100%',
@@ -73,7 +75,7 @@ export function AppShell() {
   const [isMobile, setIsMobile] = useState(() => !window.matchMedia('(min-width: 1024px)').matches)
   const currentTabIndex = tabIndexForPath(location.pathname, isMobile)
   const [tabTransition, setTabTransition] = useState({ index: currentTabIndex, direction: 1 })
-  const slide = { direction: tabTransition.direction }
+  const slide = { direction: tabTransition.direction, isMobile }
 
   if (tabTransition.index !== currentTabIndex) {
     setTabTransition({
@@ -144,7 +146,7 @@ export function AppShell() {
       </AnimatePresence>
 
       <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col overflow-x-clip lg:max-w-none">
-        <div className="relative min-w-0 flex-1 overflow-x-clip pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
+        <div className="relative min-w-0 flex-1 overflow-clip pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
           <AnimatePresence initial={false} custom={slide} mode="sync">
             <motion.div
               key={currentTabIndex}
@@ -155,6 +157,7 @@ export function AppShell() {
               exit="exit"
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               className="w-full will-change-transform"
+              data-screen-panel
             >
               {outlet}
             </motion.div>
