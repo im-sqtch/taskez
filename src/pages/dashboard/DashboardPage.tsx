@@ -26,14 +26,12 @@ const widgetComponents: Record<WidgetType, React.ComponentType<{ size: WidgetSiz
 
 export function DashboardPage() {
   const layout = useWorkspaceLayout()
-  const seedIfEmpty = useDataStore((s) => s.seedIfEmpty)
   const migrateProfileSizeIfNeeded = useDataStore((s) => s.migrateProfileSizeIfNeeded)
   const [customizeOpen, setCustomizeOpen] = useState(false)
 
   useEffect(() => {
-    seedIfEmpty()
     migrateProfileSizeIfNeeded()
-  }, [seedIfEmpty, migrateProfileSizeIfNeeded])
+  }, [migrateProfileSizeIfNeeded])
 
   const visibleWidgets = [...layout.widgets].filter((w) => w.visible).sort((a, b) => a.order - b.order)
 

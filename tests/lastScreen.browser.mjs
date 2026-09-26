@@ -17,7 +17,11 @@ try {
         export const useAuthStore = (selector) => selector(state);
         useAuthStore.getState = () => state;`,
     }))
-    await context.route('**/*.supabase.co/**', (route) => route.abort())
+    await context.route('**/*.supabase.co/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '[]',
+    }))
     await context.addInitScript(() => {
       if (!localStorage.getItem('test-initialized')) {
         localStorage.setItem('taskez:last-screen:test-user', '/files')
@@ -36,6 +40,7 @@ try {
     await page.goto(`${base}/dashboard`)
     await page.waitForURL('**/files')
     await page.getByRole('heading', { name: 'Arquivos', exact: true }).waitFor()
+    if (viewport.width >= 1024) await page.getByText('Meu workspace', { exact: true }).waitFor()
     assert.ok(!(await page.evaluate(() => window.savedRoutes)).includes('/dashboard'))
 
     // A navigation during the session must still be allowed to open the dashboard.

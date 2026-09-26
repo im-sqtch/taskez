@@ -47,6 +47,9 @@ function tabIndexForPath(pathname: string, isMobile: boolean) {
 
 export function AppShell() {
   const checkDueRecurrences = useDataStore((s) => s.checkDueRecurrences)
+  const seedIfEmpty = useDataStore((s) => s.seedIfEmpty)
+  const loading = useDataStore((s) => s.loading)
+  const hasWorkspace = useDataStore((s) => s.workspaces.length > 0)
   const desktopNotificationsOpen = useUiStore((s) => s.desktopNotificationsOpen)
   const location = useLocation()
   const currentUserId = useAuthStore((s) => s.currentUserId)
@@ -56,6 +59,13 @@ export function AppShell() {
       saveLastScreen(currentUserId, location.pathname + location.search + location.hash)
     }
   }, [currentUserId, location.pathname, location.search, location.hash])
+
+  // Toda rota autenticada depende dos dados da workspace. Antes, essa carga
+  // acontecia apenas no DashboardPage; restaurar diretamente Projetos, Tarefas
+  // ou Arquivos deixava a sidebar sem nome e a página sem conteúdo.
+  useEffect(() => {
+    void seedIfEmpty()
+  }, [seedIfEmpty])
 
   const [isMobile, setIsMobile] = useState(() => !window.matchMedia('(min-width: 1024px)').matches)
   const currentTabIndex = tabIndexForPath(location.pathname, isMobile)
@@ -91,6 +101,14 @@ export function AppShell() {
       window.removeEventListener('focus', onVisibilityChange)
     }
   }, [checkDueRecurrences])
+
+  if (loading || !hasWorkspace) {
+    return (
+      <div className="flex min-h-svh w-full items-center justify-center bg-base" role="status" aria-label="Carregando workspace">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex w-full min-w-0 flex-1 overflow-x-clip bg-base">
