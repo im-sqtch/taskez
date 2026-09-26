@@ -11,16 +11,16 @@ export function ProjectUnreadBadge({ projectId }: { projectId: string }) {
   ))
 
   return (
-    <>
+    <span className="pointer-events-none absolute -right-1 -top-1 flex items-center gap-1">
       {hasUnread && (
         <span
-          className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-danger ring-2 ring-surface"
+          className="h-3 w-3 shrink-0 rounded-full bg-danger ring-2 ring-surface"
           role="img"
           aria-label="Novas mensagens no chat do projeto"
           title="Novas mensagens no chat do projeto"
         />
       )}
       <CommentUnreadBadge projectId={projectId} />
-    </>
+    </span>
   )
 }

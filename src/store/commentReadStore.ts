@@ -4,24 +4,47 @@ import type { Task } from '@/types'
 
 interface CommentReadState {
   lastReadAt: Record<string, string>
-  markCommentsRead: (userId: string, taskId: string, createdAt: string) => void
+  lastReadCommentId: Record<string, string>
+  markCommentsRead: (userId: string, taskId: string, comment: { id: string; createdAt: string }) => void
 }
 
 export const useCommentReadStore = create<CommentReadState>()(
   persist(
     (set) => ({
       lastReadAt: {},
-      markCommentsRead: (userId, taskId, createdAt) => set((state) => {
+      lastReadCommentId: {},
+      markCommentsRead: (userId, taskId, comment) => set((state) => {
         const key = `${userId}:${taskId}`
-        if (state.lastReadAt[key] >= createdAt) return state
-        return { lastReadAt: { ...state.lastReadAt, [key]: createdAt } }
+        if (state.lastReadCommentId[key] === comment.id) return state
+        return {
+          lastReadAt: { ...state.lastReadAt, [key]: comment.createdAt },
+          lastReadCommentId: { ...state.lastReadCommentId, [key]: comment.id },
+        }
       }),
     }),
     { name: 'taskez-comment-read' },
   ),
 )
 
-export function hasUnreadComments(task: Task, userId: string, lastReadAt: Record<string, string>) {
-  const readAt = lastReadAt[`${userId}:${task.id}`]
-  return task.comments.some((comment) => comment.authorId !== userId && (!readAt || comment.createdAt > readAt))
+export function hasUnreadComments(
+  task: Task,
+  userId: string,
+  readState: Pick<CommentReadState, 'lastReadAt' | 'lastReadCommentId'>,
+) {
+  if (task.comments.length === 0) return false
+  const key = `${userId}:${task.id}`
+  const readCommentId = readState.lastReadCommentId[key]
+  let readIndex = readCommentId ? task.comments.findIndex((comment) => comment.id === readCommentId) : -1
+
+  // Compatibilidade com o formato anterior: localiza na lista o comentário que
+  // correspondia ao horário salvo. Depois disso, comentários novos são detectados
+  // pela posição/ID, sem depender do relógio de outros dispositivos.
+  if (readIndex < 0) {
+    const readAt = readState.lastReadAt[key]
+    if (readAt) {
+      readIndex = task.comments.findLastIndex((comment) => comment.createdAt === readAt)
+    }
+  }
+
+  return readIndex < task.comments.length - 1
 }

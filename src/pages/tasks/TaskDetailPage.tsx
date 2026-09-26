@@ -49,20 +49,17 @@ export function TaskDetailPage() {
   const [commentInput, setCommentInput] = useState('')
   const userId = useAuthStore((s) => s.currentUserId)
   const markCommentsRead = useCommentReadStore((s) => s.markCommentsRead)
-  const latestCommentAt = task?.comments.reduce<string | undefined>(
-    (latest, comment) => !latest || comment.createdAt > latest ? comment.createdAt : latest,
-    undefined,
-  )
+  const latestComment = task?.comments.at(-1)
 
   useEffect(() => {
-    if (!userId || !id || !latestCommentAt) return
+    if (!userId || !id || !latestComment) return
     const markVisibleCommentsRead = () => {
-      if (document.visibilityState === 'visible') markCommentsRead(userId, id, latestCommentAt)
+      if (document.visibilityState === 'visible') markCommentsRead(userId, id, latestComment)
     }
     markVisibleCommentsRead()
     document.addEventListener('visibilitychange', markVisibleCommentsRead)
     return () => document.removeEventListener('visibilitychange', markVisibleCommentsRead)
-  }, [userId, id, latestCommentAt, markCommentsRead])
+  }, [userId, id, latestComment, markCommentsRead])
 
   if (!task) {
     return (
