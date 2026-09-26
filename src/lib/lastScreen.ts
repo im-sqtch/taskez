@@ -19,6 +19,16 @@ export function getLastScreen(userId: string | null): string {
   }
 }
 
+export function getStartupScreen(userId: string | null, entryPath: string): string {
+  // Instalações antigas e favoritos ainda abrem /dashboard. A restauração
+  // precisa acontecer antes de montar essa tela e gravá-la como última visita.
+  if (userId && (entryPath === '/' || /^\/dashboard\/?$/.test(entryPath))) {
+    return getLastScreen(userId)
+  }
+  // Links para tarefas, projetos e notificações têm prioridade na abertura.
+  return entryPath
+}
+
 export function saveLastScreen(userId: string, path: string): void {
   if (!isAppScreen(path)) return
   try {

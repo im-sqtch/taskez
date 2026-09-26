@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { InviteMemberSheet } from '@/components/projects/InviteMemberSheet'
 import { ProjectChat } from '@/components/projects/ProjectChat'
 import { ProjectFiles } from '@/components/projects/ProjectFiles'
@@ -79,7 +79,9 @@ export function ProjectDetailPage() {
   // visivelmente no banco.
   const isWorkspaceOwner = useDataStore((s) => (project ? s.workspaceRoles[project.workspaceId] === 'owner' : false))
 
-  const [tab, setTab] = useState<TabKey>('tasks')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const tab: TabKey = tabs.find((item) => item.key === requestedTab)?.key ?? 'tasks'
   const [slideDirection, setSlideDirection] = useState(1)
   const [editOpen, setEditOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
@@ -158,7 +160,11 @@ export function ProjectDetailPage() {
   function selectTab(nextTab: TabKey) {
     if (nextTab === tab) return
     setSlideDirection(tabOrder.indexOf(nextTab) > tabOrder.indexOf(tab) ? 1 : -1)
-    setTab(nextTab)
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      next.set('tab', nextTab)
+      return next
+    }, { replace: true })
   }
 
   return (

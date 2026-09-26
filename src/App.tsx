@@ -19,6 +19,7 @@ import { TrashPage } from '@/pages/trash/TrashPage'
 import { useAuthStore } from '@/store/authStore'
 import { useThemeStore } from '@/store/themeStore'
 import { getLastScreen } from '@/lib/lastScreen'
+import { RestoreLastScreen } from '@/components/layout/RestoreLastScreen'
 
 function RootRedirect() {
   const hasSeenOnboarding = useAuthStore((s) => s.hasSeenOnboarding)
@@ -69,6 +70,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <RestoreLastScreen>
       <ConfirmDialog />
       <Routes>
         <Route path="/" element={<RootRedirect />} />
@@ -122,6 +124,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </RestoreLastScreen>
     </BrowserRouter>
   )
 }
