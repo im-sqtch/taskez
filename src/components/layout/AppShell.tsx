@@ -23,6 +23,9 @@ const tabSlideVariants = {
   exit: ({ direction, isMobile }: TabSlide) => ({
     x: isMobile ? (direction > 0 ? '-100%' : '100%') : 0,
     y: isMobile ? 0 : direction > 0 ? '-100%' : '100%',
+    transition: isMobile
+      ? { duration: 0.22, ease: [0.22, 1, 0.36, 1] as const }
+      : { duration: 0.18, ease: [0.22, 1, 0.36, 1] as const },
     position: 'absolute' as const,
     inset: 0,
     width: '100%',
