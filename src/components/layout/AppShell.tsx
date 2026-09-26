@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { useLocation, useOutlet } from 'react-router-dom'
 import { NotificationsPanel } from '@/components/layout/NotificationsPanel'
 import { QuickCreateSheet } from '@/components/layout/QuickCreateSheet'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -12,19 +12,18 @@ import { useUiStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { saveLastScreen } from '@/lib/lastScreen'
 
-type TabSlide = { direction: number; isMobile: boolean }
+type TabSlide = { direction: number }
 
 const tabSlideVariants = {
-  enter: ({ direction, isMobile }: TabSlide) => ({
-    opacity: 0,
-    x: isMobile ? (direction > 0 ? 48 : -48) : 0,
-    y: isMobile ? 0 : direction > 0 ? 48 : -48,
+  enter: ({ direction }: TabSlide) => ({
+    x: direction > 0 ? '100%' : '-100%',
   }),
-  center: { opacity: 1, x: 0, y: 0 },
-  exit: ({ direction, isMobile }: TabSlide) => ({
-    opacity: 0,
-    x: isMobile ? (direction > 0 ? -48 : 48) : 0,
-    y: isMobile ? 0 : direction > 0 ? -48 : 48,
+  center: { x: 0 },
+  exit: ({ direction }: TabSlide) => ({
+    x: direction > 0 ? '-28%' : '28%',
+    position: 'absolute' as const,
+    inset: 0,
+    width: '100%',
   }),
 }
 
@@ -52,6 +51,10 @@ export function AppShell() {
   const hasWorkspace = useDataStore((s) => s.workspaces.length > 0)
   const desktopNotificationsOpen = useUiStore((s) => s.desktopNotificationsOpen)
   const location = useLocation()
+  // `useOutlet()` devolve o elemento da rota deste render. Guardado como filho
+  // do painel com key, ele não troca pelo conteúdo novo enquanto o painel antigo
+  // está saindo (o antigo <Outlet /> causava o flash antes do slide).
+  const outlet = useOutlet()
   const currentUserId = useAuthStore((s) => s.currentUserId)
 
   useEffect(() => {
@@ -70,7 +73,7 @@ export function AppShell() {
   const [isMobile, setIsMobile] = useState(() => !window.matchMedia('(min-width: 1024px)').matches)
   const currentTabIndex = tabIndexForPath(location.pathname, isMobile)
   const [tabTransition, setTabTransition] = useState({ index: currentTabIndex, direction: 1 })
-  const slide = { direction: tabTransition.direction, isMobile }
+  const slide = { direction: tabTransition.direction }
 
   if (tabTransition.index !== currentTabIndex) {
     setTabTransition({
@@ -141,8 +144,8 @@ export function AppShell() {
       </AnimatePresence>
 
       <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col overflow-x-clip lg:max-w-none">
-        <div className="min-w-0 flex-1 pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
-          <AnimatePresence initial={false} custom={slide} mode="wait">
+        <div className="relative min-w-0 flex-1 overflow-x-clip pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
+          <AnimatePresence initial={false} custom={slide} mode="sync">
             <motion.div
               key={currentTabIndex}
               custom={slide}
@@ -151,8 +154,9 @@ export function AppShell() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full will-change-transform"
             >
-              <Outlet />
+              {outlet}
             </motion.div>
           </AnimatePresence>
         </div>

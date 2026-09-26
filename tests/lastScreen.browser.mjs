@@ -43,6 +43,15 @@ try {
     if (viewport.width >= 1024) await page.getByText('Meu workspace', { exact: true }).waitFor()
     assert.ok(!(await page.evaluate(() => window.savedRoutes)).includes('/dashboard'))
 
+    // During the slide, the exiting screen must retain its own content while
+    // the new screen enters. A live <Outlet /> used to turn both into Tarefas.
+    await page.getByRole('link', { name: 'Tarefas', exact: true }).click()
+    await page.getByRole('heading', { name: 'Tarefas', exact: true }).waitFor({ state: 'attached' })
+    const headingsDuringSlide = await page.locator('h1').allTextContents()
+    assert.ok(headingsDuringSlide.includes('Arquivos'))
+    assert.ok(headingsDuringSlide.includes('Tarefas'))
+    await page.getByRole('heading', { name: 'Arquivos', exact: true }).waitFor({ state: 'detached' })
+
     // A navigation during the session must still be allowed to open the dashboard.
     await page.getByRole('link', { name: 'Início', exact: true }).click()
     await page.waitForFunction(() => localStorage.getItem('taskez:last-screen:test-user') === '/dashboard')
