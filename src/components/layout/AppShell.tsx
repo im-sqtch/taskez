@@ -9,6 +9,8 @@ import { NotificationsSheet } from '@/components/layout/NotificationsSheet'
 import { SearchOverlay } from '@/components/layout/SearchOverlay'
 import { useDataStore } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
+import { saveLastScreen } from '@/lib/lastScreen'
 
 type TabSlide = { direction: number; isMobile: boolean }
 
@@ -47,6 +49,14 @@ export function AppShell() {
   const checkDueRecurrences = useDataStore((s) => s.checkDueRecurrences)
   const desktopNotificationsOpen = useUiStore((s) => s.desktopNotificationsOpen)
   const location = useLocation()
+  const currentUserId = useAuthStore((s) => s.currentUserId)
+
+  useEffect(() => {
+    if (currentUserId) {
+      saveLastScreen(currentUserId, location.pathname + location.search + location.hash)
+    }
+  }, [currentUserId, location.pathname, location.search, location.hash])
+
   const [isMobile, setIsMobile] = useState(() => !window.matchMedia('(min-width: 1024px)').matches)
   const currentTabIndex = tabIndexForPath(location.pathname, isMobile)
   const [tabTransition, setTabTransition] = useState({ index: currentTabIndex, direction: 1 })

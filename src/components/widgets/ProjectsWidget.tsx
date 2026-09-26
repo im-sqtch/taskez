@@ -1,6 +1,7 @@
 import { FolderKanban } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
+import { ProjectUnreadBadge } from '@/components/projects/ProjectUnreadBadge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { cn, formatDate } from '@/lib/utils'
@@ -60,8 +61,9 @@ export function ProjectsWidget({ size }: { size: WidgetSize }) {
                 className="flex flex-col gap-2.5 rounded-xl border border-border-soft bg-surface p-3.5 text-left"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white" style={{ backgroundColor: p.color }}>
+                  <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white" style={{ backgroundColor: p.color }}>
                     <FolderKanban size={16} />
+                    <ProjectUnreadBadge projectId={p.id} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold leading-tight text-text">{p.name}</p>
@@ -85,10 +87,11 @@ export function ProjectsWidget({ size }: { size: WidgetSize }) {
                 className="flex w-52 shrink-0 flex-col gap-3 rounded-xl border border-border-soft bg-surface p-4 text-left"
               >
                 <div
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
+                  className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white"
                   style={{ backgroundColor: p.color }}
                 >
                   <FolderKanban size={16} />
+                  <ProjectUnreadBadge projectId={p.id} />
                 </div>
                 <div>
                   <p className="font-semibold leading-tight text-text">{p.name}</p>

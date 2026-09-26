@@ -19,7 +19,7 @@ export function LoginPage() {
       setError(result.error)
       return
     }
-    navigate('/dashboard')
+    navigate('/', { replace: true })
   }
 
   return (

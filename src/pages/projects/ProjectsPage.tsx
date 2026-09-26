@@ -3,6 +3,7 @@ import { FolderKanban, Plus, Repeat, SlidersHorizontal, Upload } from 'lucide-re
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ProjectFormSheet } from '@/components/projects/ProjectFormSheet'
+import { ProjectUnreadBadge } from '@/components/projects/ProjectUnreadBadge'
 import { ReorderProjectsSheet } from '@/components/projects/ReorderProjectsSheet'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ProgressBar } from '@/components/ui/ProgressBar'
@@ -177,10 +178,11 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <div
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
+                        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
                         style={{ backgroundColor: p.color }}
                       >
                         <FolderKanban size={18} />
+                        <ProjectUnreadBadge projectId={p.id} />
                       </div>
                       <div>
                         <p className="flex items-center gap-1.5 font-semibold text-text">

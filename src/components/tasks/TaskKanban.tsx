@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { useDataStore } from '@/store/dataStore'
 import type { Task, TaskStatus } from '@/types'
 import { useNavigate } from 'react-router-dom'
+import { CommentUnreadBadge } from '@/components/tasks/CommentUnreadBadge'
 
 const columns: { key: TaskStatus; label: string; dotColor: string }[] = [
   { key: 'todo', label: 'A fazer', dotColor: 'bg-text-faint' },
@@ -31,7 +32,7 @@ function KanbanCard({ task }: { task: Task }) {
         isDragging && 'opacity-70 shadow-lg',
       )}
     >
-      <p className="text-sm font-medium text-text">{task.title}</p>
+      <p className="text-sm font-medium text-text">{task.title} <CommentUnreadBadge taskId={task.id} /></p>
       <div className="flex items-center justify-between">
         <PriorityBadge priority={task.priority} />
         {task.subtasks.length > 0 && (

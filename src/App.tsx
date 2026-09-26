@@ -18,6 +18,7 @@ import { TasksLayout } from '@/pages/tasks/TasksLayout'
 import { TrashPage } from '@/pages/trash/TrashPage'
 import { useAuthStore } from '@/store/authStore'
 import { useThemeStore } from '@/store/themeStore'
+import { getLastScreen } from '@/lib/lastScreen'
 
 function RootRedirect() {
   const hasSeenOnboarding = useAuthStore((s) => s.hasSeenOnboarding)
@@ -30,7 +31,7 @@ function RootRedirect() {
   // como prova disso, sem depender desse valor ter sobrevivido no dispositivo.
   if (!hasSeenOnboarding && !currentUserId) return <Navigate to="/onboarding" replace />
   if (!currentUserId) return <Navigate to="/login" replace />
-  return <Navigate to="/dashboard" replace />
+  return <Navigate to={getLastScreen(currentUserId)} replace />
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -45,7 +46,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 // para o dashboard no meio da própria transição pós-cadastro.
 function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
   const [wasAuthedOnMount] = useState(() => Boolean(useAuthStore.getState().currentUserId))
-  if (wasAuthedOnMount) return <Navigate to="/dashboard" replace />
+  if (wasAuthedOnMount) return <Navigate to="/" replace />
   return <>{children}</>
 }
 

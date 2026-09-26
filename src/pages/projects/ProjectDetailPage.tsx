@@ -94,9 +94,15 @@ export function ProjectDetailPage() {
   const hasUnreadChat = Boolean(latestChatMessageAt && (!lastChatReadAt || latestChatMessageAt > lastChatReadAt))
 
   useEffect(() => {
-    if (tab === 'chat' && currentUserId && id && latestChatMessageAt) {
-      markChatRead(currentUserId, id, latestChatMessageAt)
+    if (tab !== 'chat' || !currentUserId || !id || !latestChatMessageAt) return
+    const markVisibleChatRead = () => {
+      if (document.visibilityState === 'visible') {
+        markChatRead(currentUserId, id, latestChatMessageAt)
+      }
     }
+    markVisibleChatRead()
+    document.addEventListener('visibilitychange', markVisibleChatRead)
+    return () => document.removeEventListener('visibilitychange', markVisibleChatRead)
   }, [tab, currentUserId, id, latestChatMessageAt, markChatRead])
 
   if (!project) {

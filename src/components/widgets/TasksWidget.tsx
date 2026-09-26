@@ -1,4 +1,5 @@
 import { Circle, ListTodo } from 'lucide-react'
+import { CommentUnreadBadge } from '@/components/tasks/CommentUnreadBadge'
 import { useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -64,7 +65,7 @@ export function TasksWidget({ size }: { size: WidgetSize }) {
                   <Circle size={20} />
                 </button>
                 <button onClick={() => navigate(`/tasks/${t.id}`)} className="flex-1 text-left">
-                  <p className="text-sm font-medium leading-tight text-text">{t.title}</p>
+                  <p className="text-sm font-medium leading-tight text-text">{t.title} <CommentUnreadBadge taskId={t.id} /></p>
                 </button>
                 {t.dueDate && (
                   <span className={overdue ? 'text-xs font-semibold text-danger' : 'text-xs text-text-faint'}>

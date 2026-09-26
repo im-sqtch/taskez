@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, CheckCheck, Circle, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMatch, useNavigate, useParams } from 'react-router-dom'
 import { ReorderSubtasksSheet } from '@/components/tasks/ReorderSubtasksSheet'
 import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
@@ -17,6 +17,7 @@ import { cn, formatDate, isOverdue } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
+import { useCommentReadStore } from '@/store/commentReadStore'
 
 export function TaskDetailPage() {
   const params = useParams<{ id?: string; taskId?: string }>()
@@ -46,6 +47,22 @@ export function TaskDetailPage() {
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
   const [editingSubtaskValue, setEditingSubtaskValue] = useState('')
   const [commentInput, setCommentInput] = useState('')
+  const userId = useAuthStore((s) => s.currentUserId)
+  const markCommentsRead = useCommentReadStore((s) => s.markCommentsRead)
+  const latestCommentAt = task?.comments.reduce<string | undefined>(
+    (latest, comment) => !latest || comment.createdAt > latest ? comment.createdAt : latest,
+    undefined,
+  )
+
+  useEffect(() => {
+    if (!userId || !id || !latestCommentAt) return
+    const markVisibleCommentsRead = () => {
+      if (document.visibilityState === 'visible') markCommentsRead(userId, id, latestCommentAt)
+    }
+    markVisibleCommentsRead()
+    document.addEventListener('visibilitychange', markVisibleCommentsRead)
+    return () => document.removeEventListener('visibilitychange', markVisibleCommentsRead)
+  }, [userId, id, latestCommentAt, markCommentsRead])
 
   if (!task) {
     return (

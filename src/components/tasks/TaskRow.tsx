@@ -4,6 +4,7 @@ import { PriorityBadge } from '@/components/ui/Badge'
 import { cn, formatDate, isOverdue } from '@/lib/utils'
 import { useDataStore } from '@/store/dataStore'
 import type { Task } from '@/types'
+import { CommentUnreadBadge } from '@/components/tasks/CommentUnreadBadge'
 
 export function TaskRow({ task, active, to }: { task: Task; active?: boolean; to?: string }) {
   const toggleTaskStatus = useDataStore((s) => s.toggleTaskStatus)
@@ -37,6 +38,7 @@ export function TaskRow({ task, active, to }: { task: Task; active?: boolean; to
       <button onClick={() => navigate(to ?? `/tasks/${task.id}`)} className="flex flex-1 flex-col items-start gap-1 text-left min-w-0">
         <p className={cn('text-sm font-medium leading-tight text-text', task.status === 'done' && 'line-through text-text-faint')}>
           {task.title}
+          {' '}<CommentUnreadBadge taskId={task.id} />
         </p>
         <div className="flex items-center gap-2 flex-wrap">
           {project && (
