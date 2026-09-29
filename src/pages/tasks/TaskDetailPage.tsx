@@ -247,18 +247,25 @@ export function TaskDetailPage() {
           <p className="text-sm text-text-faint">Nenhum comentário ainda.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {task.comments.map((c) => (
-              <div key={c.id} className="flex gap-2.5">
-                {currentUser && <Avatar name={currentUser.name} color={currentUser.avatarColor} size="xs" />}
-                <div className="flex-1 rounded-xl bg-surface p-3">
-                  {/* Preserva as quebras de linha digitadas sem deixar palavra longa estourar o balão. */}
-                  <p className="whitespace-pre-wrap break-words text-sm text-text">
-                    <MentionText text={c.text} workspaceId={task.workspaceId} />
-                  </p>
-                  <p className="mt-1 text-[11px] text-text-faint">{formatDate(c.createdAt)}</p>
+            {task.comments.map((c) => {
+              const member = team.find((m) => m.workspaceId === task.workspaceId && (m.linkedUserId === c.authorId || m.id === c.authorId))
+              const author = c.authorId === currentUser?.id
+                ? currentUser
+                : member ?? { name: 'Autor desconhecido', avatarColor: '#62667A' }
+              return (
+                <div key={c.id} className="flex gap-2.5">
+                  <Avatar name={author.name} color={author.avatarColor} size="xs" />
+                  <div className="flex-1 rounded-xl bg-surface p-3">
+                    <p className="mb-1 text-xs font-semibold text-text-muted">{author.name}</p>
+                    {/* Preserva as quebras de linha digitadas sem deixar palavra longa estourar o balão. */}
+                    <p className="whitespace-pre-wrap break-words text-sm text-text">
+                      <MentionText text={c.text} workspaceId={task.workspaceId} />
+                    </p>
+                    <p className="mt-1 text-[11px] text-text-faint">{formatDate(c.createdAt)}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
         <MessageComposer
