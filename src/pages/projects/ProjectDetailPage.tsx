@@ -31,6 +31,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { LinksList } from '@/components/ui/LinksField'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { cn, formatDate } from '@/lib/utils'
+import { ownAuthorIds } from '@/lib/ownAuthorIds'
 import { confirmAction } from '@/store/confirmStore'
 import { useChatReadStore, useLastChatReadAt } from '@/store/chatReadStore'
 import { useDataStore } from '@/store/dataStore'
@@ -93,7 +94,12 @@ export function ProjectDetailPage() {
   const latestChatMessageAt = chatMessages
     .filter((message) => message.projectId === id)
     .reduce<string | undefined>((latest, message) => (!latest || message.createdAt > latest ? message.createdAt : latest), undefined)
-  const hasUnreadChat = Boolean(latestChatMessageAt && (!lastChatReadAt || latestChatMessageAt > lastChatReadAt))
+  const ownAuthors = currentUserId && project ? ownAuthorIds(currentUserId, project.workspaceId, allTeam) : undefined
+  const hasUnreadChat = Boolean(ownAuthors && chatMessages.some((message) =>
+    message.projectId === id
+    && (!lastChatReadAt || message.createdAt > lastChatReadAt)
+    && !ownAuthors.has(message.authorId ?? ''),
+  ))
 
   useEffect(() => {
     if (tab !== 'chat' || !currentUserId || !id || !latestChatMessageAt) return

@@ -1,6 +1,7 @@
 import { useAuthStore } from '@/store/authStore'
 import { hasUnreadComments, useCommentReadStore } from '@/store/commentReadStore'
 import { useDataStore } from '@/store/dataStore'
+import { ownAuthorIds } from '@/lib/ownAuthorIds'
 
 export function CommentUnreadBadge({ taskId, projectId }: { taskId?: string; projectId?: string }) {
   const userId = useAuthStore((s) => s.currentUserId)
@@ -8,7 +9,7 @@ export function CommentUnreadBadge({ taskId, projectId }: { taskId?: string; pro
   const lastReadCommentId = useCommentReadStore((s) => s.lastReadCommentId)
   const hasUnread = useDataStore((s) => Boolean(userId && s.tasks.some((task) =>
     (taskId ? task.id === taskId : Boolean(projectId && task.projectId === projectId))
-    && hasUnreadComments(task, userId, { lastReadAt, lastReadCommentId }),
+    && hasUnreadComments(task, userId, { lastReadAt, lastReadCommentId }, ownAuthorIds(userId, task.workspaceId, s.team)),
   )))
 
   if (!hasUnread) return null

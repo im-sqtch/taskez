@@ -30,6 +30,7 @@ export function hasUnreadComments(
   task: Task,
   userId: string,
   readState: Pick<CommentReadState, 'lastReadAt' | 'lastReadCommentId'>,
+  ownAuthors: ReadonlySet<string>,
 ) {
   if (task.comments.length === 0) return false
   const key = `${userId}:${task.id}`
@@ -46,5 +47,5 @@ export function hasUnreadComments(
     }
   }
 
-  return readIndex < task.comments.length - 1
+  return task.comments.some((comment, index) => index > readIndex && !ownAuthors.has(comment.authorId))
 }
