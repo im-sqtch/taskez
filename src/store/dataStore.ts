@@ -13,6 +13,7 @@ import { applyOffset, dueOccurrence, offsetDays } from '@/lib/recurrence'
 import { dateKey, keyToDate } from '@/lib/calendar'
 import type {
   ChatMessage,
+  MessageReaction,
   DashboardLayout,
   DashboardWidget,
   Notification,
@@ -188,6 +189,17 @@ interface ChatMessageRow {
   created_at: string
 }
 
+interface MessageReactionRow {
+  id: string
+  workspace_id: string
+  chat_message_id: string | null
+  task_id: string | null
+  comment_id: string | null
+  user_id: string
+  emoji: string
+  created_at: string
+}
+
 interface NotificationRow {
   id: string
   user_id: string
@@ -217,6 +229,19 @@ interface ProjectFileRow {
 
 function mapChatMessage(row: ChatMessageRow): ChatMessage {
   return { id: row.id, projectId: row.project_id, authorId: row.author_id, text: row.text, createdAt: row.created_at }
+}
+
+function mapMessageReaction(row: MessageReactionRow): MessageReaction {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    chatMessageId: row.chat_message_id ?? undefined,
+    taskId: row.task_id ?? undefined,
+    commentId: row.comment_id ?? undefined,
+    userId: row.user_id,
+    emoji: row.emoji,
+    createdAt: row.created_at,
+  }
 }
 
 function mapNotification(row: NotificationRow): Notification {
@@ -645,6 +670,7 @@ interface DataState {
   team: TeamMember[]
   notifications: Notification[]
   chatMessages: ChatMessage[]
+  reactions: MessageReaction[]
   files: ProjectFile[]
   // Layout do painel modular por workspace e viewport — mobile e desktop têm
   // organizações independentes, sincronizadas via Supabase.
@@ -699,6 +725,7 @@ interface DataState {
   deleteProject: (id: string) => void
   reorderProjects: (orderedIds: string[]) => void
   addChatMessage: (projectId: string, authorId: string, text: string) => void
+  toggleReaction: (target: { chatMessageId: string } | { taskId: string; commentId: string }, emoji: string) => void
   addFile: (data: Omit<ProjectFile, 'id' | 'createdAt'>) => void
   removeFile: (id: string) => void
   linkFileToProject: (fileId: string, projectId: string) => void
@@ -847,6 +874,37 @@ function setupRealtime() {
         return { chatMessages: exists ? state.chatMessages.map((m) => (m.id === message.id ? message : m)) : [...state.chatMessages, message] }
       })
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, (payload) => {
+      const p = payload as RealtimePostgresChangesPayload<MessageReactionRow>
+      if (p.eventType === 'DELETE') {
+        const oldId = (p.old as { id?: string }).id
+        if (!oldId) return
+        useDataStore.setState((state) => ({ reactions: state.reactions.filter((r) => r.id !== oldId) }))
+        return
+      }
+      const reaction = mapMessageReaction(p.new as MessageReactionRow)
+      useDataStore.setState((state) => {
+        const exists = state.reactions.some((r) =>
+          r.id === reaction.id
+          || (r.userId === reaction.userId
+            && (reaction.chatMessageId
+              ? r.chatMessageId === reaction.chatMessageId
+              : r.taskId === reaction.taskId && r.commentId === reaction.commentId)),
+        )
+        return {
+          reactions: exists
+            ? state.reactions.map((r) => (
+              r.id === reaction.id
+              || (r.userId === reaction.userId
+                && (reaction.chatMessageId
+                  ? r.chatMessageId === reaction.chatMessageId
+                  : r.taskId === reaction.taskId && r.commentId === reaction.commentId))
+                ? reaction : r
+            ))
+            : [...state.reactions, reaction],
+        }
+      })
+    })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'files' }, (payload) => {
       const p = payload as RealtimePostgresChangesPayload<ProjectFileRow>
       if (p.eventType === 'DELETE') {
@@ -923,6 +981,7 @@ export const useDataStore = create<DataState>()(
       team: [],
       notifications: [],
       chatMessages: [],
+      reactions: [],
       files: [],
       layouts: {},
       trash: { projects: [], tasks: [], files: [] },
@@ -963,6 +1022,7 @@ export const useDataStore = create<DataState>()(
             { data: projectRows },
             { data: taskRows },
             { data: chatRows },
+            { data: reactionRows },
             { data: fileRows },
             { data: notificationRows },
             { data: layoutRows },
@@ -974,6 +1034,7 @@ export const useDataStore = create<DataState>()(
             supabase.from('projects').select('*').in('workspace_id', workspaceIds).is('deleted_at', null),
             supabase.from('tasks').select('*').in('workspace_id', workspaceIds).is('deleted_at', null),
             supabase.from('chat_messages').select('*').in('workspace_id', workspaceIds),
+            supabase.from('message_reactions').select('*').in('workspace_id', workspaceIds),
             supabase.from('files').select('*').in('workspace_id', workspaceIds).is('deleted_at', null),
             // Sem filtro de workspace: RLS já restringe a `user_id = auth.uid()`,
             // e notificações de conta (contato aceito etc.) não têm workspace_id.
@@ -1002,6 +1063,7 @@ export const useDataStore = create<DataState>()(
             projects: (projectRows ?? []).map((r) => mapProject(r as ProjectRow)),
             tasks: (taskRows ?? []).map((r) => mapTask(r as TaskRow)),
             chatMessages: (chatRows ?? []).map((r) => mapChatMessage(r as ChatMessageRow)),
+            reactions: (reactionRows ?? []).map((r) => mapMessageReaction(r as MessageReactionRow)),
             files: (fileRows ?? []).map((r) => mapProjectFile(r as ProjectFileRow)),
             notifications: allNotifications.filter((n) => !isNotificationStale(n)),
             // Preserva rascunhos locais (persistidos no localStorage) de workspaces
@@ -1057,6 +1119,7 @@ export const useDataStore = create<DataState>()(
           projects: [],
           tasks: [],
           chatMessages: [],
+          reactions: [],
           files: [],
           notifications: freshNotifications,
         })
@@ -1104,6 +1167,7 @@ export const useDataStore = create<DataState>()(
           tasks: [],
           team: [],
           chatMessages: [],
+          reactions: [],
           files: [],
           notifications: [],
           // `layouts` nunca era limpo aqui — num dispositivo compartilhado, o
@@ -1501,26 +1565,11 @@ export const useDataStore = create<DataState>()(
         })
       },
       addChatMessage: (projectId, authorId, text) => {
-        const userId = useAuthStore.getState().currentUserId!
         const id = uuid()
         const createdAt = now()
         set((state) => {
-          const project = state.projects.find((p) => p.id === projectId)
-          // A mensagem pode ter várias linhas; o preview da notificação é sempre
-          // uma linha só, então quebras viram espaço antes do corte.
-          const flat = text.replace(/\s+/g, ' ').trim()
-          const preview = flat.length > 60 ? `${flat.slice(0, 57)}...` : flat
           return {
             chatMessages: [...state.chatMessages, { id, projectId, authorId, text, createdAt }],
-            notifications: project
-              ? appendNotification(
-                  state.notifications,
-                  makeNotification(userId, project.workspaceId, 'project.message', `Nova mensagem em ${project.name}`, preview, {
-                    type: 'project',
-                    id: project.id,
-                  }),
-                )
-              : state.notifications,
           }
         })
         const workspaceId = get().projects.find((p) => p.id === projectId)?.workspaceId
@@ -1529,6 +1578,44 @@ export const useDataStore = create<DataState>()(
             supabase.from('chat_messages').insert({ id, workspace_id: workspaceId, project_id: projectId, author_id: authorId, text, created_at: createdAt }),
           )
         }
+      },
+      toggleReaction: (target, emoji) => {
+        const userId = useAuthStore.getState().currentUserId
+        if (!userId) return
+        const chatMessageId = 'chatMessageId' in target ? target.chatMessageId : null
+        const taskId = 'taskId' in target ? target.taskId : null
+        const commentId = 'commentId' in target ? target.commentId : null
+        set((state) => {
+          const workspaceId = chatMessageId
+            ? state.projects.find((p) => p.id === state.chatMessages.find((m) => m.id === chatMessageId)?.projectId)?.workspaceId
+            : state.tasks.find((t) => t.id === taskId)?.workspaceId
+          if (!workspaceId) return state
+          const existing = state.reactions.find((r) =>
+            r.userId === userId
+            && (chatMessageId ? r.chatMessageId === chatMessageId : r.taskId === taskId && r.commentId === commentId),
+          )
+          if (existing?.emoji === emoji) {
+            return { reactions: state.reactions.filter((r) => r.id !== existing.id) }
+          }
+          if (existing) {
+            return { reactions: state.reactions.map((r) =>
+              r.id === existing.id ? { ...r, emoji, createdAt: now() } : r,
+            ) }
+          }
+          return {
+            reactions: [...state.reactions, {
+              id: uuid(), workspaceId, chatMessageId: chatMessageId ?? undefined,
+              taskId: taskId ?? undefined, commentId: commentId ?? undefined,
+              userId, emoji, createdAt: now(),
+            }],
+          }
+        })
+        fireAndForget(supabase.rpc('toggle_message_reaction', {
+          p_chat_message_id: chatMessageId,
+          p_task_id: taskId,
+          p_comment_id: commentId,
+          p_emoji: emoji,
+        }))
       },
       addFile: (data) => {
         const userId = useAuthStore.getState().currentUserId!
@@ -1988,20 +2075,10 @@ export const useDataStore = create<DataState>()(
         const commentId = uuid()
         const createdAt = now()
         set((state) => {
-          const task = state.tasks.find((t) => t.id === taskId)
           return {
             tasks: state.tasks.map((t) =>
               t.id !== taskId ? t : { ...t, comments: [...t.comments, { id: commentId, authorId, text, createdAt }], updatedAt: now() },
             ),
-            notifications: task
-              ? appendNotification(
-                  state.notifications,
-                  makeNotification(userId, task.workspaceId, 'task.comment', 'Novo comentário', `Comentário em "${task.title}".`, {
-                    type: 'task',
-                    id: task.id,
-                  }),
-                )
-              : state.notifications,
           }
         })
         publishTaskComment({ userId, taskId, comment: { id: commentId, authorId, text, createdAt } })

@@ -4,6 +4,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { MentionText } from '@/components/ui/MentionText'
 import { MessageComposer } from '@/components/ui/MessageComposer'
+import { ReactionControl } from '@/components/ui/ReactionControl'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { useDataStore, useWorkspaceTeam } from '@/store/dataStore'
@@ -14,6 +15,9 @@ function formatTime(iso: string) {
 
 export function ProjectChat({ projectId }: { projectId: string }) {
   const allMessages = useDataStore((s) => s.chatMessages)
+  const reactions = useDataStore((s) => s.reactions)
+  const toggleReaction = useDataStore((s) => s.toggleReaction)
+  const currentUserId = useAuthStore((s) => s.currentUserId)
   const workspaceId = useDataStore((s) => s.projects.find((p) => p.id === projectId)?.workspaceId)
   const team = useWorkspaceTeam()
   const addChatMessage = useDataStore((s) => s.addChatMessage)
@@ -64,16 +68,23 @@ export function ProjectChat({ projectId }: { projectId: string }) {
                 <Avatar name={author.name} color={author.avatarColor} size="xs" />
                 <div className={cn('flex min-w-0 max-w-[75%] flex-col gap-0.5', own && 'items-end')}>
                   {!own && <span className="px-1 text-[11px] font-medium text-text-faint">{author.name.split(' ')[0]}</span>}
-                  <div
-                    className={cn(
-                      // whitespace-pre-wrap preserva as quebras de linha digitadas;
-                      // break-words evita que uma palavra/URL longa estoure o balão.
-                      'whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-sm',
-                      own ? 'rounded-br-sm bg-accent text-white' : 'rounded-bl-sm bg-surface text-text',
-                    )}
+                  <ReactionControl
+                    reactions={reactions.filter((reaction) => reaction.chatMessageId === m.id)}
+                    currentUserId={currentUserId}
+                    onReact={(emoji) => toggleReaction({ chatMessageId: m.id }, emoji)}
+                    align={own ? 'right' : 'left'}
                   >
-                    <MentionText text={m.text} workspaceId={workspaceId} variant={own ? 'onAccent' : 'default'} />
-                  </div>
+                    <div
+                      className={cn(
+                        // whitespace-pre-wrap preserva as quebras de linha digitadas;
+                        // break-words evita que uma palavra/URL longa estoure o balão.
+                        'whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-sm',
+                        own ? 'rounded-br-sm bg-accent text-white' : 'rounded-bl-sm bg-surface text-text',
+                      )}
+                    >
+                      <MentionText text={m.text} workspaceId={workspaceId} variant={own ? 'onAccent' : 'default'} />
+                    </div>
+                  </ReactionControl>
                   <span className="px-1 text-[10px] text-text-faint">{formatTime(m.createdAt)}</span>
                 </div>
               </div>

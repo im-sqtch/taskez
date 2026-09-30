@@ -53,9 +53,11 @@ export function NotificationsBody({ onNavigate }: NotificationsBodyProps) {
       onNavigate?.()
       if (n.entityId && tasks.some((t) => t.id === n.entityId)) navigate(`/tasks/${n.entityId}`)
       else navigate('/notifications/unavailable', { state: { title: n.title } })
-    } else if (n.entityType === 'project') {
+    } else if (n.entityType === 'project' || n.entityType === 'project_chat') {
       onNavigate?.()
-      if (n.entityId && projects.some((p) => p.id === n.entityId)) navigate(`/projects/${n.entityId}`)
+      if (n.entityId && projects.some((p) => p.id === n.entityId)) {
+        navigate(`/projects/${n.entityId}${n.entityType === 'project_chat' ? '?tab=chat' : ''}`)
+      }
       else navigate('/notifications/unavailable', { state: { title: n.title } })
     }
   }

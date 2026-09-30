@@ -64,7 +64,7 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
   const { entityType, entityId } = notification.data || {}
-  const path = entityType === 'task' ? `/tasks/${entityId}` : entityType === 'project' ? `/projects/${entityId}` : '/dashboard'
+  const path = entityType === 'task' ? `/tasks/${entityId}` : entityType === 'project_chat' ? `/projects/${entityId}?tab=chat` : entityType === 'project' ? `/projects/${entityId}` : '/dashboard'
   const targetUrl = new URL(path, self.location.origin).href
 
   event.waitUntil(

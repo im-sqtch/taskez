@@ -13,6 +13,7 @@ import { LinksList } from '@/components/ui/LinksField'
 import { MentionText } from '@/components/ui/MentionText'
 import { MentionTextArea } from '@/components/ui/MentionTextArea'
 import { MessageComposer } from '@/components/ui/MessageComposer'
+import { ReactionControl } from '@/components/ui/ReactionControl'
 import { cn, formatDate, isOverdue } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { confirmAction } from '@/store/confirmStore'
@@ -39,6 +40,8 @@ export function TaskDetailPage() {
   const toggleSubtask = useDataStore((s) => s.toggleSubtask)
   const removeSubtask = useDataStore((s) => s.removeSubtask)
   const addComment = useDataStore((s) => s.addComment)
+  const reactions = useDataStore((s) => s.reactions)
+  const toggleReaction = useDataStore((s) => s.toggleReaction)
   const currentUser = useAuthStore((s) => s.currentUser())
 
   const [editOpen, setEditOpen] = useState(false)
@@ -255,14 +258,21 @@ export function TaskDetailPage() {
               return (
                 <div key={c.id} className="flex gap-2.5">
                   <Avatar name={author.name} color={author.avatarColor} size="xs" />
-                  <div className="flex-1 rounded-xl bg-surface p-3">
-                    <p className="mb-1 text-xs font-semibold text-text-muted">{author.name}</p>
-                    {/* Preserva as quebras de linha digitadas sem deixar palavra longa estourar o balão. */}
-                    <p className="whitespace-pre-wrap break-words text-sm text-text">
-                      <MentionText text={c.text} workspaceId={task.workspaceId} />
-                    </p>
-                    <p className="mt-1 text-[11px] text-text-faint">{formatDate(c.createdAt)}</p>
-                  </div>
+                  <ReactionControl
+                    reactions={reactions.filter((reaction) => reaction.taskId === task.id && reaction.commentId === c.id)}
+                    currentUserId={userId}
+                    onReact={(emoji) => toggleReaction({ taskId: task.id, commentId: c.id }, emoji)}
+                    fill
+                  >
+                    <div className="rounded-xl bg-surface p-3">
+                      <p className="mb-1 text-xs font-semibold text-text-muted">{author.name}</p>
+                      {/* Preserva as quebras de linha digitadas sem deixar palavra longa estourar o balão. */}
+                      <p className="whitespace-pre-wrap break-words text-sm text-text">
+                        <MentionText text={c.text} workspaceId={task.workspaceId} />
+                      </p>
+                      <p className="mt-1 text-[11px] text-text-faint">{formatDate(c.createdAt)}</p>
+                    </div>
+                  </ReactionControl>
                 </div>
               )
             })}

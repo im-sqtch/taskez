@@ -136,6 +136,17 @@ export interface ChatMessage {
   createdAt: string
 }
 
+export interface MessageReaction {
+  id: string
+  workspaceId: string
+  chatMessageId?: string
+  taskId?: string
+  commentId?: string
+  userId: string
+  emoji: string
+  createdAt: string
+}
+
 export interface ProjectFile {
   id: string
   workspaceId: string
@@ -167,7 +178,7 @@ export interface Notification {
   // usados para levar o usuário até a página correspondente ao clicar. Ausentes
   // para eventos sem destino próprio (ex.: novo membro na equipe) ou cuja entidade
   // foi excluída (ex.: projeto excluído).
-  entityType?: 'task' | 'project'
+  entityType?: 'task' | 'project' | 'project_chat'
   entityId?: string
 }
 
