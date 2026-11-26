@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { fireAndForget, supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { FOCUS_TRACKS, nextFocusTrack } from '@/lib/focusMusic'
@@ -15,6 +16,7 @@ export interface FocusTimerDefinition {
   userId: string
   name: string
   totalSeconds: number
+  createdAt?: string
 }
 
 interface TimerState {
@@ -34,6 +36,12 @@ interface TimerState {
 interface PomodoroState {
   definitions: FocusTimerDefinition[]
   timers: Record<string, TimerState>
+  // Versão da última escrita conhecida de cada timer (ver coluna `version` em
+  // focus_timers) — usada para ignorar ecos de escritas antigas.
+  versions: Record<string, number>
+  // Usuários cujos timers locais (da época em que viviam só no dispositivo)
+  // já foram enviados para a conta — a migração roda uma única vez.
+  migratedUsers: Record<string, boolean>
   musicEnabled: boolean
   musicSource: 'lofi' | 'youtube'
   youtubeUrls: Record<string, string>
@@ -217,11 +225,190 @@ async function showCompletedNotification(id: string) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Sincronização com a conta (tabela focus_timers)
+// ---------------------------------------------------------------------------
+// Os timers pertencem à conta: definição (nome/duração) e estado da contagem
+// ficam no Supabase, e o localStorage vira só um cache para abrir rápido e
+// funcionar offline. Cada escrita leva uma `version` crescente; ecos do
+// realtime (ou respostas de carga) com versão menor que a local são ignorados.
+
+interface FocusTimerRow {
+  id: string
+  user_id: string
+  name: string
+  total_seconds: number
+  seconds_left: number
+  running: boolean
+  end_at: string | null
+  scheduled_id: string | null
+  version: number
+  created_at: string
+}
+
+// Timers em andamento que foram iniciados em outro dispositivo (ver syncMusic).
+const remoteRuns = new Set<string>()
+// Inserções ainda não confirmadas — uma carga feita nesse meio-tempo não deve
+// descartá-las por não encontrá-las no banco.
+const pendingInserts = new Set<string>()
+// Fila por timer: garante que as escritas cheguem ao banco na ordem em que
+// aconteceram (ex.: criar e já iniciar não pode virar update antes do insert).
+const writeQueues = new Map<string, Promise<unknown>>()
+
+function enqueueWrite(id: string, run: () => PromiseLike<unknown>) {
+  const next = (writeQueues.get(id) ?? Promise.resolve()).then(run, run)
+  writeQueues.set(id, next)
+  fireAndForget(next)
+  const cleanup = () => { if (writeQueues.get(id) === next) writeQueues.delete(id) }
+  next.then(cleanup, cleanup)
+  return next
+}
+
+function syncTimer(id: string, mode: 'insert' | 'update' = 'update') {
+  const state = usePomodoroStore.getState()
+  const definition = state.definitions.find((timer) => timer.id === id)
+  if (!definition || definition.userId !== useAuthStore.getState().currentUserId) return
+  const timer = getTimer(state, id, definition.totalSeconds)
+  const version = (state.versions[id] ?? 0) + 1
+  usePomodoroStore.setState((current) => ({ versions: { ...current.versions, [id]: version } }))
+  const row = {
+    name: definition.name,
+    total_seconds: definition.totalSeconds,
+    seconds_left: Math.max(0, Math.min(timer.secondsLeft, definition.totalSeconds)),
+    running: timer.running && timer.endAt !== null,
+    end_at: timer.running && timer.endAt !== null ? new Date(timer.endAt).toISOString() : null,
+    scheduled_id: timer.scheduledId ?? null,
+    version,
+    updated_at: new Date().toISOString(),
+  }
+  if (mode === 'insert') {
+    pendingInserts.add(id)
+    const done = () => pendingInserts.delete(id)
+    enqueueWrite(id, () => supabase.from('focus_timers').insert({
+      id, user_id: definition.userId, created_at: definition.createdAt ?? new Date().toISOString(), ...row,
+    })).then(done, done)
+  } else {
+    enqueueWrite(id, () => supabase.from('focus_timers').update(row).eq('id', id))
+  }
+}
+
+function timerFromRow(row: FocusTimerRow): TimerState {
+  const endAt = row.end_at ? Date.parse(row.end_at) : null
+  if (row.running && endAt !== null) {
+    const secondsLeft = Math.max(0, Math.round((endAt - Date.now()) / 1000))
+    // Terminou enquanto este dispositivo não acompanhava: conclui em silêncio,
+    // sem o beep (o push agendado já avisou), como na reidratação.
+    if (secondsLeft <= 0) return { secondsLeft: 0, running: false, endAt: null, scheduledId: undefined }
+    return { secondsLeft, running: true, endAt, scheduledId: row.scheduled_id ?? undefined }
+  }
+  return { secondsLeft: Math.min(row.seconds_left, row.total_seconds), running: false, endAt: null, scheduledId: undefined }
+}
+
+function definitionFromRow(row: FocusTimerRow): FocusTimerDefinition {
+  return { id: row.id, userId: row.user_id, name: row.name, totalSeconds: row.total_seconds, createdAt: row.created_at }
+}
+
+// Aplica uma linha vinda do banco, se ela não for mais antiga que o estado local.
+function applyRemoteRow(row: FocusTimerRow) {
+  const state = usePomodoroStore.getState()
+  if (row.version < (state.versions[row.id] ?? -1)) return
+  const local = state.timers[row.id]
+  const timer = timerFromRow(row)
+  const definition = definitionFromRow(row)
+  if (timer.running && !(local?.running && local.endAt === timer.endAt)) remoteRuns.add(row.id)
+  if (!timer.running) remoteRuns.delete(row.id)
+  usePomodoroStore.setState((current) => {
+    const exists = current.definitions.some((item) => item.id === row.id)
+    return {
+      definitions: exists
+        ? current.definitions.map((item) => item.id === row.id ? definition : item)
+        : [...current.definitions, definition],
+      timers: { ...current.timers, [row.id]: { ...timer, runId: timer.running ? current.timers[row.id]?.runId : undefined } },
+      versions: { ...current.versions, [row.id]: row.version },
+    }
+  })
+  if (!timer.running) void closeRunningNotification(row.id)
+}
+
+function removeLocalTimer(id: string) {
+  remoteRuns.delete(id)
+  usePomodoroStore.setState((current) => {
+    const { [id]: _timer, ...timers } = current.timers
+    const { [id]: _version, ...versions } = current.versions
+    return { definitions: current.definitions.filter((item) => item.id !== id), timers, versions }
+  })
+  void closeRunningNotification(id)
+}
+
+async function loadFocusTimers(userId: string) {
+  const { data, error } = await supabase
+    .from('focus_timers')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+  if (error || !data || useAuthStore.getState().currentUserId !== userId) return
+  const rows = data as FocusTimerRow[]
+  const state = usePomodoroStore.getState()
+
+  const remoteIds = new Set(rows.map((row) => row.id))
+
+  // Primeira vez com a sincronização neste dispositivo: os timers que existiam
+  // só aqui sobem para a conta (até o limite), em vez de serem descartados.
+  if (!state.migratedUsers[userId]) {
+    usePomodoroStore.setState((current) => ({ migratedUsers: { ...current.migratedUsers, [userId]: true } }))
+    state.definitions
+      .filter((timer) => timer.userId === userId && !remoteIds.has(timer.id))
+      .slice(0, Math.max(0, MAX_FOCUS_TIMERS - rows.length))
+      .forEach((timer) => syncTimer(timer.id, 'insert'))
+  }
+
+  state.definitions
+    .filter((timer) => timer.userId === userId && !remoteIds.has(timer.id) && !pendingInserts.has(timer.id) && !writeQueues.has(timer.id))
+    .forEach((timer) => removeLocalTimer(timer.id))
+  rows.forEach(applyRemoteRow)
+  // Mantém a ordem de criação do banco para os timers deste usuário; os que
+  // ainda estão subindo ficam no fim, na ordem em que estavam.
+  usePomodoroStore.setState((current) => {
+    const order = new Map(rows.map((row, index) => [row.id, index]))
+    const mine = current.definitions.filter((timer) => timer.userId === userId)
+    const ordered = [...mine.filter((timer) => order.has(timer.id)).sort((a, b) => order.get(a.id)! - order.get(b.id)!), ...mine.filter((timer) => !order.has(timer.id))]
+    return { definitions: [...current.definitions.filter((timer) => timer.userId !== userId), ...ordered] }
+  })
+}
+
+let focusTimersChannel: RealtimeChannel | null = null
+
+function connectFocusTimers(userId: string | null) {
+  if (focusTimersChannel) {
+    void supabase.removeChannel(focusTimersChannel)
+    focusTimersChannel = null
+  }
+  if (!userId) return
+  void loadFocusTimers(userId)
+  const onUpsert = (payload: RealtimePostgresChangesPayload<FocusTimerRow>) => {
+    const row = payload.new as FocusTimerRow
+    if (row?.id && row.user_id === useAuthStore.getState().currentUserId) applyRemoteRow(row)
+  }
+  focusTimersChannel = supabase
+    .channel(`focus-timers-${userId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'focus_timers', filter: `user_id=eq.${userId}` }, onUpsert)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'focus_timers', filter: `user_id=eq.${userId}` }, onUpsert)
+    // Eventos de DELETE não aceitam filtro e só trazem a chave primária; o RLS
+    // garante que só chegam os da própria conta.
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'focus_timers' }, (payload) => {
+      const id = (payload.old as { id?: string }).id
+      if (id && usePomodoroStore.getState().definitions.some((timer) => timer.id === id) && !writeQueues.has(id)) removeLocalTimer(id)
+    })
+    .subscribe()
+}
+
 export const usePomodoroStore = create<PomodoroState>()(
   persist(
     (set, get) => ({
       definitions: [],
       timers: {},
+      versions: {},
+      migratedUsers: {},
       musicEnabled: false,
       musicSource: 'lofi',
       youtubeUrls: {},
@@ -233,8 +420,9 @@ export const usePomodoroStore = create<PomodoroState>()(
       addTimer: (name, minutes) => {
         const userId = useAuthStore.getState().currentUserId
         if (!userId || !validTimer(name, minutes) || get().definitions.filter((timer) => timer.userId === userId).length >= MAX_FOCUS_TIMERS) return false
-        const definition = { id: crypto.randomUUID(), userId, name: name.trim(), totalSeconds: minutes * 60 }
+        const definition = { id: crypto.randomUUID(), userId, name: name.trim(), totalSeconds: minutes * 60, createdAt: new Date().toISOString() }
         set((state) => ({ definitions: [...state.definitions, definition] }))
+        syncTimer(definition.id, 'insert')
         return true
       },
       updateTimer: (id, name, minutes) => {
@@ -244,6 +432,7 @@ export const usePomodoroStore = create<PomodoroState>()(
         const durationChanged = definition.totalSeconds !== minutes * 60
         get().pause(id)
         set((state) => ({ definitions: state.definitions.map((timer) => timer.id === id ? { ...timer, name: name.trim(), totalSeconds: minutes * 60 } : timer) }))
+        syncTimer(id)
         if (durationChanged) get().reset(id)
         else if (wasRunning) get().start(id)
         return true
@@ -253,6 +442,8 @@ export const usePomodoroStore = create<PomodoroState>()(
         cancelScheduledPush(get().timers[id]?.scheduledId)
         void closeRunningNotification(id)
         set((state) => ({ definitions: state.definitions.filter((timer) => timer.id !== id), timers: Object.fromEntries(Object.entries(state.timers).filter(([key]) => key !== id)) }))
+        remoteRuns.delete(id)
+        enqueueWrite(id, () => supabase.from('focus_timers').delete().eq('id', id))
       },
       setMusicEnabled: (enabled) => {
         set({ musicEnabled: enabled, musicError: null })
@@ -289,6 +480,8 @@ export const usePomodoroStore = create<PomodoroState>()(
           timers: { ...state.timers, [id]: { secondsLeft, running: true, endAt, runId, scheduledId: undefined } },
           musicError: null,
         }))
+        remoteRuns.delete(id)
+        syncTimer(id)
         void showRunningNotification(id)
         void schedulePush(id, endAt).then((scheduledId) => {
           // Só anexa o agendamento se este ainda for o mesmo ciclo — evita
@@ -302,6 +495,7 @@ export const usePomodoroStore = create<PomodoroState>()(
           usePomodoroStore.setState((state) => ({
             timers: { ...state.timers, [id]: { ...state.timers[id]!, scheduledId } },
           }))
+          syncTimer(id)
         })
       },
       pause: (id) => {
@@ -315,6 +509,7 @@ export const usePomodoroStore = create<PomodoroState>()(
             : current.secondsLeft
           return { timers: { ...state.timers, [id]: { secondsLeft, running: false, endAt: null, scheduledId: undefined } } }
         })
+        syncTimer(id)
         void closeRunningNotification(id)
       },
       toggle: (id) => {
@@ -335,6 +530,7 @@ export const usePomodoroStore = create<PomodoroState>()(
         set((state) => ({
           timers: { ...state.timers, [id]: { secondsLeft: totalSeconds, running: false, endAt: null, scheduledId: undefined } },
         }))
+        syncTimer(id)
         void closeRunningNotification(id)
       },
     }),
@@ -347,9 +543,9 @@ export const usePomodoroStore = create<PomodoroState>()(
           cancelScheduledPush(timer.scheduledId)
           void closeRunningNotification(id)
         }
-        return { timers: {}, definitions: [], musicEnabled: false, musicSource: 'lofi' as const, youtubeUrls: {}, youtubeVideoCollapsed: false, trackId: FOCUS_TRACKS[0]!.id, volume: 0.35 }
+        return { timers: {}, definitions: [], versions: {}, migratedUsers: {}, musicEnabled: false, musicSource: 'lofi' as const, youtubeUrls: {}, youtubeVideoCollapsed: false, trackId: FOCUS_TRACKS[0]!.id, volume: 0.35 }
       },
-      partialize: (state) => ({ definitions: state.definitions, timers: state.timers, musicEnabled: state.musicEnabled, musicSource: state.musicSource, youtubeUrls: state.youtubeUrls, youtubeVideoCollapsed: state.youtubeVideoCollapsed, trackId: state.trackId, volume: state.volume }),
+      partialize: (state) => ({ definitions: state.definitions, timers: state.timers, versions: state.versions, migratedUsers: state.migratedUsers, musicEnabled: state.musicEnabled, musicSource: state.musicSource, youtubeUrls: state.youtubeUrls, youtubeVideoCollapsed: state.youtubeVideoCollapsed, trackId: state.trackId, volume: state.volume }),
       // Ao reabrir o app/recarregar a página, o tempo que passou enquanto ele
       // estava fechado precisa ser descontado silenciosamente (sem tocar o
       // som de conclusão) — o loop de tick abaixo assumiria erroneamente que
@@ -382,6 +578,7 @@ const tickInterval = setInterval(() => {
   const state = usePomodoroStore.getState()
   let changed = false
   const nextTimers = { ...state.timers }
+  const completed: string[] = []
   for (const [id, timer] of Object.entries(state.timers)) {
     if (!timer.running || timer.endAt === null || !ownsTimer(state, id)) continue
     const secondsLeft = Math.max(0, Math.round((timer.endAt - Date.now()) / 1000))
@@ -394,17 +591,24 @@ const tickInterval = setInterval(() => {
       // mostra o aviso de conclusão na hora em vez de esperar o push.
       cancelScheduledPush(timer.scheduledId)
       void showCompletedNotification(id)
+      completed.push(id)
     } else if (secondsLeft !== timer.secondsLeft) {
       nextTimers[id] = { ...timer, secondsLeft }
       changed = true
     }
   }
   if (changed) usePomodoroStore.setState({ timers: nextTimers })
+  for (const id of completed) {
+    remoteRuns.delete(id)
+    syncTimer(id)
+  }
 }, 250)
 
 function syncMusic() {
   const state = usePomodoroStore.getState()
-  const hasRunningTimer = Object.entries(state.timers).some(([id, timer]) => timer.running && ownsTimer(state, id))
+  // Timers iniciados em outro dispositivo também contam aqui, mas não ligam a
+  // música deste aparelho — ela acompanha só as sessões iniciadas nele.
+  const hasRunningTimer = Object.entries(state.timers).some(([id, timer]) => timer.running && ownsTimer(state, id) && !remoteRuns.has(id))
   const playing = state.musicEnabled && hasRunningTimer && !state.musicError
   const userId = useAuthStore.getState().currentUserId
   const youtubeUrl = userId ? state.youtubeUrls[userId] ?? '' : ''
@@ -433,6 +637,7 @@ setFocusYouTubeListener((event, code) => {
 const unsubscribeMusic = usePomodoroStore.subscribe(syncMusic)
 const unsubscribeAuth = useAuthStore.subscribe?.((auth, previous) => {
   if (auth.currentUserId === previous.currentUserId) return
+  connectFocusTimers(auth.currentUserId)
   // Restoring authentication on reload must preserve the running countdown.
   if (!previous.currentUserId) { syncMusic(); return }
   const state = usePomodoroStore.getState()
@@ -446,8 +651,20 @@ const unsubscribeAuth = useAuthStore.subscribe?.((auth, previous) => {
   usePomodoroStore.setState({ timers, musicEnabled: false, musicError: null, musicStatus: 'paused' })
 })
 
+connectFocusTimers(useAuthStore.getState().currentUserId)
+
+// Ao voltar para o app, recarrega da conta — cobre alterações feitas em outro
+// dispositivo enquanto o realtime estava desconectado (aba em segundo plano).
+function onFocusTimersVisibility() {
+  const userId = useAuthStore.getState().currentUserId
+  if (document.visibilityState === 'visible' && userId) void loadFocusTimers(userId)
+}
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onFocusTimersVisibility)
+
 if (import.meta.hot) import.meta.hot.dispose(() => {
   clearInterval(tickInterval)
+  connectFocusTimers(null)
+  if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onFocusTimersVisibility)
   unsubscribeMusic()
   unsubscribeAuth?.()
   syncFocusAudio(usePomodoroStore.getState().trackId, usePomodoroStore.getState().volume, false)

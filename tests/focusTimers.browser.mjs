@@ -28,9 +28,22 @@ try {
           hasSeenOnboarding: true, currentUser: () => get().profile }));`,
     }))
     const writes = []
+    // Os timers ficam na conta (tabela focus_timers): o mock guarda o que o app
+    // grava para que recarregar a página devolva os mesmos timers.
+    const focusRows = []
     await context.route('**/*.supabase.co/**', (route) => {
       const request = route.request()
       if (['POST', 'PATCH', 'DELETE'].includes(request.method())) writes.push({ method: request.method(), url: request.url(), data: request.postDataJSON() })
+      if (request.url().includes('/rest/v1/focus_timers')) {
+        const url = new URL(request.url())
+        const id = url.searchParams.get('id')?.replace('eq.', '')
+        const userId = url.searchParams.get('user_id')?.replace('eq.', '')
+        if (request.method() === 'POST') focusRows.push(...[request.postDataJSON()].flat())
+        if (request.method() === 'PATCH') Object.assign(focusRows.find((row) => row.id === id) ?? {}, request.postDataJSON())
+        if (request.method() === 'DELETE') focusRows.splice(0, focusRows.length, ...focusRows.filter((row) => row.id !== id))
+        const body = request.method() === 'GET' ? focusRows.filter((row) => !userId || row.user_id === userId) : []
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+      }
       const table = Object.keys(responses).find((name) => request.url().includes(`/rest/v1/${name}`))
       const body = request.url().includes('/scheduled_notifications') && request.method() === 'POST' ? { id: `scheduled-${writes.length}` } : table ? responses[table] : []
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
