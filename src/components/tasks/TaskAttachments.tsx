@@ -1,18 +1,15 @@
-import { Download, File, FileText, Image, Paperclip, Plus, Unlink, Upload } from 'lucide-react'
+import { Download, Paperclip, Plus, Unlink, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { FilePreviewDialog } from '@/components/files/FilePreviewDialog'
+import { FileThumbnail } from '@/components/files/FileThumbnail'
 import { Button } from '@/components/ui/Button'
+import { getFileDownloadUrl } from '@/lib/fileUrls'
 import { formatBytes, formatDate } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useDataStore } from '@/store/dataStore'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
-
-function iconFor(type: string) {
-  if (type.startsWith('image/')) return Image
-  if (type === 'application/pdf' || type.startsWith('text/')) return FileText
-  return File
-}
 
 export function TaskAttachments({ taskId }: { taskId: string }) {
   const task = useDataStore((s) => s.tasks.find((item) => item.id === taskId))
@@ -26,6 +23,7 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
   const [uploading, setUploading] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [showAvailable, setShowAvailable] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   if (!task) return null
   const activeTask = task
 
@@ -67,13 +65,13 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
 
   async function download(file: (typeof attachments)[number]) {
     setDownloadingId(file.id)
-    const { data, error: signError } = await supabase.storage.from('project-files').createSignedUrl(file.storagePath, 60)
+    const url = await getFileDownloadUrl(file)
     setDownloadingId(null)
-    if (signError || !data) {
-      setError(`Não foi possível abrir "${file.name}".`)
+    if (!url) {
+      setError(`Não foi possível baixar "${file.name}".`)
       return
     }
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    window.location.assign(url)
   }
 
   return (
@@ -95,16 +93,18 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
         </div>
       )}
       {attachments.length > 0 && <div className="flex flex-col gap-2">
-        {attachments.map((file) => {
-          const Icon = iconFor(file.type)
+        {attachments.map((file, index) => {
           return <div key={file.id} className="flex items-center gap-3 rounded-xl bg-surface p-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-alt text-text-muted"><Icon size={17} /></div>
-            <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-text">{file.name}</p><p className="text-xs text-text-faint">{formatBytes(file.size)} · {formatDate(file.createdAt)}</p></div>
-            <button onClick={() => void download(file)} disabled={downloadingId === file.id} aria-label={`Abrir ${file.name}`} className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-accent"><Download size={16} /></button>
+            <button type="button" onClick={() => setPreviewIndex(index)} aria-label={`Visualizar ${file.name}`} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-accent">
+              <FileThumbnail file={file} />
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-text hover:text-accent">{file.name}</p><p className="text-xs text-text-faint">{formatBytes(file.size)} · {formatDate(file.createdAt)}</p></div>
+            </button>
+            <button onClick={() => void download(file)} disabled={downloadingId === file.id} aria-label={`Baixar ${file.name}`} title="Baixar" className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-accent"><Download size={16} /></button>
             <button onClick={() => unlinkFileFromTask(file.id, taskId)} aria-label={`Desvincular ${file.name} da tarefa`} className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-danger"><Unlink size={16} /></button>
           </div>
         })}
       </div>}
+      <FilePreviewDialog files={attachments} index={previewIndex} onIndexChange={setPreviewIndex} />
     </section>
   )
 }

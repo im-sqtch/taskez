@@ -1,8 +1,11 @@
-import { Download, File, FileText, Image, Paperclip, Search, Unlink, Upload } from 'lucide-react'
+import { Download, Paperclip, Search, Unlink, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { FilePreviewDialog } from '@/components/files/FilePreviewDialog'
+import { FileThumbnail } from '@/components/files/FileThumbnail'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { FindFileSheet } from '@/components/projects/FindFileSheet'
+import { getFileDownloadUrl } from '@/lib/fileUrls'
 import { formatBytes, formatDate } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -11,12 +14,6 @@ import { useDataStore } from '@/store/dataStore'
 import type { ProjectFile } from '@/types'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB — arquivos ficam no Supabase Storage
-
-function iconFor(type: string) {
-  if (type.startsWith('image/')) return Image
-  if (type === 'application/pdf' || type.startsWith('text/')) return FileText
-  return File
-}
 
 export function ProjectFiles({ projectId }: { projectId: string }) {
   const project = useDataStore((s) => s.projects.find((p) => p.id === projectId))
@@ -28,6 +25,7 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const [findOpen, setFindOpen] = useState(false)
 
   const files = allFiles
@@ -67,13 +65,13 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
 
   async function handleDownload(file: ProjectFile) {
     setDownloadingId(file.id)
-    const { data, error: signError } = await supabase.storage.from('project-files').createSignedUrl(file.storagePath, 60)
+    const url = await getFileDownloadUrl(file)
     setDownloadingId(null)
-    if (signError || !data) {
+    if (!url) {
       setError('Não foi possível baixar esse arquivo.')
       return
     }
-    window.open(data.signedUrl, '_blank')
+    window.location.assign(url)
   }
 
   function handleUnlink(file: ProjectFile) {
@@ -110,19 +108,18 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
         <EmptyState icon={<Paperclip size={22} />} title="Nenhum arquivo ainda" description="Envie documentos, imagens e outros arquivos deste projeto." />
       ) : (
         <div className="flex flex-col gap-2">
-          {files.map((file) => {
-            const Icon = iconFor(file.type)
+          {files.map((file, index) => {
             return (
               <div key={file.id} className="flex items-center gap-3 rounded-xl bg-surface p-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-alt text-text-muted">
-                  <Icon size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-text">{file.name}</p>
-                  <p className="text-xs text-text-faint">
-                    {formatBytes(file.size)} · {formatDate(file.createdAt)}
-                  </p>
-                </div>
+                <button type="button" onClick={() => setPreviewIndex(index)} aria-label={`Visualizar ${file.name}`} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-accent">
+                  <FileThumbnail file={file} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-text hover:text-accent">{file.name}</p>
+                    <p className="text-xs text-text-faint">
+                      {formatBytes(file.size)} · {formatDate(file.createdAt)}
+                    </p>
+                  </div>
+                </button>
                 <button
                   onClick={() => handleDownload(file)}
                   disabled={downloadingId === file.id}
@@ -144,6 +141,7 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      <FilePreviewDialog files={files} index={previewIndex} onIndexChange={setPreviewIndex} />
       <FindFileSheet open={findOpen} onClose={() => setFindOpen(false)} projectId={projectId} excludeFileIds={files.map((f) => f.id)} />
     </div>
   )
