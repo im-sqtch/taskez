@@ -56,6 +56,8 @@ export interface Task {
   priority: Priority
   projectId?: string
   dueDate?: string
+  // Horário opcional do prazo, "HH:MM" (24h). Sem ele, a tarefa é "de dia inteiro".
+  dueTime?: string
   assigneeIds: string[]
   subtasks: Subtask[]
   tables?: TaskTable[]

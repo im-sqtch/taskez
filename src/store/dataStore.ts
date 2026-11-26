@@ -113,6 +113,7 @@ interface TaskRow {
   not_fulfilled: boolean
   priority: Priority
   due_date: string | null
+  due_time: string | null
   assignee_ids: string[]
   subtasks: Subtask[]
   tables: TaskTable[]
@@ -289,6 +290,7 @@ function mapTask(row: TaskRow): Task {
     priority: row.priority,
     projectId: row.project_id ?? undefined,
     dueDate: row.due_date ?? undefined,
+    dueTime: row.due_time ?? undefined,
     assigneeIds: row.assignee_ids ?? [],
     subtasks: row.subtasks ?? [],
     tables: row.tables ?? [],
@@ -335,6 +337,8 @@ function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
   if (patch.priority !== undefined) row.priority = patch.priority
   if (patch.projectId !== undefined) row.project_id = patch.projectId ?? null
   if (patch.dueDate !== undefined) row.due_date = patch.dueDate ?? null
+  // Como `recurrence`: o formulário manda a chave com `undefined` para limpar.
+  if ('dueTime' in patch) row.due_time = patch.dueTime ?? null
   if (patch.assigneeIds !== undefined) row.assignee_ids = patch.assigneeIds
   if (patch.subtasks !== undefined) row.subtasks = patch.subtasks
   if (patch.tables !== undefined) row.tables = patch.tables ?? []
@@ -527,6 +531,7 @@ async function generateDueRecurrences(userId: string) {
         status: task.status,
         priority: task.priority,
         due_date: task.dueDate ?? null,
+        due_time: task.dueTime ?? null,
         assignee_ids: task.assigneeIds,
         subtasks: task.subtasks,
         comments: task.comments,
@@ -1764,6 +1769,7 @@ export const useDataStore = create<DataState>()(
           priority: data.priority ?? 'medium',
           projectId: data.projectId,
           dueDate: data.dueDate,
+          dueTime: data.dueDate ? data.dueTime : undefined,
           assigneeIds: data.assigneeIds ?? [],
           subtasks: data.subtasks ?? [],
           tables: data.tables ?? [],
@@ -1817,6 +1823,7 @@ export const useDataStore = create<DataState>()(
             priority: task.priority,
             project_id: task.projectId ?? null,
             due_date: task.dueDate ?? null,
+            due_time: task.dueTime ?? null,
             assignee_ids: task.assigneeIds,
             subtasks: task.subtasks,
             tables: task.tables ?? [],

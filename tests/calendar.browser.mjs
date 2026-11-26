@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const base = process.env.TEST_BASE_URL || 'http://localhost:5174'
-const browser = await chromium.launch({ channel: 'msedge', headless: true })
+// PLAYWRIGHT_CHANNEL vazio usa o Chromium do próprio Playwright (padrão: Edge).
+const channel = process.env.PLAYWRIGHT_CHANNEL ?? 'msedge'
+const browser = await chromium.launch({ ...(channel ? { channel } : {}), headless: true })
 
 const createdAt = '2026-09-26T12:00:00.000Z'
 const responses = {
@@ -26,7 +28,8 @@ responses.tasks.push(
 try {
   for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }, { width: 812, height: 375 }]) {
     const context = await browser.newContext({ viewport, timezoneId: 'America/Sao_Paulo', reducedMotion: 'reduce' })
-    await context.route('**/src/store/authStore.ts', (route) => route.fulfill({
+    // O `*` cobre o `?t=` que o Vite acrescenta aos imports depois de um HMR.
+    await context.route('**/src/store/authStore.ts*', (route) => route.fulfill({
       contentType: 'application/javascript',
       body: `const user = { id: 'test-user', name: 'Teste', email: 'test@example.com', avatarColor: '#123456' };
         const state = { currentUserId: user.id, profile: user, authReady: true, hasHydrated: true,
@@ -47,7 +50,9 @@ try {
     await page.goto(`${base}/calendar?date=2026-11-26&view=month`)
     await page.getByRole('heading', { name: 'Calendário', exact: true }).waitFor()
     assert.equal(await page.locator('[data-calendar-day]').count(), 42)
-    assert.equal(await page.locator('[data-calendar-day="2026-11-26"]').getByRole('link', { name: 'Tarefa teste', exact: true }).count(), 1, 'UTC deadline must stay on the selected Brazilian day')
+    // O prazo em UTC precisa continuar no dia certo no fuso do Brasil.
+    if (viewport.width >= 1024) assert.equal(await page.locator('[data-calendar-day="2026-11-26"]').getByRole('button', { name: 'Tarefa teste', exact: true }).count(), 1)
+    else assert.equal(await page.getByRole('region', { name: 'Tarefas do dia selecionado' }).getByText('Tarefa teste', { exact: true }).count(), 1)
     assert.equal(await page.getByText('Outra workspace', { exact: true }).count(), 0)
     const visibleNav = viewport.width >= 1024 ? page.locator('aside').first() : page.locator('nav').last()
     assert.equal(await visibleNav.getByRole('link', { name: 'Calendário', exact: true }).count(), 1)
@@ -56,56 +61,104 @@ try {
       const labels = await visibleNav.getByRole('link').allTextContents()
       assert.equal(labels.indexOf('Calendário'), labels.indexOf('Tarefas') + 1)
     }
-    await page.locator('[data-calendar-day="2026-11-26"]').getByRole('link', { name: 'Tarefa teste', exact: true }).click()
+    const desktop = viewport.width >= 1024
+    const day26 = page.locator('[data-calendar-day="2026-11-26"]')
+
+    // Abrir uma tarefa: no desktop pela etiqueta + cartão rápido; no celular tocando o dia e a tarefa da lista.
+    if (desktop) {
+      await day26.getByRole('button', { name: 'Tarefa teste', exact: true }).click()
+      await page.getByRole('dialog', { name: 'Resumo de Tarefa teste' }).waitFor()
+      await page.getByRole('button', { name: 'Abrir detalhes', exact: true }).click()
+    } else {
+      assert.match(await day26.getAttribute('aria-label'), /2 tarefas/)
+      await day26.click()
+      await page.getByRole('region', { name: 'Tarefas do dia selecionado' }).getByText('Tarefa teste', { exact: true }).click()
+    }
     await page.getByRole('heading', { name: 'Tarefa teste', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Voltar ao calendário', exact: true }).click()
     await page.waitForURL((url) => url.pathname === '/calendar')
-    await page.locator('.calendar-detail').waitFor({ state: 'detached' })
-    assert.match(page.url(), /date=2026-11-26&view=month/)
-    for (const view of ['day', 'week', 'agenda', 'month']) {
-      await page.getByLabel('Visualização do calendário').selectOption(view)
-      await page.waitForURL((url) => url.searchParams.get('view') === view)
-      await page.waitForFunction((v) => document.querySelector('#calendar-view')?.value === v, view)
-      assert.ok(await page.getByText('Tarefa teste', { exact: true }).count() > 0)
+    await page.locator('[data-scroll-pane="calendar-detail"]').waitFor({ state: 'detached' })
+    assert.match(page.url(), /date=2026-11-26/)
+    assert.match(page.url(), /view=month/)
+
+    // Clicar no espaço vazio de um dia (desktop) cria tarefa já com a data.
+    if (desktop) {
+      await page.locator('[data-calendar-day="2026-11-19"]').click({ position: { x: 60, y: 80 } })
+      await page.getByRole('button', { name: '19 de nov', exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Fechar', exact: true }).click()
     }
-    await page.getByRole('button', { name: 'Filtros do calendário' }).click()
-    await page.getByLabel('Mostrar concluídas').click()
+
+    // Grade de horas (desktop): clicar num horário cria a tarefa já com dia e hora.
+    if (desktop) {
+      await page.getByRole('radio', { name: 'Semana', exact: true }).click()
+      const grid = page.locator('[data-calendar-zone="timed"]').nth(4)
+      await grid.click({ position: { x: 30, y: 14 * 48 + 5 } })
+      assert.equal(await page.locator('#task-due-time').inputValue(), '14:00')
+      await page.getByRole('button', { name: '26 de nov', exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Fechar', exact: true }).click()
+      await page.getByPlaceholder('Ex: Enviar proposta para o cliente').waitFor({ state: 'detached' })
+    }
+
+    for (const [view, label] of [['day', 'Dia'], ['week', 'Semana'], ['agenda', 'Agenda'], ['month', 'Mês']]) {
+      await page.getByRole('radio', { name: label, exact: true }).click()
+      await page.waitForURL((url) => url.searchParams.get('view') === view)
+      assert.ok(await page.getByText('Tarefa teste', { exact: true }).count() > 0, `"Tarefa teste" deve aparecer na visualização ${view}`)
+    }
+
+    if (!desktop) await page.getByRole('button', { name: 'Filtros do calendário' }).click()
+    await page.getByRole('button', { name: 'Mostrar concluídas' }).click()
     await page.waitForURL((url) => url.searchParams.get('completed') === 'false')
     await page.getByText('Entrega concluída', { exact: true }).first().waitFor({ state: 'detached' })
-    assert.equal(await page.getByText('Entrega concluída', { exact: true }).count(), 0)
-    await page.getByLabel('Projeto teste', { exact: true }).click()
+    await page.getByRole('checkbox', { name: 'Projeto teste' }).click()
     await page.waitForURL((url) => url.searchParams.getAll('hide').includes('project-1'))
-    await page.getByText('Tarefa teste', { exact: true }).first().waitFor({ state: 'detached' })
-    assert.equal(await page.getByText('Tarefa teste', { exact: true }).count(), 0)
+    await page.getByRole('main').getByText('Tarefa teste', { exact: true }).first().waitFor({ state: 'detached' })
     await page.getByRole('button', { name: 'Limpar filtros' }).click()
     await page.waitForURL((url) => !url.searchParams.has('hide') && !url.searchParams.has('completed'))
     await page.getByText('Tarefa teste', { exact: true }).first().waitFor()
-    await page.getByLabel('Pesquisar no calendário').fill('inexistente')
-    await page.getByText('Tarefa teste', { exact: true }).first().waitFor({ state: 'detached' })
-    assert.equal(await page.getByText('Tarefa teste', { exact: true }).count(), 0)
-    await page.getByLabel('Pesquisar no calendário').fill('')
-    await page.getByRole('button', { name: 'Sem data (1)' }).click()
+
+    await page.getByRole('button', { name: 'Tarefas sem data' }).click()
     await page.getByText('Planejar próxima entrega', { exact: true }).waitFor()
     await page.getByRole('button', { name: 'Voltar ao calendário', exact: true }).click()
     await page.waitForURL((url) => !url.searchParams.has('undated'))
+
+    await page.getByRole('button', { name: 'Pesquisar no calendário' }).click()
+    await page.getByRole('searchbox').fill('inexistente')
+    await page.getByText('Nenhuma tarefa encontrada.', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Fechar pesquisa' }).click()
     await page.getByRole('heading', { name: 'Novembro de 2026', exact: true }).waitFor()
-    await page.getByLabel('Ir para uma data').fill('2026-01-31')
-    await page.waitForURL((url) => url.searchParams.get('date') === '2026-01-31')
-    await page.getByRole('heading', { name: 'Janeiro de 2026', exact: true }).waitFor()
+
     await page.getByRole('button', { name: 'Próximo período', exact: true }).click()
-    await page.waitForURL((url) => url.searchParams.get('date') === '2026-02-01')
-    await page.getByRole('heading', { name: 'Fevereiro de 2026', exact: true }).waitFor()
-    assert.match(page.url(), /date=2026-02-01/)
-    await page.getByLabel('Ir para uma data').fill('2026-11-26')
-    await page.waitForURL((url) => url.searchParams.get('date') === '2026-11-26')
+    await page.waitForURL((url) => url.searchParams.get('date') === '2026-12-26')
+    await page.getByRole('heading', { name: 'Dezembro de 2026', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Período anterior', exact: true }).click()
     await page.getByRole('heading', { name: 'Novembro de 2026', exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Nova tarefa', exact: true }).click()
+
+    if (desktop) await page.getByRole('button', { name: 'Nova tarefa', exact: true }).click()
+    else await page.getByRole('button', { name: 'Criar tarefa em Quinta-feira, 26 de novembro', exact: true }).click()
     await page.getByPlaceholder('Ex: Enviar proposta para o cliente').fill('Criada pelo calendário')
     await page.getByRole('button', { name: '26 de nov', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Criar tarefa', exact: true }).click()
     await page.waitForFunction(() => document.body.textContent.includes('Criada pelo calendário'))
     assert.ok(writes.some((w) => w.url.includes('/tasks') && w.data.title === 'Criada pelo calendário' && w.data.due_date === '2026-11-26T00:00:00.000Z'))
-    await page.getByRole('button', { name: 'Filtros do calendário' }).click()
+
+    // Arrastar uma etiqueta para outro dia muda o prazo (desktop).
+    if (desktop) {
+      // Espera o Sheet de criação terminar a animação de saída (ele cobre a tela).
+      await page.getByPlaceholder('Ex: Enviar proposta para o cliente').waitFor({ state: 'detached' })
+      await page.waitForTimeout(400)
+      const chip = await day26.getByRole('button', { name: 'Tarefa teste', exact: true }).boundingBox()
+      const target = await page.locator('[data-calendar-day="2026-11-27"]').boundingBox()
+      await page.mouse.move(chip.x + 10, chip.y + 10)
+      await page.mouse.down()
+      for (let step = 1; step <= 12; step++) {
+        await page.mouse.move(chip.x + 10 + (target.x + 40 - chip.x) * step / 12, chip.y + 10 + (target.y + 60 - chip.y) * step / 12)
+        await page.waitForTimeout(16)
+      }
+      await page.mouse.up()
+      await page.locator('[data-calendar-day="2026-11-27"]').getByRole('button', { name: 'Tarefa teste', exact: true }).waitFor()
+      assert.ok(writes.some((w) => w.url.includes('/tasks') && w.data.due_date === '2026-11-27T00:00:00.000Z'))
+    }
+
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
     if (viewport.width === 1440 || viewport.width === 375) {
       await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector('[data-screen-panel]').scrollTo(0, 0) })
@@ -114,7 +167,7 @@ try {
       await page.screenshot({ path: `${process.env.TEMP || '/tmp'}/taskez-calendar-light-${viewport.width}.png`, fullPage: true })
     }
     assert.deepEqual(errors, [])
-    console.log(`PASS ${viewport.width}x${viewport.height}: navigation, views, dates, details, filters, undated tasks, creation, persistence, workspace isolation, and overflow`)
+    console.log(`PASS ${viewport.width}x${viewport.height}: navegação, visualizações, cartão rápido, detalhes, filtros, sem data, busca, criação, arraste, isolamento de workspace e overflow`)
     await context.close()
   }
 } finally {

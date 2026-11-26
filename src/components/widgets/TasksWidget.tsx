@@ -3,7 +3,7 @@ import { CommentUnreadBadge } from '@/components/tasks/CommentUnreadBadge'
 import { useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { formatDate, isOverdue } from '@/lib/utils'
+import { formatDue, isOverdue } from '@/lib/utils'
 import { widgetContentSize } from '@/lib/widgetCatalog'
 import { useDataStore, useWorkspaceTasks } from '@/store/dataStore'
 import type { WidgetSize } from '@/types'
@@ -54,7 +54,7 @@ export function TasksWidget({ size }: { size: WidgetSize }) {
       ) : (
         <div className="flex flex-col gap-1">
           {upcoming.map((t) => {
-            const overdue = isOverdue(t.dueDate)
+            const overdue = isOverdue(t.dueDate, t.dueTime)
             return (
               <div key={t.id} className="flex items-center gap-3 rounded-xl px-1 py-2 transition-colors hover:bg-surface-alt">
                 <button
@@ -69,7 +69,7 @@ export function TasksWidget({ size }: { size: WidgetSize }) {
                 </button>
                 {t.dueDate && (
                   <span className={overdue ? 'text-xs font-semibold text-danger' : 'text-xs text-text-faint'}>
-                    {formatDate(t.dueDate)}
+                    {formatDue(t.dueDate, t.dueTime)}
                   </span>
                 )}
               </div>

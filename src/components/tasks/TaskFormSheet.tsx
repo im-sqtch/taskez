@@ -1,4 +1,4 @@
-import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, FolderKanban, Plus, UserX } from 'lucide-react'
+import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, Clock, FolderKanban, Plus, UserX } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
 import { Avatar } from '@/components/ui/Avatar'
@@ -24,6 +24,8 @@ interface TaskFormSheetProps {
   task?: Task
   defaultProjectId?: string
   defaultDueDate?: string
+  // "HH:MM" — usado pelo calendário ao clicar num horário da grade.
+  defaultDueTime?: string
 }
 
 const priorities: { value: Priority; label: string; color: string }[] = [
@@ -33,7 +35,7 @@ const priorities: { value: Priority; label: string; color: string }[] = [
   { value: 'urgent', label: 'Urgente', color: 'var(--color-danger)' },
 ]
 
-export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDueDate }: TaskFormSheetProps) {
+export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDueDate, defaultDueTime }: TaskFormSheetProps) {
   const projects = useWorkspaceProjects()
   const team = useWorkspaceTeam()
   const addTask = useDataStore((s) => s.addTask)
@@ -53,6 +55,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
   const [projectId, setProjectId] = useState<string | undefined>(defaultProjectId)
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [dueDate, setDueDate] = useState('')
+  const [dueTime, setDueTime] = useState('')
   const [subtasks, setSubtasks] = useState<string[]>([])
   const [subtaskInput, setSubtaskInput] = useState('')
   const [editingSubtaskIndex, setEditingSubtaskIndex] = useState<number | null>(null)
@@ -73,6 +76,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
     setAssigneeIds(task?.assigneeIds ?? (defaultAssigneeId ? [defaultAssigneeId] : []))
     const initialDate = task?.dueDate?.slice(0, 10) ?? defaultDueDate ?? ''
     setDueDate(initialDate)
+    setDueTime(task ? task.dueTime ?? '' : initialDate ? defaultDueTime ?? '' : '')
     setCalendarCursor(initialDate ? keyToDate(initialDate) : new Date())
     setSubtasks(task?.subtasks.map((s) => s.title) ?? [])
     setSubtaskInput('')
@@ -80,7 +84,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
     setLinks(task?.links ?? [])
     setLinkDraft('')
     setRecurrence(task?.recurrence)
-  }, [open, task, defaultProjectId, defaultAssigneeId, defaultDueDate])
+  }, [open, task, defaultProjectId, defaultAssigneeId, defaultDueDate, defaultDueTime])
 
   function addSubtaskDraft() {
     if (!subtaskInput.trim()) return
@@ -107,6 +111,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
       projectId,
       assigneeIds,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+      dueTime: dueDate && dueTime ? dueTime : undefined,
       links: withDraft(links, linkDraft),
       recurrence,
     }
@@ -247,6 +252,27 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
           </div>
         </div>
 
+        {dueDate && (
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel htmlFor="task-due-time">Horário (opcional)</FieldLabel>
+            <div className="flex items-center gap-2">
+              <label className="flex h-13 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-border bg-surface px-3.5 text-sm text-text transition-colors focus-within:border-accent">
+                <Clock size={16} className="shrink-0 text-text-faint" aria-hidden="true" />
+                <input
+                  id="task-due-time"
+                  type="time"
+                  step={300}
+                  value={dueTime}
+                  onChange={(event) => setDueTime(event.target.value)}
+                  className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', dueTime ? 'text-text' : 'text-text-faint')}
+                />
+              </label>
+              {dueTime && <Button variant="ghost" size="sm" onClick={() => setDueTime('')}>Remover</Button>}
+            </div>
+            {!dueTime && <p className="text-xs text-text-faint">Sem horário, a tarefa vale para o dia inteiro.</p>}
+          </div>
+        )}
+
         <RecurrenceField value={recurrence} onChange={setRecurrence} />
 
         {!task && (
@@ -309,6 +335,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
           <button
             onClick={() => {
               setDueDate('')
+              setDueTime('')
               setDueSheetOpen(false)
             }}
             className="rounded-full px-2.5 py-1 text-xs font-semibold text-text-muted hover:text-danger"

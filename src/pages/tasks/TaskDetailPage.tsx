@@ -18,7 +18,7 @@ import { MentionText } from '@/components/ui/MentionText'
 import { MentionTextArea } from '@/components/ui/MentionTextArea'
 import { MessageComposer } from '@/components/ui/MessageComposer'
 import { ReactionControl } from '@/components/ui/ReactionControl'
-import { cn, formatDate, isOverdue } from '@/lib/utils'
+import { cn, formatDate, formatDue, isOverdue } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
@@ -83,7 +83,7 @@ export function TaskDetailPage() {
     )
   }
 
-  const overdue = isOverdue(task.dueDate) && task.status !== 'done'
+  const overdue = isOverdue(task.dueDate, task.dueTime) && task.status !== 'done'
   const doneCount = task.subtasks.filter((s) => s.done).length
 
   function handleDelete() {
@@ -197,7 +197,7 @@ export function TaskDetailPage() {
             )}
             {task.dueDate && (
               <span className={cn('text-xs font-semibold', overdue ? 'text-danger' : 'text-text-faint')}>
-                Prazo: {formatDate(task.dueDate)}
+                Prazo: {formatDue(task.dueDate, task.dueTime)}
               </span>
             )}
             {assignees.map((assignee) => (

@@ -9,6 +9,7 @@ import { useUiStore } from '@/store/uiStore'
 export function QuickCreateSheet() {
   const open = useUiStore((s) => s.quickCreateOpen)
   const close = useUiStore((s) => s.closeQuickCreate)
+  const defaultDueDate = useUiStore((s) => s.quickCreateDueDate)
   const [mode, setMode] = useState<'menu' | 'task' | 'project'>('menu')
   const navigate = useNavigate()
 
@@ -48,7 +49,7 @@ export function QuickCreateSheet() {
         </div>
       </Sheet>
 
-      <TaskFormSheet open={open && mode === 'task'} onClose={handleClose} />
+      <TaskFormSheet open={open && mode === 'task'} onClose={handleClose} defaultDueDate={defaultDueDate} />
       <ProjectFormSheet
         open={open && mode === 'project'}
         onClose={handleClose}

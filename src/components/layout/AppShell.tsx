@@ -58,7 +58,9 @@ export function AppShell() {
   const hasWorkspace = useDataStore((s) => s.workspaces.length > 0)
   const desktopNotificationsOpen = useUiStore((s) => s.desktopNotificationsOpen)
   const location = useLocation()
-  const hasSplitView = location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks')
+  // O calendário controla a própria rolagem (grade na altura da tela) e usa a largura toda.
+  const isCalendar = location.pathname.startsWith('/calendar')
+  const hasSplitView = location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks') || isCalendar
   // `useOutlet()` devolve o elemento da rota deste render. Guardado como filho
   // do painel com key, ele não troca pelo conteúdo novo enquanto o painel antigo
   // está saindo (o antigo <Outlet /> causava o flash antes do slide).
@@ -152,7 +154,7 @@ export function AppShell() {
       </AnimatePresence>
 
       <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col overflow-x-clip lg:min-h-0 lg:max-w-none">
-        <div className="relative min-w-0 flex-1 overflow-clip pb-28 lg:mx-auto lg:h-full lg:min-h-0 lg:w-full lg:max-w-6xl lg:pb-0">
+        <div className={`relative min-w-0 flex-1 overflow-clip pb-28 lg:mx-auto lg:h-full lg:min-h-0 lg:w-full lg:pb-0 ${isCalendar ? '' : 'lg:max-w-6xl'}`}>
           <AnimatePresence initial={false} custom={slide} mode="sync">
             <motion.div
               key={currentTabIndex}

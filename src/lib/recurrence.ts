@@ -1,7 +1,7 @@
 // Funções puras de recorrência — sem Supabase, sem estado. A geração de
 // verdade (ler/gravar projetos e tarefas) fica em dataStore.ts; aqui só a
 // matemática de "qual é a próxima data que bate com a regra".
-import { addDays, dateKey, dueDateToLocalDate, keyToDate } from '@/lib/calendar'
+import { addDays, dateKey, dueDateToLocalDate, keyToDate } from './calendar.ts'
 import type { RecurrenceRule } from '@/types'
 
 function daysInMonth(year: number, month: number): number {

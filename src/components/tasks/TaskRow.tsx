@@ -1,7 +1,7 @@
 import { Circle, CircleCheck, CircleX, ListChecks, Repeat } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { PriorityBadge } from '@/components/ui/Badge'
-import { cn, formatDate, isOverdue } from '@/lib/utils'
+import { cn, formatDue, isOverdue } from '@/lib/utils'
 import { useDataStore } from '@/store/dataStore'
 import type { Task } from '@/types'
 import { CommentUnreadBadge } from '@/components/tasks/CommentUnreadBadge'
@@ -10,7 +10,7 @@ export function TaskRow({ task, active, to }: { task: Task; active?: boolean; to
   const toggleTaskStatus = useDataStore((s) => s.toggleTaskStatus)
   const project = useDataStore((s) => s.projects.find((p) => p.id === task.projectId))
   const navigate = useNavigate()
-  const overdue = isOverdue(task.dueDate) && task.status !== 'done'
+  const overdue = isOverdue(task.dueDate, task.dueTime) && task.status !== 'done'
   const doneSubtasks = task.subtasks.filter((s) => s.done).length
   const recurring = Boolean(task.recurrence ?? project?.recurrence)
 
@@ -49,7 +49,7 @@ export function TaskRow({ task, active, to }: { task: Task; active?: boolean; to
           )}
           {task.dueDate && (
             <span className={cn('text-[11px] font-medium', overdue ? 'text-danger' : 'text-text-faint')}>
-              {formatDate(task.dueDate)}
+              {formatDue(task.dueDate, task.dueTime)}
             </span>
           )}
           {task.subtasks.length > 0 && (

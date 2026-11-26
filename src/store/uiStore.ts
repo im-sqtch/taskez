@@ -9,6 +9,10 @@ interface UiState {
   // de fechamento são diferentes: este só fecha ao clicar em outro item da
   // sidebar, nunca ao navegar para a notificação clicada.
   desktopNotificationsOpen: boolean
+  // Prazo sugerido ao criar tarefa pelo "+" global (o calendário informa o dia
+  // selecionado enquanto está aberto). Formato "YYYY-MM-DD".
+  quickCreateDueDate?: string
+  setQuickCreateDueDate: (date: string | undefined) => void
   openQuickCreate: () => void
   closeQuickCreate: () => void
   openSearch: () => void
@@ -24,6 +28,8 @@ export const useUiStore = create<UiState>((set) => ({
   searchOpen: false,
   notificationsOpen: false,
   desktopNotificationsOpen: false,
+  quickCreateDueDate: undefined,
+  setQuickCreateDueDate: (date) => set({ quickCreateDueDate: date }),
   openQuickCreate: () => set({ quickCreateOpen: true }),
   closeQuickCreate: () => set({ quickCreateOpen: false }),
   openSearch: () => set({ searchOpen: true }),

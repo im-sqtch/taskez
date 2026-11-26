@@ -80,3 +80,50 @@ export function formatWeekTitle(days: Date[]): string {
 export function formatFullDate(date: Date): string {
   return capitalize(new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(date))
 }
+
+// Prazo no formato gravado no banco para o dia escolhido (meia-noite UTC — o
+// mesmo que o formulário grava com new Date('YYYY-MM-DD').toISOString()).
+export function keyToDueDate(key: string): string {
+  return `${key}T00:00:00.000Z`
+}
+
+export function isSameMonth(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
+}
+
+export function formatShortMonth(date: Date): string {
+  return new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(date).replace('.', '')
+}
+
+export function formatWeekdayShort(date: Date): string {
+  return WEEKDAY_LABELS[date.getDay()]!
+}
+
+// --- Horário opcional ("HH:MM") ---
+
+export function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number)
+  return hours! * 60 + minutes!
+}
+
+export function minutesToTime(total: number): string {
+  const clamped = Math.max(0, Math.min(23 * 60 + 59, Math.round(total)))
+  return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`
+}
+
+// Momento exato do prazo no fuso local: fim do dia quando não há horário.
+export function dueMoment(dueDate: string, dueTime?: string): Date {
+  const date = dueDateToLocalDate(dueDate)
+  if (dueTime) date.setMinutes(timeToMinutes(dueTime))
+  else date.setHours(23, 59, 59, 999)
+  return date
+}
+
+// Ordem dentro de um dia: sem horário primeiro (como "dia inteiro" no Google
+// Agenda), depois por horário.
+export function compareDueTime(a: { dueTime?: string }, b: { dueTime?: string }): number {
+  if (!a.dueTime && !b.dueTime) return 0
+  if (!a.dueTime) return -1
+  if (!b.dueTime) return 1
+  return timeToMinutes(a.dueTime) - timeToMinutes(b.dueTime)
+}

@@ -1,5 +1,5 @@
 import { clsx, type ClassValue } from 'clsx'
-import { dueDateToLocalDate } from './calendar'
+import { dueDateToLocalDate, dueMoment } from './calendar'
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
@@ -26,11 +26,16 @@ export function formatDate(iso?: string) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date)
 }
 
-export function isOverdue(iso?: string) {
+export function isOverdue(iso?: string, time?: string) {
   if (!iso) return false
-  const date = dueDateToLocalDate(iso)
-  date.setHours(23, 59, 59, 999)
-  return date.getTime() < Date.now()
+  return dueMoment(iso, time).getTime() < Date.now()
+}
+
+// "Hoje, 14:30" / "12 de nov." — prazo com o horário, quando houver.
+export function formatDue(iso?: string, time?: string) {
+  const day = formatDate(iso)
+  if (!day) return undefined
+  return time ? `${day}, ${time}` : day
 }
 
 export function greeting() {

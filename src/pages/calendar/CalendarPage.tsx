@@ -1,62 +1,122 @@
-import { CalendarDays, Check, ChevronLeft, ChevronRight, ListTodo, Plus, Search, SlidersHorizontal } from 'lucide-react'
+import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
+import { ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link, Outlet, useMatch, useNavigate, useSearchParams } from 'react-router-dom'
+import { Outlet, useMatch, useNavigate, useSearchParams } from 'react-router-dom'
+import { CalendarFilters, type CalendarFilterProject } from '@/components/calendar/CalendarFilters'
+import { isOccurrence, markDragEnd } from '@/components/calendar/calendarShared'
+import { ChipBody } from '@/components/calendar/EventChip'
+import { AgendaView, CalendarTaskList, DayHeading, DayView, MobileWeek } from '@/components/calendar/ListViews'
+import { MiniMonth } from '@/components/calendar/MiniMonth'
+import { MonthView } from '@/components/calendar/MonthView'
+import { TaskQuickView } from '@/components/calendar/TaskQuickView'
+import { HOUR_HEIGHT, TimeGrid } from '@/components/calendar/TimeGrid'
 import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
-import { TaskRow } from '@/components/tasks/TaskRow'
-import { WEEKDAY_LABELS, addDays, addMonths, dateKey, dueDateKey, formatFullDate, formatMonthTitle, formatWeekTitle, keyToDate, monthGrid, weekGrid } from '@/lib/calendar'
+import { Button } from '@/components/ui/Button'
+import { Sheet } from '@/components/ui/Sheet'
+import { addDays, compareDueTime, dateKey, dueDateKey, formatFullDate, formatMonthTitle, formatWeekTitle, keyToDate, keyToDueDate, minutesToTime, weekGrid } from '@/lib/calendar'
+import { projectRecurringTasks } from '@/lib/recurrenceProjection'
+import { useDashboardViewport } from '@/lib/dashboardViewport'
 import { cn } from '@/lib/utils'
-import { useCurrentWorkspace, useWorkspaceProjects, useWorkspaceTasks } from '@/store/dataStore'
-import type { Task } from '@/types'
+import { useDataStore, useWorkspaceProjects, useWorkspaceTasks } from '@/store/dataStore'
+import { useUiStore } from '@/store/uiStore'
+import type { Project, Task } from '@/types'
 
 type CalendarView = 'day' | 'week' | 'month' | 'agenda'
-const views: { value: CalendarView; label: string }[] = [
-  { value: 'day', label: 'Dia' }, { value: 'week', label: 'Semana' },
-  { value: 'month', label: 'Mês' }, { value: 'agenda', label: 'Agenda' },
+const VIEWS: { value: CalendarView; label: string; key: string }[] = [
+  { value: 'day', label: 'Dia', key: 'd' },
+  { value: 'week', label: 'Semana', key: 'w' },
+  { value: 'month', label: 'Mês', key: 'm' },
+  { value: 'agenda', label: 'Agenda', key: 'a' },
 ]
-const control = 'flex h-11 min-w-11 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-alt hover:text-text focus-visible:outline-2 focus-visible:outline-accent active:bg-accent-soft'
+const SIDEBAR_STORAGE_KEY = 'taskez-calendar-sidebar'
+
+const iconButton = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface hover:text-text focus-visible:outline-2 focus-visible:outline-accent'
 
 function validDate(key: string | null): key is string {
   return Boolean(key && /^\d{4}-\d{2}-\d{2}$/.test(key) && dateKey(keyToDate(key)) === key)
 }
 
+// Muda de mês mantendo o dia (limitado ao último dia do mês de destino).
+function shiftMonth(date: Date, delta: number) {
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + delta + 1, 0).getDate()
+  return new Date(date.getFullYear(), date.getMonth() + delta, Math.min(date.getDate(), lastDay))
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  const element = target as HTMLElement | null
+  return Boolean(element && (element.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName)))
+}
+
 export function CalendarPage() {
   const tasks = useWorkspaceTasks()
   const projects = useWorkspaceProjects()
-  const workspace = useCurrentWorkspace()
+  const updateTask = useDataStore((s) => s.updateTask)
+  const setQuickCreateDueDate = useUiStore((s) => s.setQuickCreateDueDate)
+  const isDesktop = useDashboardViewport() === 'desktop'
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
-  const detail = useMatch('/calendar/:id')
-  const detailId = detail?.params.id
+  const detailId = useMatch('/calendar/:id')?.params.id
   const detailRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
   const returnScroll = useRef(0)
   const hadDetail = useRef(false)
+
   const requestedView = params.get('view')
-  const view: CalendarView = views.some((v) => v.value === requestedView) ? requestedView as CalendarView : 'month'
+  const view: CalendarView = VIEWS.some((v) => v.value === requestedView) ? requestedView as CalendarView : 'month'
   const selectedKey = validDate(params.get('date')) ? params.get('date')! : dateKey(new Date())
   const cursor = keyToDate(selectedKey)
-  const [miniNavigation, setMiniNavigation] = useState({ anchor: selectedKey, cursor })
-  const miniCursor = miniNavigation.anchor === selectedKey ? miniNavigation.cursor : cursor
-  const setMiniCursor = (date: Date) => setMiniNavigation({ anchor: selectedKey, cursor: date })
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const hiddenProjects = new Set(params.getAll('hide'))
+  const hideParam = params.getAll('hide').join(',')
+  const hiddenProjects = useMemo(() => new Set(hideParam ? hideParam.split(',') : []), [hideParam])
   const showCompleted = params.get('completed') !== 'false'
   const showUndated = params.get('undated') === 'true'
-  const [createDate, setCreateDate] = useState<string | undefined>()
-  const [createOpen, setCreateOpen] = useState(false)
   const todayKey = dateKey(new Date())
 
-  useEffect(() => { detailRef.current?.scrollTo(0, 0) }, [detailId])
-  useLayoutEffect(() => {
-    if (!window.matchMedia('(min-width: 1024px)').matches) {
-      if (detailId) {
-        if (!hadDetail.current) returnScroll.current = window.scrollY
-        window.scrollTo(0, 0)
-      } else if (hadDetail.current) window.scrollTo(0, returnScroll.current)
-    }
-    hadDetail.current = Boolean(detailId)
-  }, [detailId])
+  const [miniMonth, setMiniMonth] = useState({ anchor: selectedKey, month: cursor })
+  const miniCursor = miniMonth.anchor === selectedKey ? miniMonth.month : cursor
+  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem(SIDEBAR_STORAGE_KEY) !== 'closed')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [create, setCreate] = useState<{ open: boolean; date?: string; time?: string }>({ open: false })
+  const [editTask, setEditTask] = useState<Task | null>(null)
+  const [quickView, setQuickView] = useState<{ task: Task; anchor: HTMLElement } | null>(null)
+  const [dragging, setDragging] = useState<Task | null>(null)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
+  const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects])
+  const filterProjects: CalendarFilterProject[] = [
+    ...projects.map((p) => ({ id: p.id, name: p.name, color: p.color })),
+    { id: 'standalone', name: 'Tarefas avulsas', color: 'var(--color-accent)' },
+  ]
+
+  const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR')
+  const filtered = tasks.filter((task) => !hiddenProjects.has(task.projectId ?? 'standalone')
+    && (showCompleted || task.status !== 'done')
+    && (!normalizedQuery || `${task.title} ${task.description ?? ''} ${projectsById.get(task.projectId ?? '')?.name ?? ''}`.toLocaleLowerCase('pt-BR').includes(normalizedQuery)))
+  // Próximas ocorrências das recorrentes (60 dias), só para exibição. Recalcula
+  // quando tarefas/projetos mudam; a busca mostra apenas tarefas reais.
+  const projected = useMemo(() => projectRecurringTasks(tasks, projects, new Date()), [tasks, projects])
+  const byDay = useMemo(() => {
+    const map = new Map<string, Task[]>()
+    const visibleProjected = normalizedQuery ? [] : projected.filter((task) => !hiddenProjects.has(task.projectId ?? 'standalone'))
+    for (const task of [...filtered, ...visibleProjected]) {
+      if (!task.dueDate) continue
+      const key = dueDateKey(task.dueDate)
+      map.set(key, [...(map.get(key) ?? []), task])
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => compareDueTime(a, b) || Number(a.status === 'done') - Number(b.status === 'done') || Number(isOccurrence(a)) - Number(isOccurrence(b)) || a.order - b.order)
+    }
+    return map
+  }, [filtered, projected, normalizedQuery, hiddenProjects])
+  const undated = filtered.filter((task) => !task.dueDate)
+  const search = params.toString() ? `?${params}` : ''
+  const taskTo = (task: Task) => `/calendar/${task.id}${search}`
+
+  // No celular a visualização Dia já mostra a data completa no cartão; o título fica no mês.
+  const periodTitle = view === 'day' && isDesktop ? formatFullDate(cursor) : view === 'week' ? formatWeekTitle(weekGrid(cursor)) : formatMonthTitle(cursor)
+
+  // --- Navegação (tudo fica na URL: dá para voltar, recarregar e compartilhar) ---
   function updateParams(patch: Record<string, string | null>) {
     setParams((current) => {
       const next = new URLSearchParams(current)
@@ -71,9 +131,10 @@ export function CalendarPage() {
     updateParams({ date: dateKey(date), undated: null, ...(nextView ? { view: nextView } : {}) })
   }
   function move(delta: number) {
-    selectDate(view === 'month' || view === 'agenda' ? addMonths(cursor, delta) : addDays(cursor, delta * (view === 'week' ? 7 : 1)))
+    selectDate(view === 'month' || view === 'agenda' ? shiftMonth(cursor, delta) : addDays(cursor, delta * (view === 'week' ? 7 : 1)))
   }
-  function create(date?: string) { setCreateDate(date); setCreateOpen(true) }
+  function setView(next: CalendarView) { updateParams({ view: next, undated: null }) }
+  function openCreate(date?: string, time?: string) { setQuickView(null); setCreate({ open: true, date, time }) }
   function toggleProject(id: string) {
     setParams((current) => {
       const next = new URLSearchParams(current)
@@ -85,142 +146,251 @@ export function CalendarPage() {
       return next
     })
   }
+  function closeSearch() { setQuery(''); setSearchOpen(false) }
 
-  const filtered = tasks.filter((task) => !hiddenProjects.has(task.projectId ?? 'standalone')
-    && (showCompleted || task.status !== 'done')
-    && (!query.trim() || `${task.title} ${task.description ?? ''} ${projects.find((p) => p.id === task.projectId)?.name ?? ''}`.toLocaleLowerCase('pt-BR').includes(query.trim().toLocaleLowerCase('pt-BR'))))
-  const byDay = useMemo(() => {
-    const map = new Map<string, Task[]>()
-    for (const task of filtered) {
-      if (!task.dueDate) continue
-      const key = dueDateKey(task.dueDate)
-      map.set(key, [...(map.get(key) ?? []), task])
+  function handleDragStart(event: DragStartEvent) {
+    setQuickView(null)
+    setDragging((event.active.data.current as { task?: Task } | undefined)?.task ?? null)
+  }
+  function handleDragEnd(event: DragEndEvent) {
+    markDragEnd()
+    setDragging(null)
+    const task = (event.active.data.current as { task?: Task } | undefined)?.task
+    const target = event.over?.data.current as { dayKey?: string; zone?: 'day' | 'allday' | 'timed' } | undefined
+    if (!task || !target?.dayKey || !event.over) return
+    const dueDate = keyToDueDate(target.dayKey)
+    if (target.zone === 'timed') {
+      // Horário pela posição do topo da etiqueta solta na coluna (de 15 em 15 min).
+      const pointer = event.activatorEvent as PointerEvent
+      const grabOffset = pointer.clientY - (event.active.rect.current.initial?.top ?? pointer.clientY)
+      const top = pointer.clientY + event.delta.y - grabOffset - event.over.rect.top
+      const dueTime = minutesToTime(Math.round(((top / HOUR_HEIGHT) * 60) / 15) * 15)
+      if (task.dueDate === dueDate && task.dueTime === dueTime) return
+      updateTask(task.id, { dueDate, dueTime })
+    } else if (target.zone === 'allday') {
+      if (task.dueDate === dueDate && !task.dueTime) return
+      updateTask(task.id, { dueDate, dueTime: undefined })
+    } else {
+      // Mês: muda só o dia e mantém o horário, como no Google Agenda.
+      if (task.dueDate && dueDateKey(task.dueDate) === target.dayKey) return
+      updateTask(task.id, { dueDate })
     }
-    for (const list of map.values()) list.sort((a, b) => Number(a.status === 'done') - Number(b.status === 'done') || a.order - b.order)
-    return map
-  }, [filtered])
-  const undated = filtered.filter((t) => !t.dueDate)
-  const days = view === 'month' ? monthGrid(cursor) : view === 'week' ? weekGrid(cursor) : [cursor]
-  const agendaDays = Array.from({ length: new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate() }, (_, i) => new Date(cursor.getFullYear(), cursor.getMonth(), i + 1)).filter((day) => byDay.has(dateKey(day)))
-  const periodTitle = view === 'day' ? formatFullDate(cursor) : view === 'week' ? formatWeekTitle(days) : formatMonthTitle(cursor)
-  const search = params.toString() ? `?${params}` : ''
-  const taskTo = (task: Task) => `/calendar/${task.id}${search}`
-
-  function event(task: Task) {
-    const project = projects.find((p) => p.id === task.projectId)
-    return (
-      <Link key={task.id} to={taskTo(task)} title={task.title}
-        className={cn('calendar-event', task.status === 'done' && 'calendar-event-done')}
-        style={{ borderInlineStartColor: project?.color ?? 'var(--color-accent)' }}>
-        {task.status === 'done' && <Check size={12} className="shrink-0" aria-hidden="true" />}
-        <span className="truncate">{task.title}</span>
-      </Link>
-    )
   }
 
-  function taskList(list: Task[], empty = 'Nenhuma tarefa neste dia.') {
-    return list.length ? list.map((task) => <TaskRow key={task.id} task={task} to={taskTo(task)} />) : (
-      <div className="flex flex-col items-center gap-2 px-5 py-10 text-center text-text-muted">
-        <CalendarDays size={26} strokeWidth={1.5} aria-hidden="true" />
-        <p className="text-sm">{empty}</p>
-        <button className="min-h-11 text-sm font-semibold text-accent" onClick={() => create(showUndated ? undefined : selectedKey)}>Criar tarefa</button>
+  // --- Efeitos ---
+  useEffect(() => { localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarOpen ? 'open' : 'closed') }, [sidebarOpen])
+
+  // O "+" da barra inferior do celular cria a tarefa no dia selecionado.
+  useEffect(() => {
+    setQuickCreateDueDate(showUndated ? undefined : selectedKey)
+    return () => setQuickCreateDueDate(undefined)
+  }, [selectedKey, showUndated, setQuickCreateDueDate])
+
+  useEffect(() => { detailRef.current?.scrollTo(0, 0) }, [detailId])
+  useLayoutEffect(() => {
+    if (!isDesktop) {
+      if (detailId) {
+        if (!hadDetail.current) returnScroll.current = window.scrollY
+        window.scrollTo(0, 0)
+      } else if (hadDetail.current) window.scrollTo(0, returnScroll.current)
+    }
+    hadDetail.current = Boolean(detailId)
+  }, [detailId, isDesktop])
+
+  // Atalhos de teclado no estilo do Google Agenda.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return
+      // Com um diálogo, cartão ou sheet aberto, as teclas são dele.
+      if (document.querySelector('[role="dialog"]')) return
+      const key = event.key.toLowerCase()
+      const viewShortcut = VIEWS.find((v) => v.key === key)
+      if (viewShortcut) setView(viewShortcut.value)
+      else if (key === 't') selectDate(new Date())
+      else if (key === 'j' || key === 'n' || event.key === 'ArrowRight') move(1)
+      else if (key === 'k' || key === 'p' || event.key === 'ArrowLeft') move(-1)
+      else if (key === 'c') openCreate(showUndated ? undefined : selectedKey)
+      else if (key === '/') { event.preventDefault(); setSearchOpen(true); requestAnimationFrame(() => searchRef.current?.focus()) }
+      else if (event.key === 'Escape' && detailId) navigate(`/calendar${search}`)
+      else return
+      event.preventDefault()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  })
+
+  // --- Conteúdo principal ---
+  function content() {
+    if (normalizedQuery) {
+      return (
+        <section aria-label="Resultados da pesquisa" className="rounded-2xl border border-border-soft bg-base-alt p-3 lg:h-full lg:overflow-y-auto">
+          <h3 className="px-2 py-2 text-sm font-semibold text-text">{filtered.length} {filtered.length === 1 ? 'tarefa encontrada' : 'tarefas encontradas'}</h3>
+          <CalendarTaskList tasks={filtered} taskTo={taskTo} empty="Nenhuma tarefa encontrada." />
+        </section>
+      )
+    }
+    if (showUndated) {
+      return (
+        <section aria-label="Tarefas sem data" className="rounded-2xl border border-border-soft bg-base-alt p-3 lg:h-full lg:overflow-y-auto">
+          <div className="flex items-center justify-between gap-2 px-2 py-1">
+            <h3 className="text-sm font-semibold text-text">Tarefas sem data ({undated.length})</h3>
+            <button type="button" className="text-sm font-semibold text-accent" onClick={() => updateParams({ undated: null })}>Voltar ao calendário</button>
+          </div>
+          <CalendarTaskList tasks={undated} taskTo={taskTo} empty="Nenhuma tarefa sem data." onCreate={() => openCreate()} />
+        </section>
+      )
+    }
+    const shared = { todayKey, byDay, projectsById, onCreate: (key: string, time?: string) => openCreate(key, time), onOpenDay: (date: Date) => selectDate(date, 'day'), onOpenTask: (task: Task, anchor: HTMLElement) => setQuickView({ task, anchor }) }
+    if (view === 'day' && isDesktop) return <TimeGrid days={[cursor]} {...shared} />
+    if (view === 'day') return <DayView date={cursor} todayKey={todayKey} tasks={byDay.get(selectedKey) ?? []} taskTo={taskTo} onCreate={() => openCreate(selectedKey)} />
+    if (view === 'agenda') return <AgendaView cursor={cursor} todayKey={todayKey} byDay={byDay} taskTo={taskTo} onOpenDay={(date) => selectDate(date, 'day')} />
+    if (view === 'week') {
+      return isDesktop
+        ? <TimeGrid days={weekGrid(cursor)} {...shared} />
+        : <MobileWeek cursor={cursor} todayKey={todayKey} byDay={byDay} taskTo={taskTo} onCreate={(key) => openCreate(key)} />
+    }
+    if (isDesktop) return <MonthView cursor={cursor} {...shared} />
+    const dayTasks = byDay.get(selectedKey) ?? []
+    return (
+      <div className="flex flex-col gap-3">
+        <MiniMonth variant="mobile" month={cursor} selectedKey={selectedKey} todayKey={todayKey} byDay={byDay} projectsById={projectsById} onSelect={(date) => selectDate(date)} onMonthChange={move} />
+        <section aria-label="Tarefas do dia selecionado" className="rounded-2xl border border-border-soft bg-base-alt p-3">
+          <DayHeading date={cursor} todayKey={todayKey} count={dayTasks.length} onCreate={() => openCreate(selectedKey)} size="md" />
+          <div className="mt-2 border-t border-border-soft pt-1">
+            <CalendarTaskList tasks={dayTasks} taskTo={taskTo} empty="Nenhuma tarefa neste dia." onCreate={() => openCreate(selectedKey)} />
+          </div>
+        </section>
       </div>
     )
   }
 
-  return (
-    <div className="calendar-page">
-      <div className={cn('calendar-main', detail && 'hidden lg:flex')}>
-        <header className="calendar-header">
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate text-xs text-text-muted">{workspace?.name}</p>
-              <h1 className="text-xl font-bold text-text">Calendário</h1>
-            </div>
-            <div className="flex items-center gap-1">
-              <button className={cn(control, filtersOpen && 'bg-accent-soft text-accent')} aria-label="Filtros do calendário" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}><SlidersHorizontal size={19} /></button>
-              <button className="flex min-h-11 items-center gap-2 rounded-xl bg-accent px-3 text-sm font-semibold text-white active:opacity-80" onClick={() => create(showUndated ? undefined : selectedKey)}><Plus size={18} aria-hidden="true" /><span>Nova tarefa</span></button>
-            </div>
-          </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1">
-              <button className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-text hover:bg-surface" onClick={() => selectDate(new Date())}>Hoje</button>
-              <button className={control} aria-label="Período anterior" onClick={() => move(-1)}><ChevronLeft size={20} /></button>
-              <button className={control} aria-label="Próximo período" onClick={() => move(1)}><ChevronRight size={20} /></button>
-            </div>
-            <label className="sr-only" htmlFor="calendar-view">Visualização do calendário</label>
-            <select id="calendar-view" value={view} onChange={(e) => updateParams({ view: e.target.value, undated: null })} className="h-11 rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-text focus-visible:outline-accent">
-              {views.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
-            </select>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <h2 aria-live="polite" className="text-base font-semibold text-text">{showUndated ? 'Tarefas sem data' : periodTitle}</h2>
-            <label className="calendar-date-label"><span className="sr-only">Ir para uma data</span><input aria-label="Ir para uma data" type="date" value={selectedKey} onChange={(e) => { if (validDate(e.target.value)) selectDate(keyToDate(e.target.value)) }} /></label>
-          </div>
-          <label className="mt-3 flex h-11 items-center gap-2 rounded-xl border border-border-soft bg-surface px-3 text-text-muted"><Search size={17} aria-hidden="true" /><span className="sr-only">Pesquisar no calendário</span><input type="search" placeholder="Pesquisar tarefas" value={query} onChange={(e) => setQuery(e.target.value)} className="w-full min-w-0 bg-transparent text-sm text-text outline-none" /></label>
-        </header>
+  const filtersProps = {
+    projects: filterProjects,
+    hiddenProjects,
+    onToggleProject: toggleProject,
+    showCompleted,
+    onToggleCompleted: () => updateParams({ completed: showCompleted ? 'false' : null }),
+    undatedCount: tasks.filter((task) => !task.dueDate && !hiddenProjects.has(task.projectId ?? 'standalone') && (showCompleted || task.status !== 'done')).length,
+    showUndated,
+    onToggleUndated: () => updateParams({ undated: showUndated ? null : 'true' }),
+    hasActiveFilters: hiddenProjects.size > 0 || !showCompleted,
+    onClear: () => updateParams({ hide: null, completed: null }),
+  }
 
-        <div className="calendar-body">
-          <aside className={cn('calendar-filters', filtersOpen ? 'block' : 'hidden xl:block')} aria-label="Filtros e navegação do calendário">
-            <div className="hidden xl:block">
-              <div className="flex items-center justify-between"><p className="text-sm font-semibold">{formatMonthTitle(miniCursor)}</p><button className={control} aria-label="Mês anterior no minicalendário" onClick={() => setMiniCursor(addMonths(miniCursor, -1))}><ChevronLeft size={16} /></button><button className={control} aria-label="Próximo mês no minicalendário" onClick={() => setMiniCursor(addMonths(miniCursor, 1))}><ChevronRight size={16} /></button></div>
-              <div className="grid grid-cols-7 text-center text-xs">
-                {WEEKDAY_LABELS.map((label) => <span key={label} className="py-2 text-text-muted">{label[0]}</span>)}
-                {monthGrid(miniCursor).map((date) => <button key={dateKey(date)} aria-label={formatFullDate(date)} aria-pressed={dateKey(date) === selectedKey} onClick={() => selectDate(date)} className={cn('h-8 rounded-full hover:bg-accent-soft focus-visible:outline-accent', date.getMonth() !== miniCursor.getMonth() && 'text-text-faint', dateKey(date) === todayKey && 'font-bold text-accent', dateKey(date) === selectedKey && 'bg-accent-soft font-bold text-accent')}>{date.getDate()}</button>)}
+  const viewSwitcher = (
+    <div role="radiogroup" aria-label="Visualização do calendário" className="flex gap-1 rounded-full bg-surface p-1">
+      {VIEWS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={view === option.value}
+          title={`${option.label} (${option.key.toUpperCase()})`}
+          onClick={() => setView(option.value)}
+          className={cn('h-8 flex-1 rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-accent lg:flex-none', view === option.value ? 'bg-accent text-white' : 'text-text-muted hover:text-text')}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  const searchField = (
+    <label className="flex h-10 w-full items-center gap-2 rounded-full border border-border bg-surface px-3 text-text-muted focus-within:border-accent lg:w-64">
+      <Search size={16} aria-hidden="true" />
+      <span className="sr-only">Pesquisar no calendário</span>
+      <input
+        ref={searchRef}
+        type="search"
+        autoFocus
+        placeholder="Pesquisar tarefas"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => { if (event.key === 'Escape') closeSearch() }}
+        className="w-full min-w-0 bg-transparent text-sm text-text outline-none placeholder:text-text-faint"
+      />
+      <button type="button" onClick={closeSearch} aria-label="Fechar pesquisa" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full hover:text-text"><X size={15} /></button>
+    </label>
+  )
+
+  return (
+    <div className="relative flex min-w-0 flex-col lg:h-full lg:overflow-hidden">
+      <h1 className="sr-only">Calendário</h1>
+      <div className={cn('flex min-w-0 flex-1 flex-col lg:min-h-0', detailId && 'hidden lg:flex')}>
+        <header className="sticky top-0 z-20 flex flex-col gap-3 bg-base px-5 pb-3 pt-[calc(env(safe-area-inset-top)+16px)] lg:static">
+          {isDesktop ? (
+            <div className="flex items-center gap-2">
+              <button type="button" className={iconButton} onClick={() => setSidebarOpen((open) => !open)} aria-label={sidebarOpen ? 'Ocultar painel lateral' : 'Mostrar painel lateral'} title={sidebarOpen ? 'Ocultar painel lateral' : 'Mostrar painel lateral'}>
+                {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+              </button>
+              <button type="button" className="h-10 rounded-full border border-border px-4 text-sm font-semibold text-text transition-colors hover:bg-surface focus-visible:outline-2 focus-visible:outline-accent" onClick={() => selectDate(new Date())} title="Hoje (T)">Hoje</button>
+              <button type="button" className={iconButton} aria-label="Período anterior" title="Período anterior (K)" onClick={() => move(-1)}><ChevronLeft size={20} /></button>
+              <button type="button" className={iconButton} aria-label="Próximo período" title="Próximo período (J)" onClick={() => move(1)}><ChevronRight size={20} /></button>
+              <h2 aria-live="polite" className="ml-2 min-w-0 truncate text-xl font-bold text-text">{showUndated ? 'Tarefas sem data' : periodTitle}</h2>
+              <div className="ml-auto flex items-center gap-2">
+                {searchOpen || query ? searchField : <button type="button" className={iconButton} aria-label="Pesquisar no calendário" title="Pesquisar (/)" onClick={() => setSearchOpen(true)}><Search size={18} /></button>}
+                {viewSwitcher}
               </div>
             </div>
-            <h3 className="mt-3 text-xs font-bold uppercase tracking-wider text-text-muted">Meus projetos</h3>
-            {[...projects.map((p) => ({ id: p.id, name: p.name, color: p.color })), { id: 'standalone', name: 'Tarefas avulsas', color: 'var(--color-accent)' }].map((project) => (
-              <label key={project.id} className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"><input type="checkbox" checked={!hiddenProjects.has(project.id)} onChange={() => toggleProject(project.id)} className="h-4 w-4 shrink-0" style={{ accentColor: project.color }} /><span className="min-w-0 break-words">{project.name}</span></label>
-            ))}
-            <div className="mt-2 border-t border-border-soft pt-2">
-              <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"><input className="h-4 w-4 accent-accent" type="checkbox" checked={showCompleted} onChange={() => updateParams({ completed: showCompleted ? 'false' : null })} />Mostrar concluídas</label>
-              <button className="min-h-11 text-left text-sm font-semibold text-accent" onClick={() => { setQuery(''); updateParams({ hide: null, completed: null }) }}>Limpar filtros</button>
-            </div>
-          </aside>
+          ) : (
+            <>
+              <div className="flex items-center gap-1">
+                <h2 aria-live="polite" className="min-w-0 flex-1 truncate text-xl font-bold text-text">{showUndated ? 'Tarefas sem data' : periodTitle}</h2>
+                <button type="button" className={iconButton} aria-label="Ir para hoje" title="Hoje" onClick={() => selectDate(new Date())}>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md border-2 border-current text-[11px] font-bold leading-none">{new Date().getDate()}</span>
+                </button>
+                <button type="button" className={cn(iconButton, (searchOpen || query) && 'bg-accent-soft text-accent')} aria-label="Pesquisar no calendário" onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}><Search size={18} /></button>
+                <button type="button" className={cn(iconButton, filtersProps.hasActiveFilters && 'text-accent')} aria-label="Filtros do calendário" onClick={() => setFiltersOpen(true)}><SlidersHorizontal size={18} /></button>
+              </div>
+              {(searchOpen || query) && searchField}
+              <div className="flex items-center gap-1">
+                <button type="button" className={iconButton} aria-label="Período anterior" onClick={() => move(-1)}><ChevronLeft size={20} /></button>
+                <div className="min-w-0 flex-1">{viewSwitcher}</div>
+                <button type="button" className={iconButton} aria-label="Próximo período" onClick={() => move(1)}><ChevronRight size={20} /></button>
+              </div>
+            </>
+          )}
+        </header>
 
-          <main className="min-w-0 flex-1" aria-label="Agenda de tarefas">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-text-muted">
-              <span>Prazos de dia inteiro</span>
-              <button className={cn('flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm hover:bg-surface', showUndated && 'bg-accent-soft text-accent')} onClick={() => updateParams({ undated: showUndated ? null : 'true' })}><ListTodo size={16} aria-hidden="true" />{showUndated ? 'Voltar ao calendário' : `Sem data (${undated.length})`}</button>
-            </div>
-
-            {query.trim() ? <section aria-label="Resultados da pesquisa" className="rounded-2xl border border-border-soft bg-base-alt p-3"><h3 className="px-2 py-3 text-sm font-semibold">{filtered.length} {filtered.length === 1 ? 'tarefa encontrada' : 'tarefas encontradas'}</h3>{taskList(filtered, 'Nenhuma tarefa encontrada.')}</section> : showUndated ? <section aria-label="Tarefas sem data" className="rounded-2xl border border-border-soft bg-base-alt p-2">{taskList(undated, 'Nenhuma tarefa sem data.')}</section> : view === 'day' ? (
-              <section className="rounded-2xl border border-border-soft bg-base-alt p-3" aria-label={formatFullDate(cursor)}>
-                <div className="mb-3 flex items-center justify-between border-b border-border-soft pb-3"><span className="text-sm text-text-muted">{(byDay.get(selectedKey) ?? []).length} tarefas</span><button className={control} aria-label="Criar tarefa neste dia" onClick={() => create(selectedKey)}><Plus size={20} /></button></div>
-                {taskList(byDay.get(selectedKey) ?? [])}
-              </section>
-            ) : view === 'agenda' ? (
-              <section className="flex flex-col gap-3" aria-label="Agenda do mês">
-                {agendaDays.length ? agendaDays.map((date) => <div key={dateKey(date)} className="rounded-2xl border border-border-soft bg-base-alt p-3"><button onClick={() => selectDate(date, 'day')} className="min-h-11 text-left text-sm font-bold text-text">{formatFullDate(date)}</button>{taskList(byDay.get(dateKey(date)) ?? [])}</div>) : taskList([], 'Nenhuma tarefa neste mês com os filtros atuais.')}
-              </section>
-            ) : (
-              <>
-                <div className={cn('calendar-grid', view === 'week' && 'calendar-week')}>
-                  {WEEKDAY_LABELS.map((label) => <div key={label} className="calendar-weekday">{label}</div>)}
-                  {days.map((date) => {
-                    const key = dateKey(date)
-                    const list = byDay.get(key) ?? []
-                    return <div key={key} data-calendar-day={key} className={cn('calendar-cell', view === 'month' && date.getMonth() !== cursor.getMonth() && 'calendar-outside', key === selectedKey && 'calendar-selected')}>
-                      <button aria-label={`Ver ${formatFullDate(date)}`} className={cn('calendar-day-number', key === todayKey && 'calendar-today')} onClick={() => selectDate(date, 'day')}>{date.getDate()}</button>
-                      <div className="flex min-w-0 flex-col gap-1">{list.slice(0, view === 'week' ? 12 : 2).map(event)}</div>
-                      {list.length > (view === 'week' ? 12 : 2) && <button className="calendar-more" onClick={() => selectDate(date, 'day')}>+{list.length - (view === 'week' ? 12 : 2)}<span className="hidden lg:inline"> mais</span></button>}
-                      <button className="calendar-add" aria-label={`Criar tarefa em ${formatFullDate(date)}`} onClick={() => create(key)}><Plus size={14} /></button>
-                    </div>
-                  })}
-                </div>
-                <section className="mt-5 rounded-2xl border border-border-soft bg-base-alt p-3" aria-label="Tarefas do dia selecionado">
-                  <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-bold text-text">{formatFullDate(cursor)}</h3><button className={control} aria-label="Adicionar tarefa ao dia selecionado" onClick={() => create(selectedKey)}><Plus size={19} /></button></div>
-                  {taskList(byDay.get(selectedKey) ?? [])}
-                </section>
-              </>
-            )}
+        <div className="flex min-h-0 flex-1 gap-5 px-5 pb-6 lg:pb-5">
+          {sidebarOpen && (
+            <aside aria-label="Navegação e filtros do calendário" className="hidden w-60 shrink-0 flex-col gap-5 overflow-y-auto pb-2 lg:flex">
+              <Button icon={<Plus size={16} />} onClick={() => openCreate(showUndated ? undefined : selectedKey)} className="self-start" title="Nova tarefa (C)">Nova tarefa</Button>
+              <MiniMonth month={miniCursor} selectedKey={selectedKey} todayKey={todayKey} onSelect={(date) => selectDate(date)} onMonthChange={(delta) => setMiniMonth({ anchor: selectedKey, month: shiftMonth(miniCursor, delta) })} />
+              <CalendarFilters {...filtersProps} />
+            </aside>
+          )}
+          <main aria-label="Agenda de tarefas" className="min-w-0 flex-1 lg:min-h-0">
+            <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => { markDragEnd(); setDragging(null) }}>
+              {content()}
+              <DragOverlay dropAnimation={null}>
+                {dragging && <ChipBody task={dragging} project={projectsById.get(dragging.projectId ?? '') as Project | undefined} className="w-44 shadow-lg" />}
+              </DragOverlay>
+            </DndContext>
           </main>
         </div>
       </div>
-      {detail && <div ref={detailRef} className="calendar-detail" data-scroll-pane="calendar-detail"><Outlet /></div>}
-      <TaskFormSheet open={createOpen} onClose={() => setCreateOpen(false)} defaultDueDate={createDate} />
-      {detail && <button className="sr-only" onClick={() => navigate(`/calendar${search}`)}>Fechar detalhes do calendário</button>}
+
+      {detailId && (
+        <div ref={detailRef} data-scroll-pane="calendar-detail" className="w-full min-w-0 lg:absolute lg:inset-y-0 lg:right-0 lg:z-30 lg:w-[440px] lg:overflow-y-auto lg:border-l lg:border-border-soft lg:bg-base lg:shadow-2xl">
+          <Outlet />
+        </div>
+      )}
+
+      {quickView && (
+        <TaskQuickView
+          task={quickView.task}
+          anchor={quickView.anchor}
+          onClose={() => setQuickView(null)}
+          onOpenDetails={(task) => navigate(taskTo(task))}
+          onEdit={(task) => setEditTask(task)}
+        />
+      )}
+      <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtros do calendário">
+        <CalendarFilters {...filtersProps} onToggleUndated={() => { filtersProps.onToggleUndated(); setFiltersOpen(false) }} />
+      </Sheet>
+      <TaskFormSheet open={create.open} onClose={() => setCreate({ open: false })} defaultDueDate={create.date} defaultDueTime={create.time} />
+      <TaskFormSheet open={Boolean(editTask)} onClose={() => setEditTask(null)} task={editTask ?? undefined} />
     </div>
   )
 }
