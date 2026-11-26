@@ -5,7 +5,7 @@ import { TaskRow } from '@/components/tasks/TaskRow'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { dueDateToLocalDate } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
-import { useWorkspaceTasks } from '@/store/dataStore'
+import { useCurrentWorkspace, useWorkspaceTasks } from '@/store/dataStore'
 import type { TaskStatus } from '@/types'
 
 type ViewMode = 'list' | 'kanban'
@@ -25,6 +25,7 @@ const groupLabels: Record<TaskStatus, string> = {
 }
 
 export function TasksPage({ selectedId }: { selectedId?: string } = {}) {
+  const workspace = useCurrentWorkspace()
   const tasks = useWorkspaceTasks()
   const [view, setView] = useState<ViewMode>('list')
   const [filter, setFilter] = useState<FilterMode>('all')
@@ -54,9 +55,13 @@ export function TasksPage({ selectedId }: { selectedId?: string } = {}) {
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="sticky top-0 z-20 -mb-4 flex flex-col gap-5 bg-base pb-4">
       <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
-        <h1 className="text-2xl font-bold text-text">Tarefas</h1>
-        <div className="flex gap-1 rounded-full bg-surface p-1">
+        <div className="min-w-0">
+          <p className="truncate text-xs text-text-muted lg:hidden">{workspace?.name}</p>
+          <h1 className="text-2xl font-bold text-text">Tarefas</h1>
+        </div>
+        <div className="flex shrink-0 gap-1 rounded-full bg-surface p-1">
           <button
             onClick={() => setView('list')}
             className={cn('flex h-8 w-8 items-center justify-center rounded-full', view === 'list' ? 'bg-accent text-white' : 'text-text-faint')}
@@ -87,6 +92,7 @@ export function TasksPage({ selectedId }: { selectedId?: string } = {}) {
             {f.label}
           </button>
         ))}
+      </div>
       </div>
 
       {filtered.length === 0 ? (

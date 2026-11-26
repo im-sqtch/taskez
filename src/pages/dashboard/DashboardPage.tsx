@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { CustomizeDashboardSheet } from '@/components/dashboard/CustomizeDashboardSheet'
-import { DashboardToolbarCard } from '@/components/dashboard/DashboardToolbarCard'
 import { DashboardHeader } from '@/components/layout/DashboardHeader'
 import { CalendarWidget } from '@/components/widgets/CalendarWidget'
 import { ProfileCardWidget } from '@/components/widgets/ProfileCardWidget'
@@ -37,11 +36,8 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <DashboardHeader />
+      <DashboardHeader onCustomize={() => setCustomizeOpen(true)} />
       <div className="grid grid-cols-1 gap-4 px-5 lg:grid-cols-2">
-        <div className="lg:col-span-2">
-          <DashboardToolbarCard onEdit={() => setCustomizeOpen(true)} />
-        </div>
         {visibleWidgets.map((w) => {
           const Widget = widgetComponents[w.type]
           const fullWidth = w.size === 'L' || w.size === 'LS'

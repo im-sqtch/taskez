@@ -24,6 +24,7 @@ import type {
   Subtask,
   Task,
   TaskStatus,
+  TaskTable,
   TeamMember,
   WidgetSize,
   Workspace,
@@ -114,6 +115,7 @@ interface TaskRow {
   due_date: string | null
   assignee_ids: string[]
   subtasks: Subtask[]
+  tables: TaskTable[]
   comments: Task['comments']
   links: string[]
   created_at: string
@@ -217,6 +219,7 @@ interface ProjectFileRow {
   id: string
   workspace_id: string
   project_ids: string[]
+  task_ids: string[]
   name: string
   size: number
   type: string
@@ -263,6 +266,7 @@ function mapProjectFile(row: ProjectFileRow): ProjectFile {
     id: row.id,
     workspaceId: row.workspace_id,
     projectIds: row.project_ids ?? [],
+    taskIds: row.task_ids ?? [],
     name: row.name,
     size: row.size,
     type: row.type,
@@ -287,6 +291,7 @@ function mapTask(row: TaskRow): Task {
     dueDate: row.due_date ?? undefined,
     assigneeIds: row.assignee_ids ?? [],
     subtasks: row.subtasks ?? [],
+    tables: row.tables ?? [],
     comments: row.comments ?? [],
     links: row.links ?? [],
     createdAt: row.created_at,
@@ -332,6 +337,7 @@ function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
   if (patch.dueDate !== undefined) row.due_date = patch.dueDate ?? null
   if (patch.assigneeIds !== undefined) row.assignee_ids = patch.assigneeIds
   if (patch.subtasks !== undefined) row.subtasks = patch.subtasks
+  if (patch.tables !== undefined) row.tables = patch.tables ?? []
   if (patch.comments !== undefined) row.comments = patch.comments
   if (patch.links !== undefined) row.links = patch.links
   if (patch.completedAt !== undefined) row.completed_at = patch.completedAt ?? null
@@ -371,6 +377,9 @@ async function generateDueRecurrences(userId: string) {
   const closedProjectIds = new Set<string>()
   const closedTaskIds = new Set<string>()
   const notifications: Notification[] = []
+  // Séries com cadência própria ficam no mesmo projeto. Não copiar também
+  // seu histórico ao repetir o projeto, para não duplicar essas tarefas.
+  const independentTaskSeries = new Set(state.tasks.filter((t) => t.recurrence).map((t) => t.seriesId ?? t.id))
 
   // Âncora normalizada para meia-noite local do dia de criação (não a hora
   // exata) — senão um item criado às 22h14 só "vence" a partir das 22h14 do
@@ -416,6 +425,7 @@ async function generateDueRecurrences(userId: string) {
 
       for (const task of state.tasks) {
         if (task.projectId !== project.id) continue
+        if (independentTaskSeries.has(task.seriesId ?? task.id)) continue
         newTasks.push({
           ...task,
           id: uuid(),
@@ -439,10 +449,10 @@ async function generateDueRecurrences(userId: string) {
     }
   }
 
-  // Tarefas avulsas recorrentes (sem projeto) — dentro de um projeto
-  // recorrente a cadência é a do projeto, não da tarefa (ver acima).
+  // A regra própria vale também dentro de projetos; o vínculo é preservado
+  // pelo spread, sem repetir as outras tarefas do projeto.
   for (const task of state.tasks) {
-    if (!task.recurrence || task.projectId) continue
+    if (!task.recurrence) continue
     try {
       const appearance = dueOccurrence(task.recurrence, localMidnightAnchor(task.createdAt), today)
       if (!appearance) continue
@@ -451,9 +461,10 @@ async function generateDueRecurrences(userId: string) {
         ...task,
         id: uuid(),
         status: 'todo',
+        notFulfilled: false,
         completedAt: undefined,
         comments: [],
-        subtasks: task.subtasks.map((s) => ({ ...s, done: false })),
+        subtasks: task.subtasks.map((s) => ({ ...s, done: false, notFulfilled: false })),
         dueDate: task.dueDate ? applyOffset(appearance, offsetDays(task.dueDate, task.createdAt)) : undefined,
         createdAt: cycleCreatedAt,
         updatedAt: cycleCreatedAt,
@@ -473,6 +484,9 @@ async function generateDueRecurrences(userId: string) {
     tasks: [...s.tasks.map((t) => (closedTaskIds.has(t.id) ? { ...t, recurrence: undefined } : t)), ...newTasks],
     notifications: [...s.notifications, ...notifications],
   }))
+  for (const projectId of new Set(newTasks.map((task) => task.projectId))) {
+    reactivateProjectForPendingTask(useDataStore.getState, projectId)
+  }
 
   // Espera os projetos novos serem gravados antes de disparar as tarefas: elas
   // referenciam `project_id` (FK) e, sem esse await, a requisição da tarefa podia
@@ -730,6 +744,8 @@ interface DataState {
   removeFile: (id: string) => void
   linkFileToProject: (fileId: string, projectId: string) => void
   unlinkFileFromProject: (fileId: string, projectId: string) => void
+  linkFileToTask: (fileId: string, taskId: string) => void
+  unlinkFileFromTask: (fileId: string, taskId: string) => void
 
   // Tasks
   addTask: (data: Partial<Task> & { title: string }) => string
@@ -1640,6 +1656,7 @@ export const useDataStore = create<DataState>()(
             id,
             workspace_id: data.workspaceId,
             project_ids: data.projectIds,
+            task_ids: data.taskIds ?? [],
             name: data.name,
             size: data.size,
             type: data.type,
@@ -1709,6 +1726,26 @@ export const useDataStore = create<DataState>()(
         })
         fireAndForget(supabase.from('files').update({ project_ids: nextIds }).eq('id', fileId))
       },
+      unlinkFileFromTask: (fileId, taskId) => {
+        let nextIds: string[] = []
+        set((state) => {
+          const file = state.files.find((f) => f.id === fileId)
+          if (!file) return state
+          nextIds = (file.taskIds ?? []).filter((id) => id !== taskId)
+          return { files: state.files.map((f) => (f.id === fileId ? { ...f, taskIds: nextIds } : f)) }
+        })
+        fireAndForget(supabase.from('files').update({ task_ids: nextIds }).eq('id', fileId))
+      },
+      linkFileToTask: (fileId, taskId) => {
+        let nextIds: string[] = []
+        set((state) => {
+          const file = state.files.find((f) => f.id === fileId)
+          if (!file || (file.taskIds ?? []).includes(taskId)) return state
+          nextIds = [...(file.taskIds ?? []), taskId]
+          return { files: state.files.map((f) => (f.id === fileId ? { ...f, taskIds: nextIds } : f)) }
+        })
+        fireAndForget(supabase.from('files').update({ task_ids: nextIds }).eq('id', fileId))
+      },
 
       addTask: (data) => {
         const id = uuid()
@@ -1729,6 +1766,7 @@ export const useDataStore = create<DataState>()(
           dueDate: data.dueDate,
           assigneeIds: data.assigneeIds ?? [],
           subtasks: data.subtasks ?? [],
+          tables: data.tables ?? [],
           comments: data.comments ?? [],
           links: data.links ?? [],
           createdAt: now(),
@@ -1781,6 +1819,7 @@ export const useDataStore = create<DataState>()(
             due_date: task.dueDate ?? null,
             assignee_ids: task.assigneeIds,
             subtasks: task.subtasks,
+            tables: task.tables ?? [],
             comments: task.comments,
             links: task.links,
             order: task.order,
@@ -1794,9 +1833,9 @@ export const useDataStore = create<DataState>()(
       updateTask: (id, patch) => {
         const userId = useAuthStore.getState().currentUserId!
         const taskBeforePatch = get().tasks.find((t) => t.id === id)
-        // Liga a recorrência pela primeira vez nesta tarefa avulsa: essa
-        // própria id vira a raiz da série.
-        if (patch.recurrence && taskBeforePatch && !taskBeforePatch.seriesId) {
+        // Ao ligar uma regra própria, inicia uma série independente, inclusive
+        // se esta tarefa foi criada por um ciclo recorrente do projeto.
+        if (patch.recurrence && taskBeforePatch && !taskBeforePatch.recurrence) {
           patch = { ...patch, seriesId: id }
         }
         set((state) => {

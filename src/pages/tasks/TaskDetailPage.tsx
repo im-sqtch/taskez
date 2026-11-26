@@ -1,8 +1,10 @@
-import { ArrowLeft, Check, CheckCheck, Circle, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, Circle, ListChecks, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Plus, Repeat, SlidersHorizontal, Table2, Trash2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useMatch, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useMatch, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { ReorderSubtasksSheet } from '@/components/tasks/ReorderSubtasksSheet'
+import { TaskAttachments } from '@/components/tasks/TaskAttachments'
 import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
+import { TaskTables } from '@/components/tasks/TaskTables'
 import { TaskFormSheet } from '@/components/tasks/TaskFormSheet'
 import { Avatar } from '@/components/ui/Avatar'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
@@ -21,10 +23,13 @@ import { useDataStore } from '@/store/dataStore'
 import { useCommentReadStore } from '@/store/commentReadStore'
 
 export function TaskDetailPage() {
+  const projectLayout = useOutletContext<{ toggleProjectList: () => void; projectListCollapsed: boolean } | undefined>()
   const params = useParams<{ id?: string; taskId?: string }>()
   const id = params.taskId ?? params.id
   const projectContext = useMatch('/projects/:projectId/tasks/:taskId')
-  const closeTo = projectContext ? `/projects/${projectContext.params.projectId}` : '/tasks'
+  const calendarContext = useMatch('/calendar/:id')
+  const { search } = useLocation()
+  const closeTo = calendarContext ? `/calendar${search}` : projectContext ? `/projects/${projectContext.params.projectId}` : '/tasks'
   const navigate = useNavigate()
   const task = useDataStore((s) => s.tasks.find((t) => t.id === id))
   const project = useDataStore((s) => s.projects.find((p) => p.id === task?.projectId))
@@ -32,10 +37,12 @@ export function TaskDetailPage() {
   // `.filter()` ali criaria um array novo a cada notificação da store e
   // entraria em loop de re-render ("Maximum update depth exceeded").
   const team = useDataStore((s) => s.team)
+  const files = useDataStore((s) => s.files)
   const assignees = team.filter((m) => task?.assigneeIds.includes(m.id))
   const toggleTaskStatus = useDataStore((s) => s.toggleTaskStatus)
   const deleteTask = useDataStore((s) => s.deleteTask)
   const addSubtask = useDataStore((s) => s.addSubtask)
+  const updateTask = useDataStore((s) => s.updateTask)
   const editSubtask = useDataStore((s) => s.editSubtask)
   const toggleSubtask = useDataStore((s) => s.toggleSubtask)
   const removeSubtask = useDataStore((s) => s.removeSubtask)
@@ -50,6 +57,9 @@ export function TaskDetailPage() {
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
   const [editingSubtaskValue, setEditingSubtaskValue] = useState('')
   const [commentInput, setCommentInput] = useState('')
+  const [showAttachments, setShowAttachments] = useState(false)
+  const [addSubItemMenuOpen, setAddSubItemMenuOpen] = useState(false)
+  const [addingSubtask, setAddingSubtask] = useState(false)
   const userId = useAuthStore((s) => s.currentUserId)
   const markCommentsRead = useCommentReadStore((s) => s.markCommentsRead)
   const latestComment = task?.comments.at(-1)
@@ -68,6 +78,7 @@ export function TaskDetailPage() {
     return (
       <div className="px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
         <EmptyState icon={<Check size={22} />} title="Tarefa não encontrada" />
+        {calendarContext && <button onClick={() => navigate(closeTo)} className="min-h-11 text-sm font-semibold text-accent">Voltar ao calendário</button>}
       </div>
     )
   }
@@ -93,6 +104,7 @@ export function TaskDetailPage() {
     if (!subtaskInput.trim() || !task) return
     addSubtask(task.id, subtaskInput.trim())
     setSubtaskInput('')
+    setAddingSubtask(false)
   }
 
   function startEditSubtask(subtaskId: string, title: string) {
@@ -112,86 +124,115 @@ export function TaskDetailPage() {
     setCommentInput('')
   }
 
+  function handleAddTable() {
+    if (!task) return
+    const columnId = crypto.randomUUID()
+    updateTask(task.id, {
+      tables: [...(task.tables ?? []), {
+        id: crypto.randomUUID(),
+        title: '',
+        columns: [{ id: columnId, title: 'Coluna 1' }],
+        rows: [{ id: crypto.randomUUID(), cells: { [columnId]: '' } }],
+      }],
+    })
+  }
+
   return (
     <div className="flex flex-col gap-5">
-      <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
-        <button onClick={() => navigate(closeTo)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
-          <ArrowLeft size={19} />
-        </button>
-        <div className="flex gap-2">
-          <button onClick={() => setEditOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
-            <Pencil size={16} />
-          </button>
-          {task.subtasks.length > 1 && (
-            <button
-              onClick={() => setReorderSubtasksOpen(true)}
-              aria-label="Reordenar subtarefa"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted"
-            >
-              <SlidersHorizontal size={16} />
+      <div data-detail-heading className="sticky top-0 z-20 -mb-4 flex flex-col gap-5 bg-base pb-4">
+        <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
+          <div className="flex items-center gap-2">
+            <button aria-label={calendarContext ? 'Voltar ao calendário' : 'Voltar para tarefas'} onClick={() => navigate(closeTo)} className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text-muted">
+              <ArrowLeft size={19} />
             </button>
-          )}
-          <button onClick={handleDelete} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-danger">
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </header>
-
-      <div className="flex flex-col gap-3 px-5">
-        <div className="flex items-start gap-3">
-          <button
-            onClick={() => toggleTaskStatus(task.id)}
-            className={cn(
-              'mt-0.5 shrink-0',
-              task.status === 'done' ? (task.notFulfilled ? 'text-danger' : 'text-success') : 'text-text-faint',
+            {projectContext && projectLayout && <button
+              aria-label={projectLayout.projectListCollapsed ? 'Expandir lista de projetos' : 'Recolher lista de projetos'}
+              title={projectLayout.projectListCollapsed ? 'Expandir lista de projetos' : 'Recolher lista de projetos'}
+              onClick={projectLayout.toggleProjectList}
+              className="hidden h-11 w-11 items-center justify-center rounded-full bg-surface text-text-muted hover:text-accent lg:flex"
+            >
+              {projectLayout.projectListCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>}
+          </div>
+          <div className="flex gap-2">
+            <button aria-label="Editar tarefa" onClick={() => setEditOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text-muted">
+              <Pencil size={16} />
+            </button>
+            {task.subtasks.length > 1 && (
+              <button
+                onClick={() => setReorderSubtasksOpen(true)}
+                aria-label="Reordenar subtarefa"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted"
+              >
+                <SlidersHorizontal size={16} />
+              </button>
             )}
-          >
-            {task.status === 'done' ? task.notFulfilled ? <X size={24} /> : <CheckCheck size={24} /> : <Circle size={24} />}
-          </button>
-          <h1 className={cn('flex flex-1 items-center gap-1.5 text-xl font-bold text-text', task.status === 'done' && 'line-through text-text-faint')}>
-            {task.title}
-            {(task.recurrence ?? project?.recurrence) && <Repeat size={15} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
-          </h1>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <PriorityBadge priority={task.priority} />
-          <StatusBadge status={task.status} />
-          {project && (
-            <button
-              onClick={() => navigate(`/projects/${project.id}`)}
-              className="flex items-center gap-1.5 rounded-full bg-surface-alt px-2.5 py-1 text-xs font-semibold text-text-muted"
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: project.color }} />
-              {project.name}
+            <button aria-label="Excluir tarefa" onClick={handleDelete} className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-danger">
+              <Trash2 size={16} />
             </button>
-          )}
-          {task.dueDate && (
-            <span className={cn('text-xs font-semibold', overdue ? 'text-danger' : 'text-text-faint')}>
-              Prazo: {formatDate(task.dueDate)}
-            </span>
-          )}
-          {assignees.map((assignee) => (
-            <span
-              key={assignee.id}
-              className="flex items-center gap-1.5 rounded-full bg-surface-alt py-1 pl-1 pr-2.5 text-xs font-semibold text-text-muted"
-            >
-              <Avatar name={assignee.name} color={assignee.avatarColor} size="xs" />
-              {assignee.name}
-            </span>
-          ))}
-        </div>
+          </div>
+        </header>
 
+        <div className="flex flex-col gap-3 px-5">
+          <div className="flex items-start gap-3">
+            <button
+              onClick={() => toggleTaskStatus(task.id)}
+              className={cn(
+                'mt-0.5 shrink-0',
+                task.status === 'done' ? (task.notFulfilled ? 'text-danger' : 'text-success') : 'text-text-faint',
+              )}
+            >
+              {task.status === 'done' ? task.notFulfilled ? <X size={24} /> : <CheckCheck size={24} /> : <Circle size={24} />}
+            </button>
+            <h1 className={cn('flex flex-1 items-center gap-1.5 text-xl font-bold text-text', task.status === 'done' && 'line-through text-text-faint')}>
+              {task.title}
+              {(task.recurrence ?? project?.recurrence) && <Repeat size={15} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
+            </h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <PriorityBadge priority={task.priority} />
+            <StatusBadge status={task.status} />
+            {project && (
+              <button
+                onClick={() => navigate(`/projects/${project.id}`)}
+                className="flex items-center gap-1.5 rounded-full bg-surface-alt px-2.5 py-1 text-xs font-semibold text-text-muted"
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: project.color }} />
+                {project.name}
+              </button>
+            )}
+            {task.dueDate && (
+              <span className={cn('text-xs font-semibold', overdue ? 'text-danger' : 'text-text-faint')}>
+                Prazo: {formatDate(task.dueDate)}
+              </span>
+            )}
+            {assignees.map((assignee) => (
+              <span
+                key={assignee.id}
+                className="flex items-center gap-1.5 rounded-full bg-surface-alt py-1 pl-1 pr-2.5 text-xs font-semibold text-text-muted"
+              >
+                <Avatar name={assignee.name} color={assignee.avatarColor} size="xs" />
+                {assignee.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {(task.description || task.links.length > 0) && (
+        <div className="flex flex-col gap-3 px-5">
         {task.description && (
           <CollapsibleDescription key={task.description} text={task.description} workspaceId={task.workspaceId} />
         )}
-        <LinksList links={task.links} />
-      </div>
+          <LinksList links={task.links} />
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 px-5">
         <div className="flex items-center justify-between">
           <p className="text-sm font-bold text-text">
-            Checklist {task.subtasks.length > 0 && `(${doneCount}/${task.subtasks.length})`}
+            Subtarefas {task.subtasks.length > 0 && `(${doneCount}/${task.subtasks.length})`}
           </p>
         </div>
         <div className="flex flex-col gap-1">
@@ -233,15 +274,43 @@ export function TaskDetailPage() {
             ),
           )}
         </div>
-        <MentionTextArea
-          value={subtaskInput}
-          onChange={setSubtaskInput}
-          workspaceId={task.workspaceId}
-          placeholder="Adicionar item ao checklist"
-        />
-        <Button variant="secondary" size="sm" icon={<Plus size={15} />} onClick={handleAddSubtask} className="self-end">
-          Adicionar
-        </Button>
+        {addingSubtask && <div className="flex flex-col gap-2">
+          <MentionTextArea
+            value={subtaskInput}
+            onChange={setSubtaskInput}
+            workspaceId={task.workspaceId}
+            placeholder="Nome da subtarefa"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { setAddingSubtask(false); setSubtaskInput('') }}>Cancelar</Button>
+            <Button variant="secondary" size="sm" disabled={!subtaskInput.trim()} onClick={handleAddSubtask}>Adicionar</Button>
+          </div>
+        </div>}
+      </div>
+
+      {(task.tables?.length ?? 0) > 0 && <div className="px-5"><TaskTables taskId={task.id} tables={task.tables ?? []} /></div>}
+      {(showAttachments || files.some((file) => (file.taskIds ?? []).includes(task.id))) && <TaskAttachments taskId={task.id} />}
+      <div className="relative px-5">
+        <button
+          aria-expanded={addSubItemMenuOpen}
+          aria-haspopup="menu"
+          onClick={() => setAddSubItemMenuOpen((open) => !open)}
+          className="flex min-h-11 items-center gap-2 rounded-xl bg-surface px-3.5 text-sm font-semibold text-text-muted hover:text-accent"
+        >
+          <Plus size={16} /> Adicionar Sub-item
+        </button>
+        {addSubItemMenuOpen && <div role="menu" className="absolute bottom-full left-5 z-30 mb-2 flex min-w-48 flex-col rounded-xl border border-border bg-base p-1.5 shadow-lg">
+          <button role="menuitem" onClick={() => { setAddingSubtask(true); setAddSubItemMenuOpen(false) }} className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-text hover:bg-surface">
+            <ListChecks size={16} /> Subtarefa
+          </button>
+          <button role="menuitem" onClick={() => { handleAddTable(); setAddSubItemMenuOpen(false) }} className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-text hover:bg-surface">
+            <Table2 size={16} /> Tabela
+          </button>
+          <button role="menuitem" onClick={() => { setShowAttachments(true); setAddSubItemMenuOpen(false) }} className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-text hover:bg-surface">
+            <Paperclip size={16} /> Anexo
+          </button>
+        </div>}
       </div>
 
       <div className="flex flex-col gap-3 px-5 pb-2">

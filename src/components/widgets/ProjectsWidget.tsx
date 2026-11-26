@@ -1,10 +1,9 @@
 import { FolderKanban } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
-import { ProjectUnreadBadge } from '@/components/projects/ProjectUnreadBadge'
+import { ProjectCardContent } from '@/components/projects/ProjectCardContent'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { ProgressBar } from '@/components/ui/ProgressBar'
-import { cn, formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { widgetContentSize } from '@/lib/widgetCatalog'
 import { useWorkspaceProjects, useWorkspaceTasks } from '@/store/dataStore'
 import type { WidgetSize } from '@/types'
@@ -21,8 +20,9 @@ export function ProjectsWidget({ size }: { size: WidgetSize }) {
 
   function progressFor(projectId: string) {
     const projectTasks = tasks.filter((t) => t.projectId === projectId)
-    if (projectTasks.length === 0) return 0
-    return Math.round((projectTasks.filter((t) => t.status === 'done').length / projectTasks.length) * 100)
+    const total = projectTasks.length
+    const completed = projectTasks.filter((t) => t.status === 'done').length
+    return { total, completed }
   }
 
   if (content === 'S') {
@@ -60,18 +60,7 @@ export function ProjectsWidget({ size }: { size: WidgetSize }) {
                 onClick={() => navigate(`/projects/${p.id}`)}
                 className="flex flex-col gap-2.5 rounded-xl border border-border-soft bg-surface p-3.5 text-left"
               >
-                <div className="flex items-center gap-3">
-                  <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white" style={{ backgroundColor: p.color }}>
-                    <FolderKanban size={16} />
-                    <ProjectUnreadBadge projectId={p.id} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold leading-tight text-text">{p.name}</p>
-                    {p.dueDate && <p className="text-xs text-text-faint">Prazo: {formatDate(p.dueDate)}</p>}
-                  </div>
-                  <span className="shrink-0 text-sm font-bold text-text-muted">{progress}%</span>
-                </div>
-                <ProgressBar value={progress} color={p.color} />
+                <ProjectCardContent project={p} completed={progress.completed} total={progress.total} />
               </button>
             )
           })}
@@ -84,23 +73,9 @@ export function ProjectsWidget({ size }: { size: WidgetSize }) {
               <button
                 key={p.id}
                 onClick={() => navigate(`/projects/${p.id}`)}
-                className="flex w-52 shrink-0 flex-col gap-3 rounded-xl border border-border-soft bg-surface p-4 text-left"
+                className="flex w-80 max-w-[calc(100vw-40px)] shrink-0 flex-col gap-3 rounded-xl border border-border-soft bg-surface p-4 text-left"
               >
-                <div
-                  className="relative flex h-9 w-9 items-center justify-center rounded-lg text-white"
-                  style={{ backgroundColor: p.color }}
-                >
-                  <FolderKanban size={16} />
-                  <ProjectUnreadBadge projectId={p.id} />
-                </div>
-                <div>
-                  <p className="font-semibold leading-tight text-text">{p.name}</p>
-                  {p.dueDate && <p className="mt-0.5 text-xs text-text-faint">Prazo: {formatDate(p.dueDate)}</p>}
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <ProgressBar value={progress} color={p.color} />
-                  <p className="text-xs font-medium text-text-muted">{progress}% concluído</p>
-                </div>
+                <ProjectCardContent project={p} completed={progress.completed} total={progress.total} />
               </button>
             )
           })}

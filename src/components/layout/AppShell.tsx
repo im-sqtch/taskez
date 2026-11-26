@@ -11,6 +11,7 @@ import { useDataStore } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { saveLastScreen } from '@/lib/lastScreen'
+import { FocusYouTubePlayer } from '@/components/widgets/FocusYouTubePlayer'
 
 type TabSlide = { direction: number; isMobile: boolean }
 
@@ -35,17 +36,18 @@ const tabSlideVariants = {
 function tabIndexForPath(pathname: string, isMobile: boolean) {
   if (isMobile) {
     if (pathname.startsWith('/projects') || pathname.startsWith('/files')) return 1
-    if (pathname.startsWith('/tasks')) return 2
+    if (pathname.startsWith('/tasks') || pathname.startsWith('/calendar')) return 2
     if (pathname.startsWith('/profile') || pathname.startsWith('/settings') || pathname.startsWith('/trash')) return 3
     return 0
   }
 
   if (pathname.startsWith('/projects')) return 1
   if (pathname.startsWith('/tasks')) return 2
-  if (pathname.startsWith('/files')) return 3
-  if (pathname.startsWith('/profile')) return 4
-  if (pathname.startsWith('/settings')) return 5
-  if (pathname.startsWith('/trash')) return 6
+  if (pathname.startsWith('/calendar')) return 3
+  if (pathname.startsWith('/files')) return 4
+  if (pathname.startsWith('/profile')) return 5
+  if (pathname.startsWith('/settings')) return 6
+  if (pathname.startsWith('/trash')) return 7
   return 0
 }
 
@@ -56,6 +58,7 @@ export function AppShell() {
   const hasWorkspace = useDataStore((s) => s.workspaces.length > 0)
   const desktopNotificationsOpen = useUiStore((s) => s.desktopNotificationsOpen)
   const location = useLocation()
+  const hasSplitView = location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks')
   // `useOutlet()` devolve o elemento da rota deste render. Guardado como filho
   // do painel com key, ele não troca pelo conteúdo novo enquanto o painel antigo
   // está saindo (o antigo <Outlet /> causava o flash antes do slide).
@@ -119,7 +122,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-1 overflow-x-clip bg-base">
+    <div className="flex w-full min-w-0 flex-1 overflow-x-clip bg-base lg:h-dvh lg:min-h-0 lg:flex-none lg:overflow-hidden">
       <div className="hidden lg:flex">
         <Sidebar />
       </div>
@@ -148,8 +151,8 @@ export function AppShell() {
         )}
       </AnimatePresence>
 
-      <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col overflow-x-clip lg:max-w-none">
-        <div className="relative min-w-0 flex-1 overflow-clip pb-28 lg:mx-auto lg:w-full lg:max-w-6xl lg:pb-8">
+      <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col overflow-x-clip lg:min-h-0 lg:max-w-none">
+        <div className="relative min-w-0 flex-1 overflow-clip pb-28 lg:mx-auto lg:h-full lg:min-h-0 lg:w-full lg:max-w-6xl lg:pb-0">
           <AnimatePresence initial={false} custom={slide} mode="sync">
             <motion.div
               key={currentTabIndex}
@@ -159,7 +162,7 @@ export function AppShell() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full will-change-transform"
+              className={`w-full will-change-transform lg:h-full lg:overscroll-contain ${hasSplitView ? 'lg:overflow-hidden' : 'lg:overflow-y-auto lg:pb-8'}`}
               data-screen-panel
             >
               {outlet}
@@ -174,6 +177,7 @@ export function AppShell() {
       <QuickCreateSheet />
       <NotificationsSheet />
       <SearchOverlay />
+      <FocusYouTubePlayer />
     </div>
   )
 }

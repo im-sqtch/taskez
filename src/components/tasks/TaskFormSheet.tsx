@@ -23,6 +23,7 @@ interface TaskFormSheetProps {
   onClose: () => void
   task?: Task
   defaultProjectId?: string
+  defaultDueDate?: string
 }
 
 const priorities: { value: Priority; label: string; color: string }[] = [
@@ -32,7 +33,7 @@ const priorities: { value: Priority; label: string; color: string }[] = [
   { value: 'urgent', label: 'Urgente', color: 'var(--color-danger)' },
 ]
 
-export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFormSheetProps) {
+export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDueDate }: TaskFormSheetProps) {
   const projects = useWorkspaceProjects()
   const team = useWorkspaceTeam()
   const addTask = useDataStore((s) => s.addTask)
@@ -70,15 +71,16 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
     setPriority(task?.priority ?? 'medium')
     setProjectId(task?.projectId ?? defaultProjectId)
     setAssigneeIds(task?.assigneeIds ?? (defaultAssigneeId ? [defaultAssigneeId] : []))
-    setDueDate(task?.dueDate ? task.dueDate.slice(0, 10) : '')
-    setCalendarCursor(task?.dueDate ? keyToDate(task.dueDate.slice(0, 10)) : new Date())
+    const initialDate = task?.dueDate?.slice(0, 10) ?? defaultDueDate ?? ''
+    setDueDate(initialDate)
+    setCalendarCursor(initialDate ? keyToDate(initialDate) : new Date())
     setSubtasks(task?.subtasks.map((s) => s.title) ?? [])
     setSubtaskInput('')
     setEditingSubtaskIndex(null)
     setLinks(task?.links ?? [])
     setLinkDraft('')
     setRecurrence(task?.recurrence)
-  }, [open, task, defaultProjectId, defaultAssigneeId])
+  }, [open, task, defaultProjectId, defaultAssigneeId, defaultDueDate])
 
   function addSubtaskDraft() {
     if (!subtaskInput.trim()) return
@@ -106,9 +108,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
       assigneeIds,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       links: withDraft(links, linkDraft),
-      // Recorrência de tarefa só faz sentido sem projeto — dentro de um
-      // projeto a cadência é a dele (ver ProjectFormSheet).
-      recurrence: projectId ? undefined : recurrence,
+      recurrence,
     }
     if (task) {
       updateTask(task.id, payload)
@@ -247,7 +247,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId }: TaskFor
           </div>
         </div>
 
-        {!projectId && <RecurrenceField value={recurrence} onChange={setRecurrence} />}
+        <RecurrenceField value={recurrence} onChange={setRecurrence} />
 
         {!task && (
           <div className="flex flex-col gap-2">

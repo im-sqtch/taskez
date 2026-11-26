@@ -6,7 +6,8 @@ import { Switch } from '@/components/ui/Switch'
 import { SortableItem, SortableList } from '@/components/ui/SortableList'
 import { cn } from '@/lib/utils'
 import { reorderItems } from '@/lib/reorder'
-import { nextSize, SIZE_LABELS, WIDGET_CATALOG } from '@/lib/widgetCatalog'
+import { useDashboardViewport, type DashboardViewport } from '@/lib/dashboardViewport'
+import { nextSize, SIZE_LABELS, WIDGET_CATALOG, widgetContentSize } from '@/lib/widgetCatalog'
 import { defaultLayout, useDataStore, useWorkspaceLayout } from '@/store/dataStore'
 import type { DashboardWidget } from '@/types'
 
@@ -15,14 +16,21 @@ interface CustomizeDashboardSheetProps {
   onClose: () => void
 }
 
+function widgetsForViewport(widgets: DashboardWidget[], viewport: DashboardViewport): DashboardWidget[] {
+  return widgets
+    .map((widget) => viewport === 'mobile' ? { ...widget, size: widgetContentSize(widget.size) } : widget)
+    .sort((a, b) => a.order - b.order)
+}
+
 export function CustomizeDashboardSheet({ open, onClose }: CustomizeDashboardSheetProps) {
   const layout = useWorkspaceLayout()
+  const viewport = useDashboardViewport()
   const setLayout = useDataStore((s) => s.setLayout)
   const [draft, setDraft] = useState<DashboardWidget[]>([])
 
   useEffect(() => {
-    if (open) setDraft([...layout.widgets].sort((a, b) => a.order - b.order))
-  }, [open, layout])
+    if (open) setDraft(widgetsForViewport(layout.widgets, viewport))
+  }, [open, layout, viewport])
 
   function reorder(oldIndex: number, newIndex: number) {
     setDraft((prev) => reorderItems(prev, oldIndex, newIndex).map((widget, order) => ({ ...widget, order })))
@@ -32,7 +40,7 @@ export function CustomizeDashboardSheet({ open, onClose }: CustomizeDashboardShe
     setDraft((prev) =>
       prev.map((w) => {
         if (w.id !== id) return w
-        const allowed = WIDGET_CATALOG[w.type].allowedSizes
+        const allowed = WIDGET_CATALOG[w.type].allowedSizes.filter((size) => viewport === 'desktop' || (size !== 'LH' && size !== 'LS'))
         return { ...w, size: nextSize(w.size, allowed) }
       }),
     )
@@ -43,7 +51,7 @@ export function CustomizeDashboardSheet({ open, onClose }: CustomizeDashboardShe
   }
 
   function handleRestoreDefault() {
-    setDraft([...defaultLayout().widgets].sort((a, b) => a.order - b.order))
+    setDraft(widgetsForViewport(defaultLayout().widgets, viewport))
   }
 
   function handleSave() {
@@ -78,6 +86,7 @@ export function CustomizeDashboardSheet({ open, onClose }: CustomizeDashboardShe
         {draft.map((widget) => {
           const catalog = WIDGET_CATALOG[widget.type]
           const Icon = catalog.icon
+          const sizeLabel = viewport === 'mobile' && widget.size === 'L' ? 'Grande' : SIZE_LABELS[widget.size]
           return (
             <SortableItem
               key={widget.id}
@@ -100,11 +109,11 @@ export function CustomizeDashboardSheet({ open, onClose }: CustomizeDashboardShe
                     onClick={() => cycleSize(widget.id)}
                     className="mt-0.5 flex items-center gap-1 text-xs font-medium text-accent"
                   >
-                    Tamanho: {SIZE_LABELS[widget.size]}
+                    Tamanho: {sizeLabel}
                     <span className="text-[10px]">↕</span>
                   </button>
                 ) : (
-                  <p className="mt-0.5 text-xs font-medium text-accent">Tamanho: {SIZE_LABELS[widget.size]}</p>
+                  <p className="mt-0.5 text-xs font-medium text-accent">Tamanho: {sizeLabel}</p>
                 )}
               </div>
 

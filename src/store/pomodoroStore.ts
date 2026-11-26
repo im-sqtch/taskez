@@ -2,6 +2,20 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { fireAndForget, supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { FOCUS_TRACKS, nextFocusTrack } from '@/lib/focusMusic'
+import { setFocusAudioListener, syncFocusAudio } from '@/lib/focusAudio'
+import { resumeFocusYouTube, setFocusYouTubeListener, skipFocusYouTube, syncFocusYouTube } from '@/lib/focusYouTube'
+import { parseYouTubeLink } from '@/lib/youtubeLink'
+
+export const MAX_FOCUS_TIMERS = 10
+export const MAX_TIMER_MINUTES = 1440
+
+export interface FocusTimerDefinition {
+  id: string
+  userId: string
+  name: string
+  totalSeconds: number
+}
 
 interface TimerState {
   secondsLeft: number
@@ -11,17 +25,45 @@ interface TimerState {
   // valor fica correto mesmo que a aba fique em segundo plano ou o widget
   // seja desmontado e remontado (troca de página no dashboard).
   endAt: number | null
+  runId?: string
   // Id da linha em `scheduled_notifications` que vai disparar o push de
   // conclusão — guardado para poder cancelar ao pausar/reiniciar/terminar.
   scheduledId?: string
 }
 
 interface PomodoroState {
+  definitions: FocusTimerDefinition[]
   timers: Record<string, TimerState>
-  start: (id: string, totalSeconds: number) => void
-  toggle: (id: string, totalSeconds: number) => void
+  musicEnabled: boolean
+  musicSource: 'lofi' | 'youtube'
+  youtubeUrls: Record<string, string>
+  youtubeVideoCollapsed: boolean
+  trackId: string
+  volume: number
+  musicError: string | null
+  musicStatus: 'paused' | 'loading' | 'playing' | 'error'
+  addTimer: (name: string, minutes: number) => boolean
+  updateTimer: (id: string, name: string, minutes: number) => boolean
+  removeTimer: (id: string) => void
+  setMusicEnabled: (enabled: boolean) => void
+  setMusicSource: (source: 'lofi' | 'youtube') => void
+  setYouTubeUrl: (url: string) => boolean
+  setYouTubeVideoCollapsed: (hidden: boolean) => void
+  setTrack: (id: string) => void
+  nextTrack: (direction?: number) => void
+  setVolume: (volume: number) => void
+  start: (id: string) => void
+  toggle: (id: string) => void
   pause: (id: string) => void
-  reset: (id: string, totalSeconds: number) => void
+  reset: (id: string) => void
+}
+
+function ownsTimer(state: PomodoroState, id: string) {
+  return state.definitions.find((timer) => timer.id === id && timer.userId === useAuthStore.getState().currentUserId)
+}
+
+function validTimer(name: string, minutes: number) {
+  return Boolean(name.trim()) && name.trim().length <= 60 && Number.isInteger(minutes) && minutes >= 1 && minutes <= MAX_TIMER_MINUTES
 }
 
 function getTimer(state: PomodoroState, id: string, totalSeconds: number): TimerState {
@@ -84,12 +126,9 @@ function playCompletionSound() {
   }
 }
 
-// "pomodoro"/"break" são os únicos ids usados hoje (ver UtilityWidget.tsx) —
-// os rótulos ficam fixos aqui do mesmo jeito que os 25/5 minutos já ficam
-// fixos lá, sem criar uma fonte de verdade nova só para isso.
 function labelsFor(id: string): { label: string; title: string; body: string } {
-  if (id === 'break') return { label: 'Descanso', title: 'Pausa concluída!', body: 'Hora de voltar ao foco.' }
-  return { label: 'Pomodoro', title: 'Pomodoro concluído!', body: 'Hora de fazer uma pausa.' }
+  const label = usePomodoroStore.getState().definitions.find((timer) => timer.id === id)?.name ?? 'Timer'
+  return { label, title: `${label}: tempo concluído!`, body: 'O tempo definido para esta sessão chegou ao fim.' }
 }
 
 // Agenda o push de conclusão (entregue mesmo com o app fechado — ver
@@ -122,6 +161,7 @@ async function showRunningNotification(id: string) {
   const { label } = labelsFor(id)
   try {
     const reg = await navigator.serviceWorker.ready
+    if (!usePomodoroStore.getState().timers[id]?.running) return
     await reg.showNotification(`${label} em andamento`, {
       tag: `pomodoro-${id}`,
       silent: true,
@@ -144,6 +184,8 @@ async function closeRunningNotification(id: string) {
   try {
     const reg = await navigator.serviceWorker.ready
     const list = await reg.getNotifications({ tag: `pomodoro-${id}` })
+    const current = usePomodoroStore.getState().timers[id]
+    if (current?.running) return
     list.forEach((n) => n.close())
   } catch {
     // ignora
@@ -160,6 +202,8 @@ async function showCompletedNotification(id: string) {
   const { title, body } = labelsFor(id)
   try {
     const reg = await navigator.serviceWorker.ready
+    const current = usePomodoroStore.getState().timers[id]
+    if (!current || current.running || current.secondsLeft !== 0) return
     await reg.showNotification(title, {
       tag: `pomodoro-${id}`,
       renotify: true,
@@ -176,8 +220,63 @@ async function showCompletedNotification(id: string) {
 export const usePomodoroStore = create<PomodoroState>()(
   persist(
     (set, get) => ({
+      definitions: [],
       timers: {},
-      start: (id, totalSeconds) => {
+      musicEnabled: false,
+      musicSource: 'lofi',
+      youtubeUrls: {},
+      youtubeVideoCollapsed: false,
+      trackId: FOCUS_TRACKS[0]!.id,
+      volume: 0.35,
+      musicError: null,
+      musicStatus: 'paused',
+      addTimer: (name, minutes) => {
+        const userId = useAuthStore.getState().currentUserId
+        if (!userId || !validTimer(name, minutes) || get().definitions.filter((timer) => timer.userId === userId).length >= MAX_FOCUS_TIMERS) return false
+        const definition = { id: crypto.randomUUID(), userId, name: name.trim(), totalSeconds: minutes * 60 }
+        set((state) => ({ definitions: [...state.definitions, definition] }))
+        return true
+      },
+      updateTimer: (id, name, minutes) => {
+        const definition = ownsTimer(get(), id)
+        if (!definition || !validTimer(name, minutes)) return false
+        const wasRunning = get().timers[id]?.running
+        const durationChanged = definition.totalSeconds !== minutes * 60
+        get().pause(id)
+        set((state) => ({ definitions: state.definitions.map((timer) => timer.id === id ? { ...timer, name: name.trim(), totalSeconds: minutes * 60 } : timer) }))
+        if (durationChanged) get().reset(id)
+        else if (wasRunning) get().start(id)
+        return true
+      },
+      removeTimer: (id) => {
+        if (!ownsTimer(get(), id)) return
+        cancelScheduledPush(get().timers[id]?.scheduledId)
+        void closeRunningNotification(id)
+        set((state) => ({ definitions: state.definitions.filter((timer) => timer.id !== id), timers: Object.fromEntries(Object.entries(state.timers).filter(([key]) => key !== id)) }))
+      },
+      setMusicEnabled: (enabled) => {
+        set({ musicEnabled: enabled, musicError: null })
+        if (enabled && get().musicSource === 'youtube') resumeFocusYouTube()
+      },
+      setMusicSource: (source) => set({ musicSource: source, musicError: null, musicStatus: 'paused' }),
+      setYouTubeUrl: (url) => {
+        const userId = useAuthStore.getState().currentUserId
+        const link = parseYouTubeLink(url)
+        if (!userId || !link) return false
+        set((state) => ({ youtubeUrls: { ...state.youtubeUrls, [userId]: link.url }, musicSource: 'youtube', musicError: null, musicStatus: 'paused' }))
+        return true
+      },
+      setYouTubeVideoCollapsed: (hidden) => set({ youtubeVideoCollapsed: hidden }),
+      setTrack: (id) => { if (FOCUS_TRACKS.some((track) => track.id === id)) set({ trackId: id, musicError: null }) },
+      nextTrack: (direction = 1) => {
+        if (get().musicSource === 'youtube') skipFocusYouTube(direction)
+        else get().setTrack(nextFocusTrack(get().trackId, direction))
+      },
+      setVolume: (volume) => { if (Number.isFinite(volume)) set({ volume: Math.max(0, Math.min(1, volume)) }) },
+      start: (id) => {
+        const definition = ownsTimer(get(), id)
+        if (!definition || get().timers[id]?.running) return
+        const totalSeconds = definition.totalSeconds
         // Chamado direto do clique no botão de play — o único momento em que
         // dá pra destravar o áudio de forma confiável (ver comentário acima
         // de `unlockAudio`).
@@ -185,8 +284,10 @@ export const usePomodoroStore = create<PomodoroState>()(
         const current = getTimer(get(), id, totalSeconds)
         const secondsLeft = current.secondsLeft > 0 ? current.secondsLeft : totalSeconds
         const endAt = Date.now() + secondsLeft * 1000
+        const runId = crypto.randomUUID()
         set((state) => ({
-          timers: { ...state.timers, [id]: { secondsLeft, running: true, endAt, scheduledId: undefined } },
+          timers: { ...state.timers, [id]: { secondsLeft, running: true, endAt, runId, scheduledId: undefined } },
+          musicError: null,
         }))
         void showRunningNotification(id)
         void schedulePush(id, endAt).then((scheduledId) => {
@@ -194,7 +295,7 @@ export const usePomodoroStore = create<PomodoroState>()(
           // reanexar a um timer que já foi pausado/reiniciado nesse meio-tempo.
           const timerNow = usePomodoroStore.getState().timers[id]
           if (!scheduledId) return
-          if (!timerNow?.running || timerNow.endAt !== endAt) {
+          if (!timerNow?.running || timerNow.runId !== runId) {
             cancelScheduledPush(scheduledId)
             return
           }
@@ -204,6 +305,7 @@ export const usePomodoroStore = create<PomodoroState>()(
         })
       },
       pause: (id) => {
+        if (!ownsTimer(get(), id)) return
         const current = get().timers[id]
         if (!current?.running) return
         cancelScheduledPush(current.scheduledId)
@@ -215,15 +317,20 @@ export const usePomodoroStore = create<PomodoroState>()(
         })
         void closeRunningNotification(id)
       },
-      toggle: (id, totalSeconds) => {
-        const current = getTimer(get(), id, totalSeconds)
+      toggle: (id) => {
+        const definition = ownsTimer(get(), id)
+        if (!definition) return
+        const current = getTimer(get(), id, definition.totalSeconds)
         if (current.running) {
           get().pause(id)
         } else {
-          get().start(id, totalSeconds)
+          get().start(id)
         }
       },
-      reset: (id, totalSeconds) => {
+      reset: (id) => {
+        const definition = ownsTimer(get(), id)
+        if (!definition) return
+        const totalSeconds = definition.totalSeconds
         cancelScheduledPush(get().timers[id]?.scheduledId)
         set((state) => ({
           timers: { ...state.timers, [id]: { secondsLeft: totalSeconds, running: false, endAt: null, scheduledId: undefined } },
@@ -233,6 +340,16 @@ export const usePomodoroStore = create<PomodoroState>()(
     }),
     {
       name: 'taskez-pomodoro',
+      version: 1,
+      migrate: (persisted) => {
+        const legacy = persisted as { timers?: Record<string, TimerState> }
+        for (const [id, timer] of Object.entries(legacy?.timers ?? {})) {
+          cancelScheduledPush(timer.scheduledId)
+          void closeRunningNotification(id)
+        }
+        return { timers: {}, definitions: [], musicEnabled: false, musicSource: 'lofi' as const, youtubeUrls: {}, youtubeVideoCollapsed: false, trackId: FOCUS_TRACKS[0]!.id, volume: 0.35 }
+      },
+      partialize: (state) => ({ definitions: state.definitions, timers: state.timers, musicEnabled: state.musicEnabled, musicSource: state.musicSource, youtubeUrls: state.youtubeUrls, youtubeVideoCollapsed: state.youtubeVideoCollapsed, trackId: state.trackId, volume: state.volume }),
       // Ao reabrir o app/recarregar a página, o tempo que passou enquanto ele
       // estava fechado precisa ser descontado silenciosamente (sem tocar o
       // som de conclusão) — o loop de tick abaixo assumiria erroneamente que
@@ -252,7 +369,7 @@ export const usePomodoroStore = create<PomodoroState>()(
             changed = true
           }
         }
-        if (changed) usePomodoroStore.setState({ timers })
+        if (changed) state.timers = timers
       },
     },
   ),
@@ -261,12 +378,12 @@ export const usePomodoroStore = create<PomodoroState>()(
 // Loop único no nível do módulo (não em um efeito de componente), garantindo
 // que a contagem continue rodando mesmo enquanto o widget do Pomodoro está
 // desmontado — por exemplo, ao navegar para outra aba do dashboard.
-setInterval(() => {
+const tickInterval = setInterval(() => {
   const state = usePomodoroStore.getState()
   let changed = false
   const nextTimers = { ...state.timers }
   for (const [id, timer] of Object.entries(state.timers)) {
-    if (!timer.running || timer.endAt === null) continue
+    if (!timer.running || timer.endAt === null || !ownsTimer(state, id)) continue
     const secondsLeft = Math.max(0, Math.round((timer.endAt - Date.now()) / 1000))
     if (secondsLeft <= 0) {
       nextTimers[id] = { secondsLeft: 0, running: false, endAt: null, scheduledId: undefined }
@@ -285,6 +402,58 @@ setInterval(() => {
   if (changed) usePomodoroStore.setState({ timers: nextTimers })
 }, 250)
 
+function syncMusic() {
+  const state = usePomodoroStore.getState()
+  const hasRunningTimer = Object.entries(state.timers).some(([id, timer]) => timer.running && ownsTimer(state, id))
+  const playing = state.musicEnabled && hasRunningTimer && !state.musicError
+  const userId = useAuthStore.getState().currentUserId
+  const youtubeUrl = userId ? state.youtubeUrls[userId] ?? '' : ''
+  syncFocusAudio(state.trackId, state.volume, playing && state.musicSource === 'lofi')
+  syncFocusYouTube(youtubeUrl, state.volume, playing && state.musicSource === 'youtube' && Boolean(youtubeUrl))
+  if (!playing && !state.musicError && state.musicStatus !== 'paused') usePomodoroStore.setState({ musicStatus: 'paused' })
+}
+
+setFocusAudioListener((event) => {
+  const state = usePomodoroStore.getState()
+  if (event === 'ended') state.nextTrack()
+  else if (event === 'error') usePomodoroStore.setState({ musicError: 'Não foi possível tocar a música. Tente novamente ou escolha outra faixa.', musicStatus: 'error' })
+  else if (state.musicStatus !== event) usePomodoroStore.setState({ musicStatus: event })
+})
+setFocusYouTubeListener((event, code) => {
+  if (usePomodoroStore.getState().musicSource !== 'youtube') return
+  if (event === 'error' || event === 'blocked') {
+    const message = event === 'blocked' ? 'O navegador bloqueou a reprodução. Tente novamente ou mostre o vídeo e toque no play do YouTube.'
+      : code === 100 ? 'Este vídeo ou playlist não está disponível.'
+      : code === 101 || code === 150 ? 'O autor não permite reproduzir este vídeo em outros sites. Escolha outro link.'
+      : code === 153 ? 'O YouTube não conseguiu identificar o site. Verifique as configurações de privacidade do navegador.'
+      : 'Não foi possível carregar o YouTube. Verifique sua conexão e tente novamente.'
+    usePomodoroStore.setState({ musicError: message, musicStatus: 'error' })
+  } else if (usePomodoroStore.getState().musicStatus !== event) usePomodoroStore.setState({ musicStatus: event })
+})
+const unsubscribeMusic = usePomodoroStore.subscribe(syncMusic)
+const unsubscribeAuth = useAuthStore.subscribe?.((auth, previous) => {
+  if (auth.currentUserId === previous.currentUserId) return
+  // Restoring authentication on reload must preserve the running countdown.
+  if (!previous.currentUserId) { syncMusic(); return }
+  const state = usePomodoroStore.getState()
+  const timers = { ...state.timers }
+  for (const [id, timer] of Object.entries(timers)) {
+    if (!timer.running) continue
+    cancelScheduledPush(timer.scheduledId)
+    void closeRunningNotification(id)
+    timers[id] = { secondsLeft: Math.max(0, Math.ceil(((timer.endAt ?? Date.now()) - Date.now()) / 1000)), running: false, endAt: null }
+  }
+  usePomodoroStore.setState({ timers, musicEnabled: false, musicError: null, musicStatus: 'paused' })
+})
+
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  clearInterval(tickInterval)
+  unsubscribeMusic()
+  unsubscribeAuth?.()
+  syncFocusAudio(usePomodoroStore.getState().trackId, usePomodoroStore.getState().volume, false)
+  syncFocusYouTube('', usePomodoroStore.getState().volume, false)
+})
+
 // Repasse de "Pausar"/"Encerrar" clicados na notificação do sistema, quando o
 // Service Worker encontrou uma aba já aberta (ver public/sw.js).
 if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
@@ -292,7 +461,7 @@ if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
     const payload = event.data as { type?: string; action?: string; id?: string } | undefined
     if (payload?.type !== 'pomodoro-action' || !payload.id) return
     if (payload.action === 'pause') usePomodoroStore.getState().pause(payload.id)
-    if (payload.action === 'stop') usePomodoroStore.getState().reset(payload.id, payload.id === 'break' ? 5 * 60 : 25 * 60)
+    if (payload.action === 'stop') usePomodoroStore.getState().reset(payload.id)
   })
 }
 
@@ -307,7 +476,7 @@ function applyPendingPomodoroUrlAction() {
   const id = params.get('pomodoroId')
   if (!action || !id) return
   if (action === 'pause') usePomodoroStore.getState().pause(id)
-  if (action === 'stop') usePomodoroStore.getState().reset(id, id === 'break' ? 5 * 60 : 25 * 60)
+  if (action === 'stop') usePomodoroStore.getState().reset(id)
   params.delete('pomodoroAction')
   params.delete('pomodoroId')
   const rest = params.toString()

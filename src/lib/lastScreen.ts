@@ -5,6 +5,7 @@ const DEFAULT_SCREEN = '/dashboard'
 function isAppScreen(path: string): boolean {
   const pathname = path.split(/[?#]/, 1)[0]
   return /^\/(dashboard|files|profile|settings|trash)$/.test(pathname)
+    || /^\/calendar(?:\/[^/?#]+)?$/.test(pathname)
     || /^\/projects(?:\/[^/?#]+(?:\/tasks\/[^/?#]+)?)?$/.test(pathname)
     || /^\/tasks(?:\/[^/?#]+)?$/.test(pathname)
 }

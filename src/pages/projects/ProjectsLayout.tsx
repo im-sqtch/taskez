@@ -1,5 +1,6 @@
 import { FolderKanban } from 'lucide-react'
-import { Outlet, useMatch } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Outlet, useLocation, useMatch } from 'react-router-dom'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { cn } from '@/lib/utils'
 import { ProjectsPage } from './ProjectsPage'
@@ -11,15 +12,22 @@ export function ProjectsLayout() {
   const detailMatch = useMatch('/projects/:id/*')
   const selectedId = detailMatch?.params.id
   const hasDetail = Boolean(selectedId)
+  const [projectListCollapsed, setProjectListCollapsed] = useState(false)
+  const { pathname } = useLocation()
+  const detailRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    detailRef.current?.scrollTo({ top: 0 })
+  }, [pathname])
 
   return (
-    <div className="w-full min-w-0 overflow-x-clip lg:flex lg:items-start lg:gap-8">
-      <div className={cn('lg:w-[380px] lg:shrink-0 lg:border-r lg:border-border-soft lg:pr-8', hasDetail && 'hidden lg:block')}>
+    <div className="w-full min-w-0 overflow-x-clip lg:flex lg:h-full lg:min-h-0 lg:gap-8">
+      <div data-scroll-pane="projects-list" className={cn('lg:h-full lg:w-[380px] lg:shrink-0 lg:overflow-y-auto lg:overscroll-contain lg:border-r lg:border-border-soft lg:pr-8 lg:pb-8', hasDetail && (projectListCollapsed ? 'hidden' : 'hidden lg:block'))}>
         <ProjectsPage selectedId={selectedId} />
       </div>
-      <div className={cn('min-w-0 flex-1', !hasDetail && 'hidden lg:flex lg:min-h-[60vh] lg:items-center lg:justify-center')}>
+      <div ref={detailRef} data-scroll-pane="projects-detail" className={cn('min-w-0 flex-1 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:pb-8', !hasDetail && 'hidden lg:flex lg:min-h-[60vh] lg:items-center lg:justify-center')}>
         {hasDetail ? (
-          <Outlet />
+          <Outlet context={{ toggleProjectList: () => setProjectListCollapsed((collapsed) => !collapsed), projectListCollapsed }} />
         ) : (
           <EmptyState
             icon={<FolderKanban size={28} />}

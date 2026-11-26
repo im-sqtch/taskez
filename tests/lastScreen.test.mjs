@@ -45,3 +45,11 @@ test('valores inválidos ou armazenamento bloqueado não impedem a abertura', ()
   assert.equal(getStartupScreen('user-1', '/dashboard'), '/dashboard')
   assert.doesNotThrow(() => saveLastScreen('user-1', '/files'))
 })
+
+test('restaura calendário e detalhes com data, visualização e filtros', () => {
+  for (const path of ['/calendar?date=2026-11-26&view=week&hide=project-1', '/calendar/task-1?date=2026-11-26&view=month']) {
+    saveLastScreen('user-1', path)
+    assert.equal(getLastScreen('user-1'), path)
+    assert.equal(getStartupScreen('user-1', '/'), path)
+  }
+})

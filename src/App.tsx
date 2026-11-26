@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignupPage } from '@/pages/auth/SignupPage'
 import { UsagePickerPage } from '@/pages/auth/UsagePickerPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
+import { CalendarPage } from '@/pages/calendar/CalendarPage'
 import { FilesPage } from '@/pages/files/FilesPage'
 import { NotificationUnavailablePage } from '@/pages/notifications/NotificationUnavailablePage'
 import { OnboardingPage } from '@/pages/onboarding/OnboardingPage'
@@ -113,6 +114,9 @@ export default function App() {
             <Route path=":projectId/tasks/:taskId" element={<TaskDetailPage />} />
           </Route>
           <Route path="/files" element={<FilesPage />} />
+          <Route path="/calendar" element={<CalendarPage />}>
+            <Route path=":id" element={<TaskDetailPage />} />
+          </Route>
           <Route path="/tasks" element={<TasksLayout />}>
             <Route path=":id" element={<TaskDetailPage />} />
           </Route>

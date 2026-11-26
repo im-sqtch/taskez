@@ -175,69 +175,73 @@ export function ProjectDetailPage() {
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-5 overflow-x-clip">
-      <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
-        <button onClick={() => navigate('/projects')} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
-          <ArrowLeft size={19} />
-        </button>
-        <div className="flex gap-2">
-          <button onClick={() => setEditOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
-            <Pencil size={16} />
+      <div data-detail-heading className="sticky top-0 z-20 flex flex-col gap-5 bg-base">
+        <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
+          <button onClick={() => navigate('/projects')} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
+            <ArrowLeft size={19} />
           </button>
-          <button
-            onClick={handleToggleArchive}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted"
-            aria-label={project.status === 'archived' ? 'Desarquivar projeto' : 'Arquivar projeto'}
-          >
-            {project.status === 'archived' ? <ArchiveRestore size={16} /> : <Archive size={16} />}
-          </button>
-          {isWorkspaceOwner && (
-            <button onClick={handleDelete} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-danger">
-              <Trash2 size={16} />
+          <div className="flex gap-2">
+            <button onClick={() => setEditOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
+              <Pencil size={16} />
             </button>
-          )}
-        </div>
-      </header>
-
-      <div className="flex flex-col gap-3 px-5">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: project.color }}>
-            <Calendar size={20} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="flex min-w-0 items-center gap-1.5 break-words text-xl font-bold text-text">
-              <span className="min-w-0 break-words">{project.name}</span>
-              {project.recurrence && <Repeat size={15} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
-            </h1>
-            {project.dueDate && <p className="text-sm text-text-faint">Prazo: {formatDate(project.dueDate)}</p>}
-          </div>
-        </div>
-        {project.description && (
-          <CollapsibleDescription key={project.description} text={project.description} workspaceId={project.workspaceId} />
-        )}
-        <div className="flex flex-col gap-1.5">
-          <ProgressBar value={pct} color={project.color} />
-          <p className="text-xs font-medium text-text-muted">{pct}% concluído · {done}/{tasks.length} tarefas</p>
-        </div>
-      </div>
-
-      <div className="grid w-full min-w-0 grid-cols-5 border-b border-border-soft px-2 sm:px-5">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => selectTab(t.key)}
-            className={cn(
-              'min-w-0 border-b-2 px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs',
-              tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-faint',
+            <button
+              onClick={handleToggleArchive}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted"
+              aria-label={project.status === 'archived' ? 'Desarquivar projeto' : 'Arquivar projeto'}
+            >
+              {project.status === 'archived' ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+            </button>
+            {isWorkspaceOwner && (
+              <button onClick={handleDelete} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-danger">
+                <Trash2 size={16} />
+              </button>
             )}
-          >
-            <span className="relative inline-flex max-w-full items-center gap-1">
-              <span className="truncate">{t.label}</span>
-              {t.key === 'chat' && hasUnreadChat && tab !== 'chat' && (
-                <span className="h-2 w-2 rounded-full bg-danger" aria-label="Nova mensagem" />
+          </div>
+        </header>
+
+        <div className="flex flex-col gap-3 px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: project.color }}>
+              <Calendar size={20} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="flex min-w-0 items-center gap-1.5 break-words text-xl font-bold text-text">
+                <span className="min-w-0 break-words">{project.name}</span>
+                {project.recurrence && <Repeat size={15} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
+              </h1>
+              {project.dueDate && <p className="text-sm text-text-faint">Prazo: {formatDate(project.dueDate)}</p>}
+            </div>
+          </div>
+          {project.description && (
+            <div className="max-h-[24dvh] overflow-y-auto overscroll-contain">
+              <CollapsibleDescription key={project.description} text={project.description} workspaceId={project.workspaceId} />
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <ProgressBar value={pct} color={project.color} />
+            <p className="text-xs font-medium text-text-muted">{pct}% concluído · {done}/{tasks.length} tarefas</p>
+          </div>
+        </div>
+
+        <div className="grid w-full min-w-0 grid-cols-5 border-b border-border-soft px-2 sm:px-5">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => selectTab(t.key)}
+              className={cn(
+                'min-w-0 border-b-2 px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs',
+                tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-faint',
               )}
-            </span>
-          </button>
-        ))}
+            >
+              <span className="relative inline-flex max-w-full items-center gap-1">
+                <span className="truncate">{t.label}</span>
+                {t.key === 'chat' && hasUnreadChat && tab !== 'chat' && (
+                  <span className="h-2 w-2 rounded-full bg-danger" aria-label="Nova mensagem" />
+                )}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="min-w-0 overflow-hidden px-5">

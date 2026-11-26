@@ -1,0 +1,21 @@
+TASKEZ focus music
+
+Collection: Open Lo-Fi
+Creator: btahir
+Source: https://github.com/btahir/open-lofi
+Release: v1.0.0
+Downloads: https://github.com/btahir/open-lofi/releases/download/v1.0.0/openlofi.zip
+License: CC0 1.0 Universal (see LICENSE.txt)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Retrieved: 2026-11-26
+
+Included tracks (original, unmodified MP3 recordings):
+- 2 AM Debug Loop
+- Coffee Ring Notebook
+- Chapter By Lamplight
+- First Coffee Thoughts
+- Terminal Rain
+
+The collection's author states that these tracks were generated with Suno v5
+under a premium account and dedicated to the public domain under CC0.
+No attribution is required; provenance is retained here for transparency.

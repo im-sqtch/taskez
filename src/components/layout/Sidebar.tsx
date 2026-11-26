@@ -1,5 +1,6 @@
 import {
   Bell,
+  CalendarDays,
   CheckSquare,
   ChevronsLeft,
   ChevronsRight,
@@ -147,6 +148,7 @@ export function Sidebar() {
         <SidebarItem to="/dashboard" label="Início" icon={House} collapsed={collapsed} onClick={handleNavigate} />
         <SidebarItem to="/projects" label="Projetos" icon={FolderKanban} collapsed={collapsed} onClick={handleNavigate} />
         <SidebarItem to="/tasks" label="Tarefas" icon={CheckSquare} collapsed={collapsed} onClick={handleNavigate} />
+        <SidebarItem to="/calendar" label="Calendário" icon={CalendarDays} collapsed={collapsed} onClick={handleNavigate} />
         <SidebarItem to="/files" label="Arquivos" icon={Paperclip} collapsed={collapsed} onClick={handleNavigate} />
         <SidebarItem
           label="Notificações"

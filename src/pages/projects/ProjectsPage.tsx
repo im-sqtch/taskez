@@ -1,14 +1,13 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { FolderKanban, Plus, Repeat, SlidersHorizontal, Upload } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { FolderKanban, Plus, SlidersHorizontal, Upload } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ProjectFormSheet } from '@/components/projects/ProjectFormSheet'
-import { ProjectUnreadBadge } from '@/components/projects/ProjectUnreadBadge'
+import { ProjectCardContent } from '@/components/projects/ProjectCardContent'
 import { ReorderProjectsSheet } from '@/components/projects/ReorderProjectsSheet'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { ProgressBar } from '@/components/ui/ProgressBar'
-import { cn, formatDate } from '@/lib/utils'
-import { useWorkspaceProjects, useWorkspaceTasks } from '@/store/dataStore'
+import { cn } from '@/lib/utils'
+import { useCurrentWorkspace, useWorkspaceProjects, useWorkspaceTasks } from '@/store/dataStore'
 import type { ProjectStatus } from '@/types'
 
 const filters: { value: ProjectStatus; label: string }[] = [
@@ -26,6 +25,7 @@ const slideVariants = {
 }
 
 export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
+  const workspace = useCurrentWorkspace()
   const projects = useWorkspaceProjects()
   const tasks = useWorkspaceTasks()
   const [filter, setFilter] = useState<ProjectStatus>('active')
@@ -35,6 +35,7 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
   const [cardLayoutEnabled, setCardLayoutEnabled] = useState(false)
   const navigate = useNavigate()
+  const listRef = useRef<HTMLDivElement>(null)
 
   const filtered = useMemo(() => {
     const list = projects.filter((p) => p.status === filter)
@@ -69,17 +70,15 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
   useEffect(() => {
     if (!selectedId) return
     if (!isDesktop) return
-    if (window.scrollY === 0) return
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    listRef.current?.closest('[data-scroll-pane]')?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [selectedId, isDesktop])
 
   function progressFor(projectId: string) {
     const projectTasks = tasks.filter((t) => t.projectId === projectId)
-    if (projectTasks.length === 0) return { pct: 0, total: 0, todo: 0 }
+    if (projectTasks.length === 0) return { total: 0, completed: 0 }
     return {
-      pct: Math.round((projectTasks.filter((t) => t.status === 'done').length / projectTasks.length) * 100),
       total: projectTasks.length,
-      todo: projectTasks.filter((t) => t.status === 'todo').length,
+      completed: projectTasks.filter((t) => t.status === 'done').length,
     }
   }
 
@@ -90,10 +89,14 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div ref={listRef} className="flex flex-col gap-5">
+      <div className="sticky top-0 z-20 -mb-4 flex flex-col gap-5 bg-base pb-4">
       <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
-        <h1 className="text-2xl font-bold text-text">Projetos</h1>
-        <div className="flex items-center gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs text-text-muted lg:hidden">{workspace?.name}</p>
+          <h1 className="text-2xl font-bold text-text">Projetos</h1>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={() => setReorderOpen(true)}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-alt text-text"
@@ -132,6 +135,7 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
           </button>
         ))}
       </div>
+      </div>
 
       <div className="overflow-hidden px-5">
         <AnimatePresence initial={false} custom={slideDirection} mode="wait">
@@ -155,7 +159,7 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
         ) : (
           <AnimatePresence initial={false}>
             {filtered.map((p) => {
-              const { pct, total, todo } = progressFor(p.id)
+              const { total, completed } = progressFor(p.id)
               return (
                 <motion.button
                   key={p.id}
@@ -175,28 +179,7 @@ export function ProjectsPage({ selectedId }: { selectedId?: string } = {}) {
                     p.id === selectedId ? 'border-accent bg-accent-soft' : 'border-border-soft bg-surface',
                   )}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
-                        style={{ backgroundColor: p.color }}
-                      >
-                        <FolderKanban size={18} />
-                        <ProjectUnreadBadge projectId={p.id} />
-                      </div>
-                      <div>
-                        <p className="flex items-center gap-1.5 font-semibold text-text">
-                          {p.name}
-                          {p.recurrence && <Repeat size={12} className="shrink-0 text-text-faint" aria-label="Recorrente" />}
-                        </p>
-                        {p.dueDate && <p className="text-xs text-text-faint">Prazo: {formatDate(p.dueDate)}</p>}
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-xs font-semibold text-text-muted">
-                      {todo} · {total} tarefas
-                    </span>
-                  </div>
-                  <ProgressBar value={pct} color={p.color} />
+                  <ProjectCardContent project={p} completed={completed} total={total} />
                 </motion.button>
               )
             })}

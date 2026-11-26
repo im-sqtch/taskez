@@ -26,7 +26,7 @@ export function TasksWidget({ size }: { size: WidgetSize }) {
 
   if (content === 'S') {
     return (
-      <Card className="flex items-center justify-between" onClick={() => navigate('/tasks')}>
+      <Card className="flex items-center justify-between lg:h-full" onClick={() => navigate('/tasks')}>
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent">
             <ListTodo size={16} />
@@ -41,7 +41,7 @@ export function TasksWidget({ size }: { size: WidgetSize }) {
   const upcoming = pending.slice(0, LIMIT_BY_SIZE[content])
 
   return (
-    <Card className="flex flex-col gap-3.5">
+    <Card className="flex flex-col gap-3.5 lg:h-full">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-text">Próximas tarefas</h3>
         <button onClick={() => navigate('/tasks')} className="text-sm font-semibold text-accent">

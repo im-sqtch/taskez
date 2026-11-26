@@ -21,6 +21,13 @@ export interface Comment {
   createdAt: string
 }
 
+export interface TaskTable {
+  id: string
+  title?: string
+  columns: { id: string; title: string }[]
+  rows: { id: string; cells: Record<string, string> }[]
+}
+
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
 
 export interface RecurrenceRule {
@@ -51,6 +58,7 @@ export interface Task {
   dueDate?: string
   assigneeIds: string[]
   subtasks: Subtask[]
+  tables?: TaskTable[]
   comments: Comment[]
   links: string[]
   createdAt: string
@@ -59,8 +67,8 @@ export interface Task {
   // Ordem manual dentro do projeto (ou da lista de avulsas do workspace,
   // quando sem projeto) — definida na sheet de reordenar.
   order: number
-  // Só é considerada quando a tarefa não pertence a um projeto — dentro de um
-  // projeto recorrente, a cadência é a do projeto (ver RecurrenceRule).
+  // Regra própria, com ou sem projeto. Quando presente, a tarefa segue esta
+  // cadência em vez de ser copiada pela recorrência do projeto.
   recurrence?: RecurrenceRule
   // Identifica a série de ciclos gerados a partir desta tarefa/projeto — só a
   // store mexe nisto, nunca é exposto na UI.
@@ -151,6 +159,7 @@ export interface ProjectFile {
   id: string
   workspaceId: string
   projectIds: string[]
+  taskIds?: string[]
   name: string
   size: number
   type: string

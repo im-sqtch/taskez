@@ -81,7 +81,7 @@ export const WIDGET_CATALOG: Record<WidgetType, WidgetCatalogEntry> = {
   utility: {
     type: 'utility',
     label: 'Sequência & Foco',
-    description: 'Sua sequência de dias e timers de pomodoro e descanso.',
+    description: 'Sua sequência de dias, timers personalizados e música lo-fi para focar.',
     icon: Flame,
     allowedSizes: ['S', 'M', 'L', 'LH'],
     defaultSize: 'M',

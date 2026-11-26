@@ -25,8 +25,16 @@ export function computeStats(tasks: Task[]) {
   const startOfWeek = new Date(today)
   startOfWeek.setDate(today.getDate() - today.getDay())
   startOfWeek.setHours(0, 0, 0, 0)
-  const dueThisWeek = tasks.filter((t) => t.dueDate && dueDateToLocalDate(t.dueDate) >= startOfWeek)
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(endOfWeek.getDate() + 7)
+  const dueThisWeek = tasks.filter((t) => {
+    if (!t.dueDate) return false
+    const due = dueDateToLocalDate(t.dueDate)
+    return due >= startOfWeek && due < endOfWeek
+  })
   const doneThisWeek = dueThisWeek.filter((t) => t.status === 'done')
+  const pendingThisWeek = dueThisWeek.filter((t) => t.status !== 'done')
+  const overdueThisWeek = pendingThisWeek.filter((t) => dueDateToLocalDate(t.dueDate!) < today && !sameDay(dueDateToLocalDate(t.dueDate!), today))
   const weekProgress = dueThisWeek.length === 0 ? 0 : Math.round((doneThisWeek.length / dueThisWeek.length) * 100)
 
   let streak = 0
@@ -53,6 +61,8 @@ export function computeStats(tasks: Task[]) {
     overdue: overdue.length,
     completedToday: completedToday.length,
     weekProgress,
+    pendingThisWeek: pendingThisWeek.length,
+    overdueThisWeek: overdueThisWeek.length,
     streak,
     completedTotal,
     totalTasks: tasks.length,

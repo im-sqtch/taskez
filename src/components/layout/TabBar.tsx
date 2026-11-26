@@ -1,4 +1,4 @@
-import { CheckSquare, FolderKanban, House, Plus, User } from 'lucide-react'
+import { CalendarDays, FolderKanban, House, Plus, User } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useUiStore } from '@/store/uiStore'
@@ -9,7 +9,7 @@ const tabs = [
 ]
 
 const tabsRight = [
-  { to: '/tasks', label: 'Tarefas', icon: CheckSquare },
+  { to: '/calendar', label: 'Calendário', icon: CalendarDays },
   { to: '/profile', label: 'Perfil', icon: User },
 ]
 
@@ -26,7 +26,7 @@ function TabLink({ to, label, icon: Icon }: (typeof tabs)[number]) {
     >
       {({ isActive }) => (
         <>
-          <Icon size={22} fill={isActive ? 'currentColor' : 'none'} strokeWidth={isActive ? 0 : 2} />
+          <Icon size={22} fill={isActive && Icon !== CalendarDays ? 'currentColor' : 'none'} strokeWidth={isActive ? (Icon === CalendarDays ? 2.5 : 0) : 2} />
           <span className="max-w-full truncate">{label}</span>
         </>
       )}
