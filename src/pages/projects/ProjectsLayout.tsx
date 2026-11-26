@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useMatch } from 'react-router-dom'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { cn } from '@/lib/utils'
+import type { DetailListLayout } from '@/components/layout/ListCollapseButton'
 import { ProjectsPage } from './ProjectsPage'
 
 export function ProjectsLayout() {
@@ -27,7 +28,7 @@ export function ProjectsLayout() {
       </div>
       <div ref={detailRef} data-scroll-pane="projects-detail" className={cn('min-w-0 flex-1 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:pb-8', !hasDetail && 'hidden lg:flex lg:min-h-[60vh] lg:items-center lg:justify-center')}>
         {hasDetail ? (
-          <Outlet context={{ toggleProjectList: () => setProjectListCollapsed((collapsed) => !collapsed), projectListCollapsed }} />
+          <Outlet context={{ toggleList: () => setProjectListCollapsed((collapsed) => !collapsed), listCollapsed: projectListCollapsed, listName: 'projetos' } satisfies DetailListLayout} />
         ) : (
           <EmptyState
             icon={<FolderKanban size={28} />}

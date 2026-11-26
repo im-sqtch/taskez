@@ -1,6 +1,8 @@
-import { ArrowLeft, Check, CheckCheck, Circle, ListChecks, PanelLeftClose, PanelLeftOpen, Paperclip, Pencil, Plus, Repeat, SlidersHorizontal, Table2, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, Circle, Pencil, Repeat, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useLocation, useMatch, useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useLocation, useMatch, useNavigate, useParams } from 'react-router-dom'
+import { ListCollapseButton } from '@/components/layout/ListCollapseButton'
+import { AddSubItemMenu } from '@/components/tasks/AddSubItemMenu'
 import { ReorderSubtasksSheet } from '@/components/tasks/ReorderSubtasksSheet'
 import { TaskAttachments } from '@/components/tasks/TaskAttachments'
 import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
@@ -23,7 +25,6 @@ import { useDataStore } from '@/store/dataStore'
 import { useCommentReadStore } from '@/store/commentReadStore'
 
 export function TaskDetailPage() {
-  const projectLayout = useOutletContext<{ toggleProjectList: () => void; projectListCollapsed: boolean } | undefined>()
   const params = useParams<{ id?: string; taskId?: string }>()
   const id = params.taskId ?? params.id
   const projectContext = useMatch('/projects/:projectId/tasks/:taskId')
@@ -58,7 +59,6 @@ export function TaskDetailPage() {
   const [editingSubtaskValue, setEditingSubtaskValue] = useState('')
   const [commentInput, setCommentInput] = useState('')
   const [showAttachments, setShowAttachments] = useState(false)
-  const [addSubItemMenuOpen, setAddSubItemMenuOpen] = useState(false)
   const [addingSubtask, setAddingSubtask] = useState(false)
   const userId = useAuthStore((s) => s.currentUserId)
   const markCommentsRead = useCommentReadStore((s) => s.markCommentsRead)
@@ -142,20 +142,13 @@ export function TaskDetailPage() {
       <div data-detail-heading className="sticky top-0 z-20 -mb-4 flex flex-col gap-5 bg-base pb-4">
         <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
           <div className="flex items-center gap-2">
-            <button aria-label={calendarContext ? 'Voltar ao calendário' : 'Voltar para tarefas'} onClick={() => navigate(closeTo)} className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text-muted">
+            <button aria-label={calendarContext ? 'Voltar ao calendário' : 'Voltar para tarefas'} onClick={() => navigate(closeTo)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
               <ArrowLeft size={19} />
             </button>
-            {projectContext && projectLayout && <button
-              aria-label={projectLayout.projectListCollapsed ? 'Expandir lista de projetos' : 'Recolher lista de projetos'}
-              title={projectLayout.projectListCollapsed ? 'Expandir lista de projetos' : 'Recolher lista de projetos'}
-              onClick={projectLayout.toggleProjectList}
-              className="hidden h-11 w-11 items-center justify-center rounded-full bg-surface text-text-muted hover:text-accent lg:flex"
-            >
-              {projectLayout.projectListCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-            </button>}
+            {!calendarContext && <ListCollapseButton />}
           </div>
           <div className="flex gap-2">
-            <button aria-label="Editar tarefa" onClick={() => setEditOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text-muted">
+            <button aria-label="Editar tarefa" onClick={() => setEditOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
               <Pencil size={16} />
             </button>
             {task.subtasks.length > 1 && (
@@ -167,7 +160,7 @@ export function TaskDetailPage() {
                 <SlidersHorizontal size={16} />
               </button>
             )}
-            <button aria-label="Excluir tarefa" onClick={handleDelete} className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-danger">
+            <button aria-label="Excluir tarefa" onClick={handleDelete} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-danger">
               <Trash2 size={16} />
             </button>
           </div>
@@ -280,6 +273,8 @@ export function TaskDetailPage() {
             onChange={setSubtaskInput}
             workspaceId={task.workspaceId}
             placeholder="Nome da subtarefa"
+            singleLine
+            onEnterSubmit={handleAddSubtask}
             autoFocus
           />
           <div className="flex justify-end gap-2">
@@ -291,26 +286,12 @@ export function TaskDetailPage() {
 
       {(task.tables?.length ?? 0) > 0 && <div className="px-5"><TaskTables taskId={task.id} tables={task.tables ?? []} /></div>}
       {(showAttachments || files.some((file) => (file.taskIds ?? []).includes(task.id))) && <TaskAttachments taskId={task.id} />}
-      <div className="relative px-5">
-        <button
-          aria-expanded={addSubItemMenuOpen}
-          aria-haspopup="menu"
-          onClick={() => setAddSubItemMenuOpen((open) => !open)}
-          className="flex min-h-11 items-center gap-2 rounded-xl bg-surface px-3.5 text-sm font-semibold text-text-muted hover:text-accent"
-        >
-          <Plus size={16} /> Adicionar Sub-item
-        </button>
-        {addSubItemMenuOpen && <div role="menu" className="absolute bottom-full left-5 z-30 mb-2 flex min-w-48 flex-col rounded-xl border border-border bg-base p-1.5 shadow-lg">
-          <button role="menuitem" onClick={() => { setAddingSubtask(true); setAddSubItemMenuOpen(false) }} className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-text hover:bg-surface">
-            <ListChecks size={16} /> Subtarefa
-          </button>
-          <button role="menuitem" onClick={() => { handleAddTable(); setAddSubItemMenuOpen(false) }} className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-text hover:bg-surface">
-            <Table2 size={16} /> Tabela
-          </button>
-          <button role="menuitem" onClick={() => { setShowAttachments(true); setAddSubItemMenuOpen(false) }} className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-text hover:bg-surface">
-            <Paperclip size={16} /> Anexo
-          </button>
-        </div>}
+      <div className="px-5">
+        <AddSubItemMenu
+          onSubtask={() => setAddingSubtask(true)}
+          onTable={handleAddTable}
+          onAttachment={() => setShowAttachments(true)}
+        />
       </div>
 
       <div className="flex flex-col gap-3 px-5 pb-2">

@@ -38,9 +38,11 @@ interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   // Ref opcional para quem precisa do elemento (ex.: menções lêem a posição do
   // cursor) sem abrir mão do auto-crescimento que vive aqui dentro.
   textareaRef?: RefObject<HTMLTextAreaElement | null>
+  // Começa com uma linha só (mesma altura de um Field) e cresce ao digitar.
+  singleLine?: boolean
 }
 
-export function TextArea({ label, className, id, value, textareaRef, ...props }: TextAreaProps) {
+export function TextArea({ label, className, id, value, textareaRef, singleLine, rows, ...props }: TextAreaProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
   // Cresce com o conteúdo: zera a altura antes de medir para que o campo também
@@ -62,8 +64,10 @@ export function TextArea({ label, className, id, value, textareaRef, ...props }:
         }}
         id={id}
         value={value}
+        rows={singleLine ? 1 : rows}
         className={cn(
-          'min-h-24 w-full resize-none overflow-y-auto rounded-2xl border border-border bg-surface px-4 py-3.5 text-[15px] leading-[22px] text-text placeholder:text-text-faint outline-none transition-colors focus:border-accent',
+          singleLine ? 'min-h-13' : 'min-h-24',
+          'w-full resize-none overflow-y-auto rounded-2xl border border-border bg-surface px-4 py-3.5 text-[15px] leading-[22px] text-text placeholder:text-text-faint outline-none transition-colors focus:border-accent',
           className,
         )}
         {...props}

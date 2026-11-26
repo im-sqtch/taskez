@@ -2,18 +2,14 @@ import { Send } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { MentionDropdown } from '@/components/ui/MentionDropdown'
 import { useMentionAutocomplete } from '@/components/ui/useMentionAutocomplete'
+import { hasTouchKeyboard, isSubmitEnter } from '@/lib/keyboard'
 import { cn } from '@/lib/utils'
 
 // Altura máxima do campo antes de ele passar a rolar por dentro (~5 linhas).
 const MAX_HEIGHT = 132
 
-// Teclado de celular não tem Shift+Enter, então lá o Enter é sempre quebra de
-// linha (como no WhatsApp) e o envio fica só no botão — `enterKeyHint` é o que
-// troca a tecla de "enviar" por "nova linha" no teclado virtual. Com teclado
-// físico vale a convenção de sempre: Enter envia, Shift+Enter quebra a linha.
-function hasTouchKeyboard() {
-  return typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-}
+// Enter envia só com teclado físico (ver lib/keyboard) — `enterKeyHint` é o
+// que troca a tecla de "enviar" por "nova linha" no teclado virtual.
 
 interface MessageComposerProps {
   value: string
@@ -42,10 +38,7 @@ export function MessageComposer({ value, onChange, onSubmit, placeholder, sendLa
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     // Com o dropdown de menção aberto, Enter escolhe a menção em vez de enviar.
     if (mentions.handleKeyDown(e)) return
-    if (e.key !== 'Enter' || touchKeyboard || e.shiftKey) return
-    // Enquanto o IME está compondo (acentos, teclados asiáticos), o Enter
-    // confirma a palavra — não pode ser confundido com envio.
-    if (e.nativeEvent.isComposing) return
+    if (!isSubmitEnter(e, touchKeyboard)) return
     e.preventDefault()
     onSubmit()
   }

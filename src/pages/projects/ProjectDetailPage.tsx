@@ -17,6 +17,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ListCollapseButton } from '@/components/layout/ListCollapseButton'
 import { InviteMemberSheet } from '@/components/projects/InviteMemberSheet'
 import { ProjectChat } from '@/components/projects/ProjectChat'
 import { ProjectFiles } from '@/components/projects/ProjectFiles'
@@ -177,9 +178,12 @@ export function ProjectDetailPage() {
     <div className="flex w-full min-w-0 flex-col gap-5 overflow-x-clip">
       <div data-detail-heading className="sticky top-0 z-20 flex flex-col gap-5 bg-base">
         <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+16px)]">
-          <button onClick={() => navigate('/projects')} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
-            <ArrowLeft size={19} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate('/projects')} aria-label="Voltar para projetos" className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
+              <ArrowLeft size={19} />
+            </button>
+            <ListCollapseButton />
+          </div>
           <div className="flex gap-2">
             <button onClick={() => setEditOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted">
               <Pencil size={16} />
