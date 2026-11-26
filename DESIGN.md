@@ -130,6 +130,42 @@ className="flex h-10 w-10 items-center justify-center rounded-full bg-surface te
 - **Card de projeto:** ícone colorido `h-10 w-10 rounded-xl text-white` com a cor do projeto, título `font-semibold`, percentual em `text-xs font-semibold text-text-muted` e `ProgressBar`.
 - **Widgets do painel:** usam `Card`, com ícone num quadrado `h-9 w-9 rounded-lg bg-accent-soft text-accent`, título `font-semibold` e número em destaque `text-lg font-bold`.
 
+## Arquivos e anexos
+
+- O quadradinho do arquivo em listas é o `FileThumbnail` (`src/components/files/`): miniatura real para imagens e ícone do tipo para o resto, em `h-11 w-11 rounded-lg bg-surface-alt`.
+- Para visualizar um arquivo, use o `FilePreviewDialog`, um visualizador em tela cheia com fundo `bg-black/85`, que navega com as setas do teclado e fecha com Esc. Clicar no arquivo abre a prévia, e o botão de download baixa com o nome original.
+- URLs de arquivos vêm de `getFileViewUrl` e `getFileDownloadUrl` (`src/lib/fileUrls.ts`). Não chame `createSignedUrl` direto nos componentes.
+- Arquivos HTML nunca são renderizados, só baixados.
+
+## Calendário
+
+Inspirado no layout do Google Agenda. Os componentes ficam em `src/components/calendar/`.
+
+- **Desktop:**
+  - Barra única no topo: painel lateral, "Hoje", setas, título do período, busca e o controle segmentado Dia/Semana/Mês/Agenda.
+  - Coluna lateral recolhível (`w-60`) com "Nova tarefa", minicalendário, filtros de projeto e "Tarefas sem data".
+  - A grade ocupa a altura da tela, e a página usa a largura toda, sem `max-w-6xl`.
+- **Celular:**
+  - Título, um botão "hoje" com o número do dia, busca e filtros (em `Sheet`). Abaixo, setas com o controle segmentado.
+  - No Mês, a grade compacta tem **pontinhos** com as cores dos projetos, e a lista do dia selecionado fica embaixo. Arrastar para os lados troca de mês.
+- **Dia e Semana no desktop** usam a grade de horas (`TimeGrid`): faixa "Dia todo" para tarefas sem horário e 24 horas de 48 px. Tarefas com horário ficam na hora certa, com o mesmo espaço de 30 min, e há uma linha `bg-danger` marcando agora. No celular, Dia e Semana continuam em lista, ordenadas por horário.
+- **Etiqueta de tarefa** (`EventChip`): `h-[22px] rounded-md text-xs` com ponto colorido.
+  - Sem horário ("dia inteiro"): fundo com a cor do projeto misturada à superfície (`color-mix(in srgb, cor 24%, var(--color-surface))`).
+  - Com horário: no mês, sem fundo e com o horário antes do título; na grade de horas, um bloco com borda esquerda colorida.
+  - Concluída: `opacity-55 line-through`.
+  - **Ocorrência futura de recorrente** (projetada por 60 dias, ainda não existe no banco): contorno tracejado na cor do projeto, sem arraste. O cartão rápido explica isso e leva à tarefa original; nas listas, ela aparece como `OccurrenceRow` com o rótulo "Prevista".
+- **Hoje:** círculo `bg-accent text-white`. **Dia selecionado** (minicalendário e celular): `bg-accent-soft text-accent`.
+- **Cliques (mesma regra em todas as visualizações):**
+  - Espaço vazio de um dia: cria uma tarefa nesse dia.
+  - Número do dia: abre a visualização Dia.
+  - Tarefa: abre o cartão rápido (`TaskQuickView`), e "Abrir detalhes" abre a gaveta lateral.
+  - "+N mais": abre um popover com o dia inteiro.
+  - Arrastar a etiqueta muda o prazo (desktop): no mês, muda só o dia; na grade de horas, define dia e horário (de 15 em 15 min); na faixa "Dia todo", remove o horário.
+  - Clicar num horário vazio da grade cria a tarefa já com dia e hora.
+- Popovers do calendário usam `AnchoredPopover`: abrem abaixo do elemento (ou acima, se não couber) e fecham ao clicar fora, com Esc ou ao rolar.
+- Grades com arraste levam `select-none`, para não selecionar texto.
+- **Atalhos:** `T` (hoje), `D`/`W`/`M`/`A` (visualização), `J`/`K` ou as setas (período), `C` (criar), `/` (buscar).
+
 ## Menus suspensos (dropdowns)
 
 O modelo é o `WorkspaceDropdown`, também usado no `AddSubItemMenu`.
