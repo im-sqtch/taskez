@@ -144,8 +144,8 @@ export function Sidebar() {
       </button>
 
       <nav className="mt-6 flex w-full flex-1 flex-col gap-1 overflow-y-auto">
-        <SidebarItem label="Pesquisar" icon={Search} collapsed={collapsed} onClick={handleSearch} />
         <SidebarItem to="/dashboard" label="Início" icon={House} collapsed={collapsed} onClick={handleNavigate} />
+        <SidebarItem label="Pesquisar" icon={Search} collapsed={collapsed} onClick={handleSearch} />
         <SidebarItem to="/projects" label="Projetos" icon={FolderKanban} collapsed={collapsed} onClick={handleNavigate} />
         <SidebarItem to="/tasks" label="Tarefas" icon={CheckSquare} collapsed={collapsed} onClick={handleNavigate} />
         <SidebarItem to="/calendar" label="Calendário" icon={CalendarDays} collapsed={collapsed} onClick={handleNavigate} />
