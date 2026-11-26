@@ -28,6 +28,9 @@ export function Sheet({ open, onClose, title, subtitle, headerAction, children, 
             transition={{ duration: 0.25, ease: 'easeOut' }}
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
             className={cn(
               'relative flex max-h-[88vh] w-full max-w-md flex-col rounded-t-2xl border-t border-border bg-surface-alt pb-[env(safe-area-inset-bottom)]',
               'lg:max-h-[85vh] lg:rounded-2xl lg:border lg:pb-0 lg:shadow-2xl',
