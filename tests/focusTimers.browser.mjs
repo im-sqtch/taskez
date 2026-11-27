@@ -104,7 +104,8 @@ try {
 
     await page.getByRole('switch', { name: 'Ativar música' }).click()
     // Última faixa da lista: ao terminar, volta para a primeira.
-    await page.getByLabel('Faixa lo-fi').selectOption('last-train-home')
+    await page.getByRole('button', { name: /^Faixa lo-fi/ }).click()
+    await page.getByRole('menuitemradio', { name: 'Last Train Home' }).click()
     await page.getByRole('button', { name: 'Iniciar Estudo', exact: true }).click()
     await page.waitForFunction(() => window.focusStore.getState().musicStatus === 'playing' && !window.focusAudioElements[0].paused)
     assert.equal(await page.evaluate(() => window.focusAudioElements.length), 1)
@@ -145,7 +146,8 @@ try {
 
     const unavailable = '**/audio/lofi/coffee-ring-notebook.mp3'
     await page.route(unavailable, (route) => route.fulfill({ status: 404, body: '' }))
-    await page.getByLabel('Faixa lo-fi').selectOption('coffee-ring-notebook')
+    await page.getByRole('button', { name: /^Faixa lo-fi/ }).click()
+    await page.getByRole('menuitemradio', { name: 'Coffee Ring Notebook' }).click()
     await page.getByRole('button', { name: 'Tentar tocar novamente' }).waitFor()
     await page.unroute(unavailable)
     await page.getByRole('button', { name: 'Tentar tocar novamente' }).click()

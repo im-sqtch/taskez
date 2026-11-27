@@ -170,13 +170,12 @@ Inspirado no layout do Google Agenda. Os componentes ficam em `src/components/ca
 
 Use o componente `DropdownMenu` com `MenuItem` (`src/components/ui/DropdownMenu.tsx`). Ele já segue todas as regras abaixo e é usado no `AddSubItemMenu`, no `SubtaskMenu` e no menu das tabelas. O visual original vem do `WorkspaceDropdown`.
 
-- **Abre para baixo:** `absolute left-0 top-full mt-2`, ou `right-0` se o botão estiver na direita. **Não abra para cima.**
+- **Abre para baixo.** O painel é desenhado por cima de tudo (portal com posição fixa), então não é cortado por cards. Só abre para cima quando não cabe embaixo nem rolando a página, como no fim da tela do celular. Para seletores tipo campo, use `width="full"`, e escolha o item atual com `MenuItem selected`.
 - Contêiner: `z-30 w-60 overflow-hidden rounded-2xl border border-border bg-surface p-1.5 shadow-lg`, com `role="menu"`.
 - Item: `flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left text-text transition-colors hover:bg-surface-alt hover:text-accent`, com `role="menuitem"`.
 - O ícone do item vai num quadradinho `flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-alt`, com ícone `size={14}`. O texto usa `text-sm font-semibold`.
 - Item destrutivo: `text-danger hover:bg-danger-soft`.
 - O menu fecha ao clicar fora (`mousedown` no `document`) e com Esc.
-- Use `scrollIntoView({ block: 'nearest' })` se o menu puder abrir no fim da rolagem.
 - O botão que abre o menu tem `aria-haspopup="menu"` e `aria-expanded`.
 
 ## Layout lista + detalhe no desktop
