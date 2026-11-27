@@ -16,6 +16,7 @@
 - `npm run dev`: servidor local. Precisa do `.env.local` com `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`, que você obtém com `vercel env pull .env.local`.
 - `npm run build`: checagem de tipos e build. `npm run lint`: oxlint.
 - `npm test`: testes unitários (`tests/*.test.mjs`, no fuso de São Paulo).
+- `npm run test:build`: depois de `npm run build`, abre o **build de produção** e confere que as páginas renderizam. Erros de ordem de carregamento (import circular entre stores) só aparecem aqui: **nunca use outra store no nível do módulo** (fora de funções).
 - `npm run test:browser`: testes de navegador (`tests/*.browser.mjs`). Sobe um Vite próprio na porta 5174 e usa o Chromium do Playwright, que você instala uma vez com `npx playwright install chromium`. Para rodar só um: `npm run test:browser -- calendar`. Os testes simulam o Supabase e não precisam de credenciais.
 
 ## Banco de dados

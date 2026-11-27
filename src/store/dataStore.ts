@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import { v4 as uuid } from 'uuid'
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { fireAndForget, setFireAndForgetErrorHandler, setWriteQueueUser, supabase } from '@/lib/supabase'
-import { describeWriteError, flushWriteQueue } from '@/lib/writeQueue'
+import { describeWriteError } from '@/lib/writeQueue'
 import { publishTaskComment, subscribeTaskComments } from '@/lib/taskCommentChannel'
 import { getDashboardViewport, useDashboardViewport, type DashboardViewport } from '@/lib/dashboardViewport'
 import { useAuthStore } from '@/store/authStore'
@@ -2353,9 +2353,10 @@ setFireAndForgetErrorHandler((error) => {
   useDataStore.getState().addNotification('system.alert', 'Uma alteração não foi salva', describeWriteError(error))
 })
 setWriteQueueUser(() => useAuthStore.getState().currentUserId)
-useAuthStore.subscribe?.((auth, previous) => {
-  if (auth.currentUserId && auth.currentUserId !== previous.currentUserId) void flushWriteQueue()
-})
+// Atenção: authStore e dataStore se importam mutuamente. No build de produção
+// o authStore ainda não existe quando este módulo roda — nada aqui no nível do
+// módulo pode USAR useAuthStore direto (só dentro de funções chamadas depois).
+// O reenvio das pendências ao entrar na conta fica no próprio authStore.
 
 // Hooks derivados: filtram pelo workspace atual no corpo do hook (não dentro do
 // seletor do zustand) para não recriar array a cada notificação de store e cair no

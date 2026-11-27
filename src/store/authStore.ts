@@ -4,6 +4,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { detectUtcOffset } from '@/lib/timezone'
 import { unsubscribeFromPush } from '@/lib/push'
+import { flushWriteQueue } from '@/lib/writeQueue'
 import { useDataStore } from '@/store/dataStore'
 import { useContactsStore } from '@/store/contactsStore'
 import type { UsageMode, User } from '@/types'
@@ -93,6 +94,7 @@ export const useAuthStore = create<AuthState>()(
         if (data.user) {
           const profile = await fetchProfile(data.user.id)
           set({ currentUserId: data.user.id, profile })
+          void flushWriteQueue() // reenvia alterações feitas sem conexão por esta conta
         }
         return { ok: true }
       },
@@ -104,6 +106,7 @@ export const useAuthStore = create<AuthState>()(
         if (data.user) {
           const profile = await fetchProfile(data.user.id)
           set({ currentUserId: data.user.id, profile })
+          void flushWriteQueue() // reenvia alterações feitas sem conexão por esta conta
         }
         return { ok: true }
       },
