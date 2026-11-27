@@ -102,8 +102,42 @@ try {
     const statusColumn = lastTable(patches).columns.find((column) => column.id === 'c-status')
     assert.equal(lastTable(patches).rows[1].cells['c-status'], statusColumn.options.find((option) => option.name === 'Pendente').id)
     await page.keyboard.press('Escape')
+    // Largura fixa: digitar, passar o mouse e mostrar o botão de copiar não mudam a célula.
+    const itemCell = page.locator('tbody tr').nth(1).locator('td').first()
+    const widthBefore = (await itemCell.boundingBox()).width
     await page.getByRole('button', { name: 'Editar Item: Domínio' }).click()
-    await page.getByRole('textbox', { name: 'Item, linha' }).fill('Domínio .com')
+    const itemInput = page.getByRole('textbox', { name: 'Item, linha' })
+    await itemInput.fill('D')
+    assert.equal((await itemCell.boundingBox()).width, widthBefore, 'digitar uma letra não muda a largura')
+    await itemInput.fill('Domínio .com com um texto bem comprido que não cabe na coluna')
+    assert.equal((await itemCell.boundingBox()).width, widthBefore, 'texto comprido não muda a largura')
+    // Shift+Enter pula linha; Enter conclui.
+    await itemInput.press('Shift+Enter')
+    await itemInput.pressSequentially('segunda linha')
+    await itemInput.press('Enter')
+    assert.equal(lastTable(patches).rows[1].cells['c-name'], 'Domínio .com com um texto bem comprido que não cabe na coluna\nsegunda linha')
+    await itemCell.hover()
+    await itemCell.getByRole('button', { name: 'Copiar valor' }).waitFor()
+    assert.equal((await itemCell.boundingBox()).width, widthBefore, 'o botão de copiar não muda a largura')
+    console.log('PASS desktop: largura fixa e Shift+Enter')
+
+    // Quebrar texto: a célula cresce na vertical.
+    const heightBefore = (await itemCell.boundingBox()).height
+    await page.getByRole('button', { name: 'Opções da tabela' }).click()
+    await page.getByRole('menuitemradio', { name: 'Quebrar texto: desativado' }).click()
+    await page.keyboard.press('Escape')
+    assert.equal(lastTable(patches).wrap, true)
+    await page.waitForTimeout(100)
+    assert.ok((await itemCell.boundingBox()).height > heightBefore + 20, 'com quebra, a célula fica mais alta')
+    assert.equal((await itemCell.boundingBox()).width, widthBefore)
+    await page.screenshot({ path: path.join(process.env.TEMP, 'taskTables-wrap.png') })
+    await page.getByRole('button', { name: 'Opções da tabela' }).click()
+    await page.getByRole('menuitemradio', { name: 'Quebrar texto: ativado' }).click()
+    await page.keyboard.press('Escape')
+    console.log('PASS desktop: quebrar texto liga e desliga')
+
+    await page.getByRole('button', { name: /^Editar Item: Domínio/ }).click()
+    await itemInput.fill('Domínio .com')
     await page.keyboard.press('Enter')
     assert.equal(lastTable(patches).rows[1].cells['c-name'], 'Domínio .com')
     await page.screenshot({ path: path.join(process.env.TEMP, 'taskTables-inline.png') })

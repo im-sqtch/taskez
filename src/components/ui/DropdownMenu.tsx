@@ -9,6 +9,8 @@ interface DropdownMenuProps {
   align?: 'left' | 'right'
   // 'full': o botão e o painel ocupam a largura toda (seletor tipo campo).
   width?: 'auto' | 'full'
+  // Só o botão ocupa a largura toda (ex.: célula de tabela); o painel mantém a largura padrão.
+  blockTrigger?: boolean
   // Botão que abre o menu; recebe o estado e a função de abrir/fechar.
   renderTrigger: (props: { open: boolean; toggle: () => void }) => ReactNode
   // Itens do menu; `close` fecha o menu (útil para quem precisa adiar o fechamento).
@@ -30,7 +32,7 @@ function bottomReserve() {
 // baixo, painel `rounded-2xl bg-surface`, fecha ao clicar fora ou com Esc.
 // O painel é desenhado por cima de tudo (portal, posição fixa), para não ser
 // cortado por cards ou painéis com rolagem própria.
-export function DropdownMenu({ label, align = 'left', width = 'auto', renderTrigger, children }: DropdownMenuProps) {
+export function DropdownMenu({ label, align = 'left', width = 'auto', blockTrigger = false, renderTrigger, children }: DropdownMenuProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -96,7 +98,7 @@ export function DropdownMenu({ label, align = 'left', width = 'auto', renderTrig
   }, [open])
 
   return (
-    <div ref={rootRef} className={cn('relative', width === 'full' ? 'block w-full' : 'inline-block')}>
+    <div ref={rootRef} className={cn('relative', width === 'full' || blockTrigger ? 'block w-full' : 'inline-block')}>
       {renderTrigger({ open, toggle })}
       {open && position && createPortal(
         <div

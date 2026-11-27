@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, Circle, CircleCheck, CircleX, Copy, ExternalLink, Paperclip, Plus, Upload, X } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { FilePreviewDialog } from '@/components/files/FilePreviewDialog'
 import { FileThumbnail } from '@/components/files/FileThumbnail'
 import { Avatar } from '@/components/ui/Avatar'
@@ -72,11 +72,11 @@ export function CopyableCell({ text, children }: { text: string; children: React
 
   return (
     <div
-      className="group relative flex min-h-9 items-center gap-1 px-1.5 [-webkit-touch-callout:none] [@media(hover:none)]:select-none"
+      className="group relative flex min-h-9 min-w-0 items-center px-1.5 [-webkit-touch-callout:none] [@media(hover:none)]:select-none"
       onPointerDown={(event) => {
         longPressed.current = false
         // Dentro de um campo em digitação, segurar o dedo serve para selecionar texto.
-        if (event.pointerType !== 'touch' || !text || (event.target as HTMLElement).closest('input')) return
+        if (event.pointerType !== 'touch' || !text || (event.target as HTMLElement).closest('input, textarea')) return
         cancelPress()
         press.current = {
           x: event.clientX,
@@ -101,7 +101,8 @@ export function CopyableCell({ text, children }: { text: string; children: React
           onClick={() => void copy()}
           aria-label="Copiar valor"
           title="Copiar"
-          className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:text-accent focus-visible:flex focus-visible:outline-2 focus-visible:outline-accent [@media(hover:hover)]:group-hover:flex"
+          // Sobreposto à direita do valor: aparecer não muda a largura da célula.
+          className="absolute right-1 top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-surface text-text-faint shadow-sm hover:text-accent focus-visible:flex focus-visible:outline-2 focus-visible:outline-accent [@media(hover:hover)]:group-hover:flex"
         >
           {copied ? <Check size={15} /> : <Copy size={15} />}
         </button>
@@ -129,7 +130,7 @@ export function CopyableCell({ text, children }: { text: string; children: React
 export function OptionChip({ option }: { option: TableSelectOption }) {
   return (
     <span
-      className="inline-flex max-w-full items-center truncate rounded-full px-2.5 py-1 text-xs font-semibold text-text"
+      className="inline-flex max-w-full shrink-0 items-center truncate rounded-full px-2.5 py-1 text-xs font-semibold text-text"
       style={{ backgroundColor: `color-mix(in srgb, ${option.color} 32%, var(--color-surface))` }}
     >
       {option.name}
@@ -145,7 +146,7 @@ function CheckboxIcon({ value }: { value: string }) {
 
 function PersonChip({ member }: { member: TeamMember }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm text-text">
+    <span className="inline-flex max-w-full shrink-0 items-center gap-1.5 text-sm text-text">
       <Avatar name={member.name} color={member.avatarColor} src={member.avatarUrl} size="xs" />
       <span className="truncate">{member.name}</span>
     </span>
@@ -170,14 +171,16 @@ interface TableCellProps {
   context: TableContext
   // `nextColumn`: a coluna com uma opção nova criada na própria célula.
   onChange: (value: TableCellValue, nextColumn?: TableColumn) => void
+  // Quebrar texto: a célula cresce na vertical em vez de cortar o conteúdo.
+  wrap: boolean
 }
 
 // O fundo da célula nunca muda (nem ao passar o mouse, nem ao digitar).
-const pickerClass = 'flex min-h-7 w-full min-w-32 items-center gap-1.5 text-left text-sm text-text outline-none focus-visible:outline-2 focus-visible:outline-accent'
+const pickerClass = 'flex min-h-7 w-full min-w-0 items-center gap-1.5 text-left text-sm text-text outline-none focus-visible:outline-2 focus-visible:outline-accent'
 
 // Célula da tabela: mostra o valor e, ao clicar, já permite alterá-lo (em
 // qualquer modo). Copiar fica por conta da CopyableCell em volta.
-export function TableCell({ column, value, context, onChange }: TableCellProps) {
+export function TableCell({ column, value, context, onChange, wrap }: TableCellProps) {
   const type = columnType(column)
   const label = column.title || 'Coluna'
   const text = asText(value)
@@ -188,13 +191,13 @@ export function TableCell({ column, value, context, onChange }: TableCellProps) 
       return <NumberCell type={type} value={text} label={label} onChange={onChange} />
     case 'select':
     case 'multiSelect':
-      return <SelectCell column={column} value={value} multiple={type === 'multiSelect'} onChange={onChange} />
+      return <SelectCell column={column} value={value} multiple={type === 'multiSelect'} wrap={wrap} onChange={onChange} />
     case 'date':
       return <DateCell value={text} label={label} onChange={onChange} />
     case 'person':
-      return <PersonCell value={asList(value)} label={label} context={context} onChange={onChange} />
+      return <PersonCell value={asList(value)} label={label} context={context} wrap={wrap} onChange={onChange} />
     case 'files':
-      return <FilesCell value={asList(value)} label={label} context={context} onChange={onChange} />
+      return <FilesCell value={asList(value)} label={label} context={context} wrap={wrap} onChange={onChange} />
     case 'checkbox':
       return (
         <button
@@ -207,40 +210,46 @@ export function TableCell({ column, value, context, onChange }: TableCellProps) 
         </button>
       )
     case 'link':
-      return <TextCell value={text} label={label} link onChange={onChange} />
+      return <TextCell value={text} label={label} link wrap={wrap} onChange={onChange} />
     default:
-      return <TextCell value={text} label={label} onChange={onChange} />
+      return <TextCell value={text} label={label} wrap={wrap} onChange={onChange} />
   }
 }
 
-const inlineInputClass = 'block w-full min-w-32 bg-transparent p-0 text-sm leading-5 text-text outline-none placeholder:text-text-faint'
+const inlineInputClass = 'block w-full min-w-0 bg-transparent p-0 text-sm leading-5 text-text outline-none placeholder:text-text-faint'
 
-// Texto e link: mostra o valor; ao clicar, vira campo de digitação no mesmo lugar.
-function TextCell({ value, label, link, onChange }: { value: string; label: string; link?: boolean; onChange: (value: string) => void }) {
+// Texto e link: mostra o valor; ao clicar, vira campo de digitação no mesmo
+// lugar. No texto, Shift+Enter pula linha e Enter conclui.
+function TextCell({ value, label, link, wrap, onChange }: { value: string; label: string; link?: boolean; wrap: boolean; onChange: (value: string) => void }) {
   const [editing, setEditing] = useState(false)
-  if (editing) {
+  if (editing && link) {
     return (
       <input
         autoFocus
-        type={link ? 'url' : 'text'}
-        inputMode={link ? 'url' : undefined}
+        type="url"
+        inputMode="url"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onBlur={() => setEditing(false)}
         onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur() }}
-        placeholder={link ? 'https://' : undefined}
+        placeholder="https://"
         aria-label={`${label}, linha`}
         className={inlineInputClass}
       />
     )
   }
+  if (editing) return <TextAreaCell value={value} label={label} onChange={onChange} onDone={() => setEditing(false)} />
   return (
-    <div className="flex min-h-5 min-w-32 items-center gap-1">
+    <div className="flex min-h-5 min-w-0 items-center gap-1">
       <button
         type="button"
         onClick={() => setEditing(true)}
         aria-label={`Editar ${label}${value ? `: ${value}` : ''}`}
-        className={cn('block min-h-5 min-w-0 flex-1 text-left text-sm leading-5 outline-none focus-visible:outline-2 focus-visible:outline-accent', link ? 'truncate text-accent' : 'whitespace-pre-wrap text-text')}
+        className={cn(
+          'block min-h-5 min-w-0 flex-1 text-left text-sm leading-5 outline-none focus-visible:outline-2 focus-visible:outline-accent',
+          link ? 'text-accent' : 'text-text',
+          wrap ? (link ? 'break-all' : 'whitespace-pre-wrap break-words') : 'truncate',
+        )}
       >
         {value}
       </button>
@@ -250,6 +259,37 @@ function TextCell({ value, label, link, onChange }: { value: string; label: stri
         </a>
       )}
     </div>
+  )
+}
+
+// Campo de texto da célula: cresce na vertical conforme o conteúdo.
+function TextAreaCell({ value, label, onChange, onDone }: { value: string; label: string; onChange: (value: string) => void; onDone: () => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const area = ref.current
+    if (!area) return
+    area.style.height = '0px'
+    area.style.height = `${area.scrollHeight}px`
+  }, [value])
+  return (
+    <textarea
+      ref={ref}
+      autoFocus
+      rows={1}
+      value={value}
+      onFocus={(event) => { const end = event.currentTarget.value.length; event.currentTarget.setSelectionRange(end, end) }}
+      onChange={(event) => onChange(event.target.value)}
+      onBlur={onDone}
+      onKeyDown={(event) => {
+        // Shift+Enter pula linha (comportamento padrão do campo); Enter sozinho conclui.
+        if ((event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) || event.key === 'Escape') {
+          event.preventDefault()
+          event.currentTarget.blur()
+        }
+      }}
+      aria-label={`${label}, linha`}
+      className={cn(inlineInputClass, 'resize-none overflow-hidden whitespace-pre-wrap break-words')}
+    />
   )
 }
 
@@ -272,7 +312,7 @@ function NumberCell({ type, value, label, onChange }: { type: 'number' | 'usd' |
 
   if (draft !== null) {
     return (
-      <label className="flex min-w-32 items-center gap-1">
+      <label className="flex min-w-0 items-center gap-1">
         {prefix && <span className="text-sm leading-5 text-text-faint">{prefix}</span>}
         <input
           autoFocus
@@ -293,23 +333,23 @@ function NumberCell({ type, value, label, onChange }: { type: 'number' | 'usd' |
       type="button"
       onClick={() => setDraft(numberDraft(type, value))}
       aria-label={`Editar ${label}${value ? `: ${formatNumber(type, value)}` : ''}`}
-      className="block min-h-5 w-full min-w-32 text-left text-sm leading-5 tabular-nums text-text outline-none focus-visible:outline-2 focus-visible:outline-accent"
+      className="block min-h-5 w-full min-w-0 truncate text-left text-sm leading-5 tabular-nums text-text outline-none focus-visible:outline-2 focus-visible:outline-accent"
     >
       {value && formatNumber(type, value)}
     </button>
   )
 }
 
-function SelectCell({ column, value, multiple, onChange }: { column: TableColumn; value: TableCellValue | undefined; multiple: boolean; onChange: TableCellProps['onChange'] }) {
+function SelectCell({ column, value, multiple, wrap, onChange }: { column: TableColumn; value: TableCellValue | undefined; multiple: boolean; wrap: boolean; onChange: TableCellProps['onChange'] }) {
   const selected = asList(value)
   const chosen = optionsOf(column, value)
   return (
     <DropdownMenu
       label={column.title || 'Opções'}
-      width="auto"
+      blockTrigger
       renderTrigger={({ open, toggle }) => (
         <button type="button" onClick={toggle} aria-haspopup="menu" aria-expanded={open} aria-label={`${column.title || 'Coluna'}: escolher opção`} className={pickerClass}>
-          <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          <span className={cn('flex min-w-0 flex-1 gap-1.5', wrap ? 'flex-wrap' : 'overflow-hidden')}>
             {chosen.map((option) => <OptionChip key={option.id} option={option} />)}
           </span>
         </button>
@@ -413,14 +453,15 @@ function DateCell({ value, label, onChange }: { value: string; label: string; on
   )
 }
 
-function PersonCell({ value, label, context, onChange }: { value: string[]; label: string; context: TableContext; onChange: (value: string[]) => void }) {
+function PersonCell({ value, label, context, wrap, onChange }: { value: string[]; label: string; context: TableContext; wrap: boolean; onChange: (value: string[]) => void }) {
   const chosen = membersOf(context, value)
   return (
     <DropdownMenu
       label={label}
+      blockTrigger
       renderTrigger={({ open, toggle }) => (
         <button type="button" onClick={toggle} aria-haspopup="menu" aria-expanded={open} aria-label={`${label}: escolher pessoas`} className={pickerClass}>
-          <span className="flex min-w-0 flex-1 flex-wrap gap-x-3 gap-y-1.5">
+          <span className={cn('flex min-w-0 flex-1 gap-x-3 gap-y-1.5', wrap ? 'flex-wrap' : 'overflow-hidden')}>
             {chosen.map((member) => <PersonChip key={member.id} member={member} />)}
           </span>
         </button>
@@ -452,15 +493,15 @@ function PersonCell({ value, label, context, onChange }: { value: string[]; labe
   )
 }
 
-function FilesCell({ value, label, context, onChange }: { value: string[]; label: string; context: TableContext; onChange: (value: string[]) => void }) {
+function FilesCell({ value, label, context, wrap, onChange }: { value: string[]; label: string; context: TableContext; wrap: boolean; onChange: (value: string[]) => void }) {
   const [open, setOpen] = useState(false)
   const chosen = filesOf(context, value)
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} aria-label={`${label}: arquivos`} className={pickerClass}>
-        <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+        <span className={cn('flex min-w-0 flex-1 gap-1.5', wrap ? 'flex-wrap' : 'overflow-hidden')}>
           {chosen.map((file) => (
-            <span key={file.id} className="inline-flex max-w-full items-center gap-1 rounded-full bg-surface-alt px-2.5 py-1 text-xs font-semibold text-text">
+            <span key={file.id} className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full bg-surface-alt px-2.5 py-1 text-xs font-semibold text-text">
               <Paperclip size={12} className="shrink-0" />
               <span className="truncate">{file.name}</span>
             </span>
