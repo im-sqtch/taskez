@@ -27,3 +27,6 @@ dist-ssr
 .env*
 supabase/.temp
 .codex-remote-attachments/
+
+# Prints dos testes de navegador
+test-results
