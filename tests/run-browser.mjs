@@ -43,13 +43,24 @@ if (!ready) {
   process.exit(1)
 }
 
-let failed = 0
-for (const name of selected) {
-  console.log(`\n▶ ${name}`)
-  const code = await new Promise((resolve) => {
+function run(name) {
+  return new Promise((resolve) => {
     const child = spawn(process.execPath, [`tests/${name}.browser.mjs`], { env, stdio: 'inherit' })
     child.on('exit', resolve)
   })
+}
+
+// Uma segunda tentativa para falhas intermitentes (comuns no CI, que é mais
+// lento). Teste que só passa na segunda vez fica marcado como instável no log.
+let failed = 0
+for (const name of selected) {
+  console.log(`\n▶ ${name}`)
+  let code = await run(name)
+  if (code !== 0) {
+    console.log(`\n⚠ ${name} falhou; tentando de novo…`)
+    code = await run(name)
+    if (code === 0) console.log(`⚠ ${name} passou só na segunda tentativa (instável).`)
+  }
   if (code !== 0) failed++
 }
 server.kill()

@@ -146,9 +146,7 @@ try {
       // Espera o Sheet de criação terminar a animação de saída (ele cobre a tela).
       await page.getByPlaceholder('Ex: Enviar proposta para o cliente').waitFor({ state: 'detached' })
       await page.waitForTimeout(400)
-      console.log('DIAGNOSTICO url:', page.url(), 'h2:', await page.locator('h2').first().innerText().catch(() => '?'))
-      await page.screenshot({ path: `${process.env.TEMP || '/tmp'}/diagnostico-calendario.png` })
-      const chip = await day26.getByRole('button', { name: 'Tarefa teste', exact: true }).boundingBox({ timeout: 5000 })
+      const chip = await day26.getByRole('button', { name: 'Tarefa teste', exact: true }).boundingBox()
       const target = await page.locator('[data-calendar-day="2026-11-27"]').boundingBox()
       await page.mouse.move(chip.x + 10, chip.y + 10)
       await page.mouse.down()
