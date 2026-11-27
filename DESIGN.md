@@ -168,7 +168,7 @@ Inspirado no layout do Google Agenda. Os componentes ficam em `src/components/ca
 
 ## Menus suspensos (dropdowns)
 
-O modelo é o `WorkspaceDropdown`, também usado no `AddSubItemMenu`.
+Use o componente `DropdownMenu` com `MenuItem` (`src/components/ui/DropdownMenu.tsx`). Ele já segue todas as regras abaixo e é usado no `AddSubItemMenu`, no `SubtaskMenu` e no menu das tabelas. O visual original vem do `WorkspaceDropdown`.
 
 - **Abre para baixo:** `absolute left-0 top-full mt-2`, ou `right-0` se o botão estiver na direita. **Não abra para cima.**
 - Contêiner: `z-30 w-60 overflow-hidden rounded-2xl border border-border bg-surface p-1.5 shadow-lg`, com `role="menu"`.
@@ -206,11 +206,3 @@ Seguem este padrão `ProjectsLayout` e `TasksLayout`:
 - Não use hexadecimal nem `bg-white`/`text-black` diretamente: o tema claro quebra. Branco só como `text-white` sobre `bg-accent` ou sobre a cor do projeto.
 - Não crie um menu, modal ou botão com visual próprio se já existe um equivalente.
 - Dados do usuário (preferências, timers, layouts) ficam na conta, no Supabase, e não só no `localStorage`.
-
-## Divergências que ainda existem no código
-
-Ao mexer nestes arquivos, alinhe-os ao padrão acima:
-
-- O menu de opções das tabelas (`TaskTables.tsx`) usa `bg-base rounded-xl` e itens sem o quadradinho de ícone.
-- O menu de subtarefa (`SubtaskMenu.tsx`) é estreito (`w-36`), usa `rounded-xl` e itens sem o quadradinho de ícone.
-- Os botões de ícone do widget de foco (`FocusTimers.tsx`) usam `h-11 w-11`.
