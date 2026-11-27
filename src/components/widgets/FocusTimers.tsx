@@ -7,7 +7,7 @@ import { parseYouTubeLink } from '@/lib/youtubeLink'
 import { useAuthStore } from '@/store/authStore'
 import { MAX_FOCUS_TIMERS, MAX_TIMER_MINUTES, usePomodoroStore, type FocusTimerDefinition } from '@/store/pomodoroStore'
 
-const iconButton = 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-accent active:bg-accent-soft'
+const iconButton = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface text-text-muted transition-colors hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-accent active:bg-accent-soft'
 
 function TimerEditor({ definition, onClose }: { definition?: FocusTimerDefinition; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
@@ -61,7 +61,7 @@ function FocusTimer({ definition, onEdit }: { definition: FocusTimerDefinition; 
         <div><p className="text-3xl font-bold tabular-nums text-text" role="timer" aria-label={`Tempo restante de ${definition.name}`}>{minutes}:{seconds}</p><p className="mt-1 text-xs text-text-muted" role="status">{status}</p></div>
         <div className="flex gap-2">
           <button type="button" onClick={() => reset(definition.id)} className={iconButton} aria-label={`Reiniciar ${definition.name}`}><RotateCcw size={17} /></button>
-          <button type="button" onClick={() => toggle(definition.id)} className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-white transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" aria-label={`${running ? 'Pausar' : 'Iniciar'} ${definition.name}`}>
+          <button type="button" onClick={() => toggle(definition.id)} className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-white transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" aria-label={`${running ? 'Pausar' : 'Iniciar'} ${definition.name}`}>
             {running ? <Pause size={18} /> : <Play size={18} />}
           </button>
         </div>

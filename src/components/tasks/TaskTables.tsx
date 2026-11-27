@@ -1,12 +1,12 @@
 import { Check, Minus, Pencil, Plus, Table2, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { DropdownMenu, MenuItem } from '@/components/ui/DropdownMenu'
 import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
 import type { TaskTable } from '@/types'
 
 export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTable[] }) {
   const updateTask = useDataStore((s) => s.updateTask)
-  const [menuTableId, setMenuTableId] = useState<string | null>(null)
   const [editingTableId, setEditingTableId] = useState<string | null>(null)
   const save = (next: TaskTable[]) => updateTask(taskId, { tables: next })
 
@@ -38,8 +38,8 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
       {tables.map((table, index) => {
         const isEditing = editingTableId === table.id
         return (
-          <section key={table.id} className="overflow-hidden rounded-2xl border border-border bg-surface">
-            <div className="relative flex items-center gap-2 border-b border-border px-3 py-2">
+          <section key={table.id} className="rounded-2xl border border-border bg-surface">
+            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
               <Table2 size={16} className="shrink-0 text-text-faint" />
               {isEditing ? (
                 <input
@@ -54,27 +54,42 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
                   {table.title?.trim() || `Tabela ${index + 1}`}
                 </p>
               )}
-              <button
-                aria-label={isEditing ? 'Concluir edição da tabela' : 'Opções da tabela'}
-                aria-expanded={menuTableId === table.id}
-                onClick={() => {
-                  if (isEditing) setEditingTableId(null)
-                  else setMenuTableId((current) => current === table.id ? null : table.id)
-                }}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-surface-alt hover:text-accent"
-              >
-                {isEditing ? <Check size={16} /> : <Pencil size={15} />}
-              </button>
-              {menuTableId === table.id && !isEditing && <div role="menu" className="absolute right-3 top-11 z-30 flex min-w-44 flex-col rounded-xl border border-border bg-base p-1.5 shadow-lg">
-                <button role="menuitem" onClick={() => { setEditingTableId(table.id); setMenuTableId(null) }} className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-text hover:bg-surface">
-                  <Pencil size={15} /> Editar tabela
+              {isEditing ? (
+                <button
+                  type="button"
+                  aria-label="Concluir edição da tabela"
+                  onClick={() => setEditingTableId(null)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-surface-alt hover:text-accent"
+                >
+                  <Check size={16} />
                 </button>
-                <button role="menuitem" onClick={() => { setMenuTableId(null); deleteTable(table) }} className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-danger hover:bg-surface">
-                  <Trash2 size={15} /> Excluir tabela
-                </button>
-              </div>}
+              ) : (
+                <DropdownMenu
+                  label="Opções da tabela"
+                  align="right"
+                  renderTrigger={({ open, toggle }) => (
+                    <button
+                      type="button"
+                      aria-label="Opções da tabela"
+                      aria-haspopup="menu"
+                      aria-expanded={open}
+                      onClick={toggle}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-surface-alt hover:text-accent"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  )}
+                >
+                  {(close) => (
+                    <>
+                      <MenuItem icon={<Pencil size={14} />} label="Editar tabela" onClick={() => { close(); setEditingTableId(table.id) }} />
+                      <MenuItem icon={<Trash2 size={14} />} label="Excluir tabela" danger onClick={() => { close(); deleteTable(table) }} />
+                    </>
+                  )}
+                </DropdownMenu>
+              )}
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-b-2xl">
               <table className="min-w-full border-collapse text-left text-sm">
                 <thead>
                   <tr>
