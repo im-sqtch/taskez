@@ -1,7 +1,8 @@
-import { ChevronDown, Headphones, Pause, Pencil, PictureInPicture2, Play, Plus, RotateCcw, SkipBack, SkipForward, Timer, Trash2, Volume2, X } from 'lucide-react'
+import { ChevronDown, Headphones, Music, Pause, Pencil, PictureInPicture2, Play, Plus, RotateCcw, SkipBack, SkipForward, Timer, Trash2, Volume2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Field } from '@/components/ui/Input'
+import { DropdownMenu, MenuItem } from '@/components/ui/DropdownMenu'
 import { Switch } from '@/components/ui/Switch'
 import { FOCUS_TRACKS } from '@/lib/focusMusic'
 import { cn } from '@/lib/utils'
@@ -97,7 +98,6 @@ function FocusMusic() {
   const trackId = usePomodoroStore((s) => s.trackId)
   const volume = usePomodoroStore((s) => s.volume)
   const error = usePomodoroStore((s) => s.musicError)
-  const status = usePomodoroStore((s) => s.musicStatus)
   const setEnabled = usePomodoroStore((s) => s.setMusicEnabled)
   const setTrack = usePomodoroStore((s) => s.setTrack)
   const nextTrack = usePomodoroStore((s) => s.nextTrack)
@@ -110,35 +110,90 @@ function FocusMusic() {
       return !value
     })
   }
+  const linkValue = linkDraft ?? youtubeUrl
+  // O link é salvo sozinho assim que for válido; inválido, avisa ao sair do campo ou no Enter.
+  function changeLink(value: string) {
+    setLinkDraft(value)
+    setLinkError('')
+    if (parseYouTubeLink(value) && setYouTubeUrl(value)) setLinkDraft(null)
+  }
+  function confirmLink() {
+    if (!linkValue.trim()) return
+    if (!setYouTubeUrl(linkValue)) setLinkError('Cole um link válido de vídeo ou playlist do YouTube.')
+    else { setLinkDraft(null); setLinkError('') }
+  }
+  const canSkip = source === 'lofi' || Boolean(parseYouTubeLink(youtubeUrl)?.playlistId)
+  const currentTrack = FOCUS_TRACKS.find((track) => track.id === trackId) ?? FOCUS_TRACKS[0]!
+
   return (
-    <section aria-label="Música de foco" className="min-w-0 rounded-xl border border-border-soft p-3">
-      <div className="flex min-h-11 items-center gap-2">
+    <section aria-label="Música de foco" className="min-w-0 rounded-xl border border-border-soft px-4 py-3">
+      <div className="flex min-h-11 items-center gap-3">
         {/* Clicar no título recolhe/expande a seção; o switch liga e desliga a música. */}
         <button type="button" onClick={toggleOpen} aria-expanded={enabled && open} disabled={!enabled} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-default">
           <Headphones size={18} className="shrink-0 text-accent" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{source === 'youtube' ? 'Música do YouTube' : 'Música lo-fi'}</span>
-          {enabled && <ChevronDown size={16} className={cn('shrink-0 text-text-muted transition-transform', open && 'rotate-180')} aria-hidden="true" />}
         </button>
         <Switch checked={enabled} onChange={() => setEnabled(!enabled)} aria-label="Ativar música" />
       </div>
-      {enabled && open && <div className="mt-2 flex flex-col gap-3">
-        <label className="flex flex-col gap-1.5 text-xs font-medium text-text-muted">Fonte da música<select aria-label="Fonte da música" value={source} onChange={(event) => setSource(event.target.value as 'lofi' | 'youtube')} className="h-11 w-full rounded-xl border border-border bg-surface px-2 text-sm text-text"><option value="lofi">Lo-fi do TASKEZ</option><option value="youtube">YouTube · vídeo ou playlist</option></select></label>
-        {source === 'youtube' ? <form className="flex min-w-0 flex-col gap-2" onSubmit={(event) => {
-          event.preventDefault()
-          if (!setYouTubeUrl(linkDraft ?? youtubeUrl)) setLinkError('Cole um link válido de vídeo ou playlist do YouTube.')
-          else { setLinkDraft(null); setLinkError('') }
-        }}>
-          <Field label="Link do YouTube" aria-label="Link do YouTube" aria-invalid={Boolean(linkError)} type="text" inputMode="url" placeholder="https://www.youtube.com/watch?v=…" value={linkDraft ?? youtubeUrl} onChange={(event) => { setLinkDraft(event.target.value); setLinkError('') }} error={linkError} />
-          <div className="flex min-h-11 items-center justify-between gap-3 text-sm text-text"><span>Vídeo colapsado</span><Switch checked={collapsed} onChange={() => setCollapsed(!collapsed)} aria-label="Vídeo colapsado" /></div>
-          <button type="submit" className="min-h-11 rounded-xl bg-accent-soft px-3 text-sm font-semibold text-accent">Usar link do YouTube</button>
-          {youtubeUrl && <a href={youtubeUrl} target="_blank" rel="noreferrer" className="flex min-h-11 items-center text-xs text-text-muted underline">Abrir link salvo no YouTube</a>}
-        </form> : <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-text-muted">Começar por
-          <select aria-label="Faixa lo-fi" value={trackId} onChange={(event) => setTrack(event.target.value)} className="h-11 w-full min-w-0 rounded-xl border border-border bg-surface px-2 text-sm text-text focus-visible:outline-accent">{FOCUS_TRACKS.map((track) => <option key={track.id} value={track.id}>{track.title}</option>)}</select>
-        </label>}
-        <div className="flex flex-wrap items-center gap-2"><button type="button" className={iconButton} disabled={source === 'youtube' && !parseYouTubeLink(youtubeUrl)?.playlistId} aria-label="Música anterior" onClick={() => nextTrack(-1)}><SkipBack size={17} /></button><button type="button" className={iconButton} disabled={source === 'youtube' && !parseYouTubeLink(youtubeUrl)?.playlistId} aria-label="Próxima música" onClick={() => nextTrack()}><SkipForward size={17} /></button><span className="min-w-0 flex-1 text-xs text-text-muted" role="status">{status === 'playing' ? 'Tocando com o timer' : status === 'loading' ? 'Carregando música…' : status === 'error' ? 'Música indisponível' : 'Inicie um timer para ouvir'}</span></div>
-        <label className="flex min-h-11 items-center gap-3 text-xs text-text-muted"><Volume2 size={17} aria-hidden="true" /><span>Volume</span><input aria-label="Volume da música" type="range" min={0} max={100} step={1} value={Math.round(volume * 100)} onChange={(event) => setVolume(Number(event.target.value) / 100)} className="min-w-0 flex-1 accent-accent" /><span className="w-9 text-right tabular-nums">{Math.round(volume * 100)}%</span></label>
+      {enabled && open && <div className="mt-2 flex min-w-0 flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-text-muted">Fonte da música</span>
+          <div role="radiogroup" aria-label="Fonte da música" className="flex gap-1 rounded-full bg-surface p-1">
+            {([['lofi', 'Lo-fi do TaskEz'], ['youtube', 'Link do YouTube']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={source === value}
+                onClick={() => setSource(value)}
+                className={cn('h-9 min-w-0 flex-1 truncate rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-accent', source === value ? 'bg-accent text-white' : 'text-text-muted hover:text-text')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {source === 'youtube' ? (
+          <form className="flex min-w-0 flex-col gap-2" onSubmit={(event) => { event.preventDefault(); confirmLink() }}>
+            <Field label="Link do YouTube" aria-label="Link do YouTube" aria-invalid={Boolean(linkError)} type="text" inputMode="url" placeholder="https://www.youtube.com/watch?v=…" value={linkValue} onChange={(event) => changeLink(event.target.value)} onBlur={confirmLink} error={linkError} />
+            <div className="flex min-h-11 items-center justify-between gap-3 text-sm text-text"><span>Vídeo colapsado</span><Switch checked={collapsed} onChange={() => setCollapsed(!collapsed)} aria-label="Vídeo colapsado" /></div>
+          </form>
+        ) : (
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-xs font-medium text-text-muted">Começar por</span>
+            <DropdownMenu
+              label="Faixas lo-fi"
+              width="full"
+              renderTrigger={({ open: menuOpen, toggle }) => (
+                <button
+                  type="button"
+                  onClick={toggle}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  aria-label={`Faixa lo-fi: ${currentTrack.title}`}
+                  className={cn('flex h-11 w-full min-w-0 items-center gap-2 rounded-2xl border bg-surface px-3.5 text-left text-sm text-text transition-colors focus-visible:outline-2 focus-visible:outline-accent', menuOpen ? 'border-accent' : 'border-border')}
+                >
+                  <Music size={15} className="shrink-0 text-text-faint" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate">{currentTrack.title}</span>
+                  <ChevronDown size={16} className={cn('shrink-0 text-text-faint transition-transform', menuOpen && 'rotate-180')} aria-hidden="true" />
+                </button>
+              )}
+            >
+              {(close) => FOCUS_TRACKS.map((track) => (
+                <MenuItem key={track.id} icon={<Music size={14} />} label={track.title} selected={track.id === trackId} onClick={() => { setTrack(track.id); close() }} />
+              ))}
+            </DropdownMenu>
+          </div>
+        )}
+        <div className="flex min-w-0 items-center gap-2">
+          <button type="button" className={iconButton} disabled={!canSkip} aria-label="Música anterior" onClick={() => nextTrack(-1)}><SkipBack size={17} /></button>
+          <button type="button" className={iconButton} disabled={!canSkip} aria-label="Próxima música" onClick={() => nextTrack()}><SkipForward size={17} /></button>
+          <label className="ml-1 flex min-w-0 flex-1 items-center gap-2 text-text-muted">
+            <Volume2 size={17} className="shrink-0" aria-hidden="true" />
+            <input aria-label="Volume da música" type="range" min={0} max={100} step={1} value={Math.round(volume * 100)} onChange={(event) => setVolume(Number(event.target.value) / 100)} className="w-full min-w-0 flex-1 accent-accent" />
+          </label>
+        </div>
         {error && <div role="alert"><p className="text-xs text-danger">{error}</p><button type="button" onClick={() => setEnabled(true)} className="min-h-11 text-sm font-semibold text-accent">Tentar tocar novamente</button></div>}
-        {source === 'youtube' && <button type="button" onClick={() => setEnabled(true)} className="min-h-11 text-left text-sm font-semibold text-accent">Retomar música do YouTube</button>}
       </div>}
     </section>
   )
