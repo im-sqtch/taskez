@@ -50,6 +50,7 @@ export function CopyableCell({ text, children }: { text: string; children: React
   const hideTimer = useRef<number | undefined>(undefined)
   const press = useRef<{ x: number; y: number; timer: number } | null>(null)
   const longPressed = useRef(false)
+  const content = useRef<HTMLDivElement>(null)
 
   useEffect(() => () => {
     window.clearTimeout(hideTimer.current)
@@ -72,7 +73,12 @@ export function CopyableCell({ text, children }: { text: string; children: React
 
   return (
     <div
-      className="group relative flex min-h-9 min-w-0 items-center px-1.5 [-webkit-touch-callout:none] [@media(hover:none)]:select-none"
+      className="group relative flex min-h-11 min-w-0 cursor-text items-center px-2.5 py-1 [-webkit-touch-callout:none] [@media(hover:none)]:select-none"
+      // Clique em qualquer parte da célula (fora do valor) também começa a edição.
+      onClick={(event) => {
+        if (event.target !== event.currentTarget && event.target !== content.current) return
+        content.current?.querySelector<HTMLElement>('button, input, textarea')?.click()
+      }}
       onPointerDown={(event) => {
         longPressed.current = false
         // Dentro de um campo em digitação, segurar o dedo serve para selecionar texto.
@@ -94,7 +100,7 @@ export function CopyableCell({ text, children }: { text: string; children: React
       onClickCapture={(event) => { if (longPressed.current) { event.preventDefault(); event.stopPropagation(); longPressed.current = false } }}
       onContextMenu={(event) => { if (press.current || longPressed.current) event.preventDefault() }}
     >
-      <div className="min-w-0 flex-1 py-1">{children}</div>
+      <div ref={content} className="min-w-0 flex-1 py-1">{children}</div>
       {text && (
         <button
           type="button"

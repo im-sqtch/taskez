@@ -143,6 +143,19 @@ try {
     await page.screenshot({ path: path.join(process.env.TEMP, 'taskTables-inline.png') })
     console.log('PASS desktop: edição direta na célula, sem mudar o fundo')
 
+    // Clicar em qualquer parte da célula (não só no texto) abre a edição.
+    const headerCell = page.locator('thead th').first()
+    const headerBox = await headerCell.boundingBox()
+    await page.mouse.click(headerBox.x + headerBox.width - 12, headerBox.y + headerBox.height - 6)
+    await page.getByRole('textbox', { name: 'Nome da coluna' }).waitFor()
+    await page.keyboard.press('Escape')
+    const bodyCell = page.locator('tbody tr').first().locator('td').first()
+    const bodyBox = await bodyCell.boundingBox()
+    await page.mouse.click(bodyBox.x + bodyBox.width - 50, bodyBox.y + bodyBox.height - 4)
+    await page.getByRole('textbox', { name: 'Item, linha' }).waitFor()
+    await page.keyboard.press('Escape')
+    console.log('PASS desktop: clique em qualquer parte da célula')
+
     // Menu do cabeçalho: renomear, mover e trocar o tipo.
     await page.getByRole('button', { name: 'Opções da coluna Item' }).click()
     await page.getByRole('textbox', { name: 'Nome da coluna' }).fill('Descrição')
