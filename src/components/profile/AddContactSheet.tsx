@@ -1,10 +1,11 @@
 import { Mail } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Input'
 import { Sheet } from '@/components/ui/Sheet'
 import { useAuthStore } from '@/store/authStore'
 import { useContactsStore } from '@/store/contactsStore'
+import { useOnChange } from '@/lib/useOnChange'
 
 interface AddContactSheetProps {
   open: boolean
@@ -18,12 +19,12 @@ export function AddContactSheet({ open, onClose }: AddContactSheetProps) {
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
 
-  useEffect(() => {
-    if (!open) return
+  useOnChange(open, (isOpen) => {
+    if (!isOpen) return
     setEmail('')
     setError(null)
     setSent(false)
-  }, [open])
+  })
 
   async function handleSubmit() {
     if (!email.trim() || !currentUser) return

@@ -1,10 +1,11 @@
 import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, Clock, FolderKanban, Plus, UserX } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel } from '@/components/ui/Input'
-import { LinksField, withDraft } from '@/components/ui/LinksField'
+import { LinksField } from '@/components/ui/LinksField'
+import { withDraft } from '@/lib/links'
 import { MentionText } from '@/components/ui/MentionText'
 import { MentionTextArea } from '@/components/ui/MentionTextArea'
 import { RecurrenceField } from '@/components/ui/RecurrenceField'
@@ -13,6 +14,7 @@ import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, monthG
 import { cn } from '@/lib/utils'
 import { useDataStore, useWorkspaceProjects, useWorkspaceTeam } from '@/store/dataStore'
 import type { Priority, RecurrenceRule, Task } from '@/types'
+import { useOnChange } from '@/lib/useOnChange'
 
 function formatShortDate(key: string): string {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(keyToDate(key)).replace('.', '')
@@ -67,8 +69,9 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
   const [projectSheetOpen, setProjectSheetOpen] = useState(false)
   const [calendarCursor, setCalendarCursor] = useState(() => new Date())
 
-  useEffect(() => {
-    if (!open) return
+  // Reinicia o formulário ao abrir (ou ao trocar a tarefa/valores sugeridos com ele aberto).
+  useOnChange(open ? [task?.id, defaultProjectId, defaultAssigneeId, defaultDueDate, defaultDueTime].join('|') : null, (openKey) => {
+    if (openKey === null) return
     setTitle(task?.title ?? '')
     setDescription(task?.description ?? '')
     setPriority(task?.priority ?? 'medium')
@@ -84,7 +87,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
     setLinks(task?.links ?? [])
     setLinkDraft('')
     setRecurrence(task?.recurrence)
-  }, [open, task, defaultProjectId, defaultAssigneeId, defaultDueDate, defaultDueTime])
+  })
 
   function addSubtaskDraft() {
     if (!subtaskInput.trim()) return

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Input'
 import { useConfirmStore } from '@/store/confirmStore'
+import { useOnChange } from '@/lib/useOnChange'
 
 export function ConfirmDialog() {
   const options = useConfirmStore((s) => s.options)
@@ -12,9 +13,7 @@ export function ConfirmDialog() {
   // Zera o campo sempre que um novo diálogo é aberto (inclusive reabrindo o
   // mesmo tipo de ação em seguida) — cada `confirmAction(...)` cria um objeto
   // novo, então a identidade de `options` muda a cada abertura.
-  useEffect(() => {
-    setTyped('')
-  }, [options])
+  useOnChange(options, () => setTyped(''))
 
   if (!options) return null
 

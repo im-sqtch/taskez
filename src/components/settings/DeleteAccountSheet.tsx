@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Input'
 import { Sheet } from '@/components/ui/Sheet'
 import { useAuthStore } from '@/store/authStore'
+import { useOnChange } from '@/lib/useOnChange'
 
 interface DeleteAccountSheetProps {
   open: boolean
@@ -17,12 +18,12 @@ export function DeleteAccountSheet({ open, onClose }: DeleteAccountSheetProps) {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    if (!open) return
+  useOnChange(open, (isOpen) => {
+    if (!isOpen) return
     setPassword('')
     setError(null)
     setSubmitting(false)
-  }, [open])
+  })
 
   async function handleSubmit() {
     if (!password) return

@@ -1,11 +1,12 @@
 import { FolderKanban, GripVertical } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Sheet } from '@/components/ui/Sheet'
 import { SortableItem, SortableList } from '@/components/ui/SortableList'
 import { reorderItems } from '@/lib/reorder'
 import { useDataStore } from '@/store/dataStore'
 import type { Project } from '@/types'
+import { useOnChange } from '@/lib/useOnChange'
 
 interface ReorderProjectsSheetProps {
   open: boolean
@@ -17,11 +18,9 @@ export function ReorderProjectsSheet({ open, onClose, projects }: ReorderProject
   const reorderProjects = useDataStore((s) => s.reorderProjects)
   const [draft, setDraft] = useState<Project[]>([])
 
-  // Não inclui `projects` nas deps: a página devolve um array filtrado novo a
-  // cada render, então reagir a ele reiniciaria o rascunho a cada movimento.
-  useEffect(() => {
-    if (open) setDraft(projects)
-  }, [open])
+  // Copia a lista só ao abrir: a página devolve um array filtrado novo a cada
+  // render, e reagir a ele reiniciaria o rascunho a cada movimento.
+  useOnChange(open, (isOpen) => { if (isOpen) setDraft(projects) })
 
   function reorder(oldIndex: number, newIndex: number) {
     setDraft((prev) => reorderItems(prev, oldIndex, newIndex))
