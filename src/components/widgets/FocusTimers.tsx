@@ -1,8 +1,10 @@
-import { Headphones, Pause, Pencil, Play, Plus, RotateCcw, SkipBack, SkipForward, Timer, Trash2, Volume2, X } from 'lucide-react'
+import { Headphones, Pause, Pencil, PictureInPicture2, Play, Plus, RotateCcw, SkipBack, SkipForward, Timer, Trash2, Volume2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Field } from '@/components/ui/Input'
 import { FOCUS_MUSIC_SOURCE, FOCUS_TRACKS } from '@/lib/focusMusic'
+import { openFocusPip, pipMode } from '@/lib/focusPip'
+import { renderFocusMiniPlayer } from '@/components/widgets/renderFocusMiniPlayer'
 import { parseYouTubeLink } from '@/lib/youtubeLink'
 import { useAuthStore } from '@/store/authStore'
 import { MAX_FOCUS_TIMERS, MAX_TIMER_MINUTES, usePomodoroStore, type FocusTimerDefinition } from '@/store/pomodoroStore'
@@ -121,9 +123,13 @@ export function FocusTimers() {
   const definitions = usePomodoroStore((s) => s.definitions)
   const timers = definitions.filter((timer) => timer.userId === userId)
   const [editor, setEditor] = useState<{ definition?: FocusTimerDefinition } | null>(null)
+  const [pipAvailable] = useState(() => pipMode() !== null)
+  const [pipError, setPipError] = useState(false)
   return (
     <div data-focus-panel className="flex min-w-0 flex-col gap-3.5">
-      <div className="flex items-center justify-between"><h3 className="flex items-center gap-2 text-sm font-bold text-text"><Timer size={17} className="text-accent" aria-hidden="true" />Meus timers</h3><span className="text-xs text-text-muted" aria-label={`${timers.length} de ${MAX_FOCUS_TIMERS} timers`}>{timers.length}/{MAX_FOCUS_TIMERS}</span></div>
+      <div className="flex items-center justify-between gap-2"><h3 className="flex flex-1 items-center gap-2 text-sm font-bold text-text"><Timer size={17} className="text-accent" aria-hidden="true" />Meus timers</h3>
+        {pipAvailable && timers.length > 0 && <button type="button" onClick={() => void openFocusPip(renderFocusMiniPlayer).catch(() => setPipError(true))} aria-label="Abrir janela flutuante do timer" title="Janela flutuante: o timer continua na tela quando você sai do app" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"><PictureInPicture2 size={17} /></button>}<span className="text-xs text-text-muted" aria-label={`${timers.length} de ${MAX_FOCUS_TIMERS} timers`}>{timers.length}/{MAX_FOCUS_TIMERS}</span></div>
+      {pipError && <p role="alert" className="text-xs text-danger">Não foi possível abrir a janela flutuante neste navegador.</p>}
       {!timers.length && <p className="text-sm leading-relaxed text-text-muted">Crie seu primeiro timer e dê um ritmo ao seu foco.</p>}
       {timers.map((definition) => <FocusTimer key={definition.id} definition={definition} onEdit={() => setEditor({ definition })} />)}
       <button type="button" disabled={timers.length >= MAX_FOCUS_TIMERS} onClick={() => setEditor({})} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 text-sm font-semibold text-accent transition-colors hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:text-text-faint disabled:opacity-60"><Plus size={18} aria-hidden="true" />{timers.length >= MAX_FOCUS_TIMERS ? 'Limite de 10 timers atingido' : 'Adicionar timer'}</button>
