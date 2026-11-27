@@ -102,7 +102,7 @@ try {
     await page.keyboard.press('Escape')
     await page.getByRole('dialog').waitFor({ state: 'detached' })
 
-    await page.getByRole('checkbox', { name: 'Música lo-fi' }).check()
+    await page.getByRole('switch', { name: 'Ativar música' }).click()
     // Última faixa da lista: ao terminar, volta para a primeira.
     await page.getByLabel('Faixa lo-fi').selectOption('last-train-home')
     await page.getByRole('button', { name: 'Iniciar Estudo', exact: true }).click()

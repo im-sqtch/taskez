@@ -106,7 +106,7 @@ try {
     }
 
     if (!desktop) await page.getByRole('button', { name: 'Filtros do calendário' }).click()
-    await page.getByRole('button', { name: 'Mostrar concluídas' }).click()
+    await page.getByRole('switch', { name: 'Mostrar concluídas' }).click()
     await page.waitForURL((url) => url.searchParams.get('completed') === 'false')
     await page.getByText('Entrega concluída', { exact: true }).first().waitFor({ state: 'detached' })
     await page.getByRole('checkbox', { name: 'Projeto teste' }).click()
