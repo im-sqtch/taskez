@@ -236,6 +236,8 @@ export function TaskDetailPage() {
                   value={editingSubtaskValue}
                   onChange={setEditingSubtaskValue}
                   workspaceId={task.workspaceId}
+                  singleLine
+                  onEnterSubmit={saveEditSubtask}
                   autoFocus
                 />
                 <div className="flex justify-end gap-2">

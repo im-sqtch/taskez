@@ -66,7 +66,9 @@ export function CalendarPage() {
   const selectedKey = validDate(params.get('date')) ? params.get('date')! : dateKey(new Date())
   const cursor = keyToDate(selectedKey)
   const hideParam = params.getAll('hide').join(',')
-  const hiddenProjects = useMemo(() => new Set(hideParam ? hideParam.split(',') : []), [hideParam])
+  const pickedHidden = useMemo(() => new Set(hideParam ? hideParam.split(',') : []), [hideParam])
+  // Ocultar projetos concluídos e arquivados (e as tarefas deles).
+  const hideClosed = params.get('closed') === 'hide'
   const showCompleted = params.get('completed') !== 'false'
   const showUndated = params.get('undated') === 'true'
   const todayKey = dateKey(new Date())
@@ -84,8 +86,12 @@ export function CalendarPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects])
+  const hiddenProjects = useMemo(() => {
+    if (!hideClosed) return pickedHidden
+    return new Set([...pickedHidden, ...projects.filter((p) => p.status !== 'active').map((p) => p.id)])
+  }, [hideClosed, pickedHidden, projects])
   const filterProjects: CalendarFilterProject[] = [
-    ...projects.map((p) => ({ id: p.id, name: p.name, color: p.color })),
+    ...projects.filter((p) => !hideClosed || p.status === 'active').map((p) => ({ id: p.id, name: p.name, color: p.color })),
     { id: 'standalone', name: 'Tarefas avulsas', color: 'var(--color-accent)' },
   ]
 
@@ -269,12 +275,14 @@ export function CalendarPage() {
     hiddenProjects,
     onToggleProject: toggleProject,
     showCompleted,
+    hideClosedProjects: hideClosed,
+    onToggleHideClosedProjects: () => updateParams({ closed: hideClosed ? null : 'hide' }),
     onToggleCompleted: () => updateParams({ completed: showCompleted ? 'false' : null }),
     undatedCount: tasks.filter((task) => !task.dueDate && !hiddenProjects.has(task.projectId ?? 'standalone') && (showCompleted || task.status !== 'done')).length,
     showUndated,
     onToggleUndated: () => updateParams({ undated: showUndated ? null : 'true' }),
-    hasActiveFilters: hiddenProjects.size > 0 || !showCompleted,
-    onClear: () => updateParams({ hide: null, completed: null }),
+    hasActiveFilters: pickedHidden.size > 0 || !showCompleted || hideClosed,
+    onClear: () => updateParams({ hide: null, completed: null, closed: null }),
   }
 
   const viewSwitcher = (

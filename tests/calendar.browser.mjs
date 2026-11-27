@@ -23,7 +23,9 @@ responses.tasks.push(
   { ...responses.tasks[0], id: 'task-done', title: 'Entrega concluída', status: 'done' },
   { ...responses.tasks[0], id: 'task-undated', title: 'Planejar próxima entrega', project_id: null, due_date: null },
   { ...responses.tasks[0], id: 'task-other', title: 'Outra workspace', workspace_id: 'workspace-2' },
+  { ...responses.tasks[0], id: 'task-archived', title: 'Tarefa de projeto arquivado', project_id: 'project-archived', due_date: '2026-11-24T00:00:00.000Z' },
 )
+responses.projects.push({ ...responses.projects[0], id: 'project-archived', name: 'Projeto arquivado', status: 'archived' })
 
 try {
   for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }, { width: 812, height: 375 }]) {
@@ -112,6 +114,10 @@ try {
     await page.getByRole('checkbox', { name: 'Projeto teste' }).click()
     await page.waitForURL((url) => url.searchParams.getAll('hide').includes('project-1'))
     await page.getByRole('main').getByText('Tarefa teste', { exact: true }).first().waitFor({ state: 'detached' })
+    // Ocultar projetos concluídos e arquivados some com as tarefas deles.
+    await page.getByRole('switch', { name: 'Ocultar projetos concluídos e arquivados' }).click()
+    await page.waitForURL((url) => url.searchParams.get('closed') === 'hide')
+    await page.getByRole('checkbox', { name: 'Projeto arquivado' }).waitFor({ state: 'detached' })
     await page.getByRole('button', { name: 'Limpar filtros' }).click()
     await page.waitForURL((url) => !url.searchParams.has('hide') && !url.searchParams.has('completed'))
     await page.getByText('Tarefa teste', { exact: true }).first().waitFor()

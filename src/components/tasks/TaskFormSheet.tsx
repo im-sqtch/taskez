@@ -4,7 +4,9 @@ import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel } from '@/components/ui/Input'
-import { LinksField } from '@/components/ui/LinksField'
+import { PendingAttachments, TaskAttachments } from '@/components/tasks/TaskAttachments'
+import { uploadTaskAttachment } from '@/lib/taskAttachments'
+import { useAuthStore } from '@/store/authStore'
 import { withDraft } from '@/lib/links'
 import { MentionText } from '@/components/ui/MentionText'
 import { MentionTextArea } from '@/components/ui/MentionTextArea'
@@ -102,6 +104,8 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [dueDate, setDueDate] = useState('')
   const [dueTime, setDueTime] = useState('')
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const currentUser = useAuthStore((st) => st.currentUser())
   const [endTime, setEndTime] = useState('')
   const [reminder, setReminder] = useState<number | null>(null)
   const [pushAvailable, setPushAvailable] = useState<boolean | null>(null)
@@ -109,8 +113,6 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
   const [subtaskInput, setSubtaskInput] = useState('')
   const [editingSubtaskIndex, setEditingSubtaskIndex] = useState<number | null>(null)
   const [editingSubtaskValue, setEditingSubtaskValue] = useState('')
-  const [links, setLinks] = useState<string[]>([])
-  const [linkDraft, setLinkDraft] = useState('')
   const [recurrence, setRecurrence] = useState<RecurrenceRule | undefined>(undefined)
   const [dueSheetOpen, setDueSheetOpen] = useState(false)
   const [projectSheetOpen, setProjectSheetOpen] = useState(false)
@@ -135,9 +137,8 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
     setSubtasks(task?.subtasks.map((s) => s.title) ?? [])
     setSubtaskInput('')
     setEditingSubtaskIndex(null)
-    setLinks(task?.links ?? [])
-    setLinkDraft('')
     setRecurrence(task?.recurrence)
+    setPendingFiles([])
   })
 
   function addSubtaskDraft() {
@@ -221,7 +222,8 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
       dueTime: dueDate && dueTime ? dueTime : undefined,
       durationMinutes: dueDate && dueTime && duration ? duration : undefined,
       reminderMinutes: dueDate && dueTime && reminder !== null ? reminder : undefined,
-      links: withDraft(links, linkDraft),
+      // Links não são mais editados no formulário (deram lugar aos anexos); os existentes ficam.
+      links: task?.links ?? [],
       recurrence,
     }
     if (task) {
@@ -233,12 +235,18 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
       }
       updateTask(task.id, payload)
     } else {
-      addTask({
+      const newTaskId = addTask({
         ...payload,
         // Inclui o rascunho ainda não confirmado com "+"/Enter — sem isso, a
         // última subtarefa digitada se perdia silenciosamente ao criar.
         subtasks: withDraft(subtasks, subtaskInput).map((t) => ({ id: crypto.randomUUID(), title: t, done: false })),
       })
+      if (pendingFiles.length && currentUser) {
+        const workspaceId = mentionWorkspaceId
+        void (async () => {
+          for (const file of pendingFiles) await uploadTaskAttachment(file, { taskId: newTaskId, workspaceId, userId: currentUser.id })
+        })()
+      }
     }
     onClose()
   }
@@ -271,7 +279,6 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
           workspaceId={mentionWorkspaceId}
         />
 
-        <LinksField links={links} onChange={setLinks} draft={linkDraft} onDraftChange={setLinkDraft} />
 
         <div className="flex flex-col gap-1.5">
           <FieldLabel>Prioridade</FieldLabel>
@@ -367,13 +374,16 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
           </div>
         </div>
 
+        {/* 2x2: Prazo | Projeto em cima, Começa às | Repetir aqui. */}
+        <div className="grid grid-cols-2 gap-3">
+          {dueDate && <TimeInput id="task-due-time" label="Começa às (opcional)" value={dueTime} onChange={setDueTime} />}
+          <div className={cn('min-w-0', !dueDate && 'col-span-2')}><RecurrenceField value={recurrence} onChange={setRecurrence} /></div>
+          {dueDate && dueTime && <TimeInput id="task-end-time" label="Termina às (opcional)" value={endTime} onChange={setEndTime} />}
+        </div>
+
         {dueDate && (
           <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-3">
-              <TimeInput id="task-due-time" label="Começa às (opcional)" value={dueTime} onChange={setDueTime} />
-              {dueTime && <TimeInput id="task-end-time" label="Termina às (opcional)" value={endTime} onChange={setEndTime} />}
-            </div>
-            {!dueTime && <p className="-mt-1 text-xs text-text-faint">Sem horário, a tarefa vale para o dia inteiro.</p>}
+            {!dueTime && <p className="-mt-3 text-xs text-text-faint">Sem horário, a tarefa vale para o dia inteiro.</p>}
             {endTimeInvalid && <p role="alert" className="-mt-1 text-xs font-medium text-danger">O término precisa ser depois do início.</p>}
             {dueTime && (
               <div className="flex flex-col gap-1.5">
@@ -399,8 +409,6 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
           </div>
         )}
 
-        <RecurrenceField value={recurrence} onChange={setRecurrence} />
-
         {!task && (
           <div className="flex flex-col gap-2">
             <FieldLabel>Subtarefas</FieldLabel>
@@ -411,6 +419,8 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
                     value={editingSubtaskValue}
                     onChange={setEditingSubtaskValue}
                     workspaceId={mentionWorkspaceId}
+                    singleLine
+                    onEnterSubmit={saveEditSubtaskDraft}
                     autoFocus
                   />
                   <div className="flex justify-end gap-2">
@@ -443,11 +453,20 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
               onChange={setSubtaskInput}
               workspaceId={mentionWorkspaceId}
               placeholder="Adicionar subtarefa"
+              singleLine
+              onEnterSubmit={addSubtaskDraft}
             />
             <Button variant="secondary" size="sm" icon={<Plus size={15} />} onClick={addSubtaskDraft} className="self-end">
               Adicionar
             </Button>
           </div>
+        )}
+
+        {/* Anexos: na edição, os da própria tarefa; na criação, ficam na fila e sobem ao criar. */}
+        {task ? (
+          <TaskAttachments taskId={task.id} inset={false} />
+        ) : (
+          <PendingAttachments files={pendingFiles} onChange={setPendingFiles} />
         )}
       </div>
     </Sheet>
