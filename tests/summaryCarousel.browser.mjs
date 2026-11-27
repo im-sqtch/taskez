@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const base = process.env.TEST_BASE_URL || 'http://localhost:5174'
-const browser = await chromium.launch({ channel: 'msedge', headless: true })
+// PLAYWRIGHT_CHANNEL vazio usa o Chromium do próprio Playwright (padrão: Edge).
+const channel = process.env.PLAYWRIGHT_CHANNEL ?? 'msedge'
+const browser = await chromium.launch({ ...(channel ? { channel } : {}), headless: true })
 
 const createdAt = '2026-09-26T12:00:00.000Z'
 const responses = {
@@ -147,7 +149,7 @@ try {
         const track = document.querySelector('[aria-label="Progresso da semana"] .transition-transform')
         return Math.abs(new DOMMatrixReadOnly(getComputedStyle(track).transform).m41 + track.getBoundingClientRect().width) < 1
       })
-      await page.screenshot({ path: `${process.env.TEMP}/taskez-summary-compact.png` })
+      await page.screenshot({ path: `${process.env.TEMP || "/tmp"}/taskez-summary-compact.png` })
     }
     await expectHeaderPagination(size === 'S' ? '2 de 4' : '2 de 2')
     await swipe(90)

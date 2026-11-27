@@ -1,0 +1,49 @@
+# Verificação automática de todo PR e de todo push na main: lint, tipos +
+# build, testes unitários e testes de navegador (Chromium do Playwright).
+# A main é protegida e só aceita PRs com estas duas verificações passando.
+name: Verificação
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: verificacao-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint, build e testes unitários
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+        env:
+          # O build só embute estes valores no bundle; aqui não acessa nada.
+          VITE_SUPABASE_URL: https://teste.supabase.co
+          VITE_SUPABASE_ANON_KEY: chave-de-teste
+      - run: npm test
+
+  navegador:
+    name: Testes de navegador
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+        env:
+          TZ: America/Sao_Paulo

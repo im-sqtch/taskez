@@ -15,13 +15,17 @@
 ## Comandos
 - `npm run dev`: servidor local. Precisa do `.env.local` com `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`, que você obtém com `vercel env pull .env.local`.
 - `npm run build`: checagem de tipos e build. `npm run lint`: oxlint.
-- `node --test tests/*.test.mjs`: testes unitários. Os arquivos `tests/*.browser.mjs` precisam do Playwright.
+- `npm test`: testes unitários (`tests/*.test.mjs`, no fuso de São Paulo).
+- `npm run test:browser`: testes de navegador (`tests/*.browser.mjs`). Sobe um Vite próprio na porta 5174 e usa o Chromium do Playwright, que você instala uma vez com `npx playwright install chromium`. Para rodar só um: `npm run test:browser -- calendar`. Os testes simulam o Supabase e não precisam de credenciais.
 
 ## Banco de dados
 - Toda mudança de schema vira uma migration nova em `supabase/migrations/`, com nome `AAAAMMDDHHMMSS_descricao.sql`. Não edite migrations já aplicadas.
 - Toda tabela nova precisa de RLS e de políticas por dono (`user_id = auth.uid()`). Se o app precisar de atualização em tempo real, adicione a tabela a `supabase_realtime`.
 - Para aplicar: `supabase db push --remote`.
 
-## Deploy
-- Push na `main` publica em produção na Vercel.
-- **Nunca publique pela CLI da Vercel (`vercel deploy`) código que não está commitado**, porque o GitHub fica para trás da produção. Faça sempre commit e push.
+## Fluxo de trabalho e deploy
+- **Nunca faça push direto na `main`.** Ela é protegida: só aceita PR com as verificações do GitHub Actions passando (`.github/workflows/verificacao.yml`: lint, build, testes unitários e de navegador).
+- Trabalhe numa branch, abra PR e confira o **preview da Vercel**, que é criado automaticamente para cada branch. Atenção: o preview usa o **mesmo banco de produção**.
+- Fazer merge na `main` publica em produção.
+- **Nunca publique pela CLI da Vercel (`vercel deploy`) código que não está commitado**, porque o GitHub fica para trás da produção.
+- Migrations entram em produção com `supabase db push --remote` e não passam pelo PR. Aplique-as só quando forem compatíveis com o código que já está publicado: colunas e tabelas novas e opcionais.
