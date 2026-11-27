@@ -1,5 +1,5 @@
-import { ArrowLeft, Bell, Check, ChevronRight, Globe, LogOut, Monitor, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowLeft, Bell, Camera, Check, ChevronRight, Globe, LogOut, Monitor, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { Field } from '@/components/ui/Input'
@@ -12,7 +12,9 @@ import { cn } from '@/lib/utils'
 import { isPushSubscribed, isPushSupported, subscribeToPush, unsubscribeFromPush } from '@/lib/push'
 import { NOTIFICATION_EVENT_KEYS, NOTIFICATION_EVENTS } from '@/lib/notificationCatalog'
 import { UTC_OFFSETS, formatUtcOffset } from '@/lib/timezone'
+import { removeAvatar, uploadAvatar } from '@/lib/avatarUpload'
 import { useAuthStore } from '@/store/authStore'
+import { useDataStore } from '@/store/dataStore'
 import { confirmAction } from '@/store/confirmStore'
 import { useNotificationPrefsStore } from '@/store/notificationPrefsStore'
 import { useThemeStore } from '@/store/themeStore'
@@ -93,6 +95,38 @@ export function SettingsPage() {
   const logout = useAuthStore((s) => s.logout)
   const signOutOtherDevices = useAuthStore((s) => s.signOutOtherDevices)
   const updateProfile = useAuthStore((s) => s.updateProfile)
+  const syncSelfProfile = useDataStore((s) => s.syncSelfProfile)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+
+  async function savePhoto(avatarUrl: string | undefined) {
+    await updateProfile({ avatarUrl })
+    syncSelfProfile({ avatarUrl })
+  }
+
+  async function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !user) return
+    setPhotoBusy(true)
+    setPhotoError(null)
+    try {
+      await savePhoto(await uploadAvatar(user.id, file, user.avatarUrl))
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : 'Não foi possível enviar a foto.')
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  async function handleRemovePhoto() {
+    if (!user) return
+    setPhotoBusy(true)
+    await removeAvatar(user.avatarUrl).catch(() => {})
+    await savePhoto(undefined)
+    setPhotoBusy(false)
+  }
   const theme = useThemeStore((s) => s.theme)
   const setTheme = useThemeStore((s) => s.setTheme)
   const disabledEvents = useNotificationPrefsStore((s) => s.disabled)
@@ -180,7 +214,7 @@ export function SettingsPage() {
         onClick={() => setEditOpen(true)}
         className="mx-5 flex items-center gap-3.5 rounded-xl bg-surface p-4 text-left"
       >
-        <Avatar name={user.name} color={user.avatarColor} size="md" />
+        <Avatar name={user.name} color={user.avatarColor} src={user.avatarUrl} size="md" />
         <div className="flex-1">
           <p className="font-semibold text-text">{user.name}</p>
           <p className="text-xs text-text-faint">{user.email}</p>
@@ -288,7 +322,20 @@ export function SettingsPage() {
           </Button>
         }
       >
-        <Field label="Nome" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center gap-4">
+            <Avatar name={name || user.name} color={user.avatarColor} src={user.avatarUrl} size="xl" />
+            <div className="flex flex-col items-start gap-2">
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => void handlePhoto(event)} />
+              <Button variant="secondary" size="sm" icon={<Camera size={15} />} disabled={photoBusy} onClick={() => photoInputRef.current?.click()}>
+                {photoBusy ? 'Enviando…' : user.avatarUrl ? 'Trocar foto' : 'Adicionar foto'}
+              </Button>
+              {user.avatarUrl && <Button variant="ghost" size="sm" disabled={photoBusy} onClick={() => void handleRemovePhoto()}>Remover foto</Button>}
+            </div>
+          </div>
+          {photoError && <p role="alert" className="-mt-3 text-xs font-medium text-danger">{photoError}</p>}
+          <Field label="Nome" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
       </Sheet>
 
       <NotificationPrefsSheet open={prefsOpen} onClose={() => setPrefsOpen(false)} />

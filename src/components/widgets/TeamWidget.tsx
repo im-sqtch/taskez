@@ -23,7 +23,7 @@ export function TeamWidget({ size }: { size: WidgetSize }) {
         <div className="flex items-center gap-2.5">
           <div className="flex -space-x-2">
             {team.slice(0, 3).map((m) => (
-              <Avatar key={m.id} name={m.name} color={m.avatarColor} size="xs" ring />
+              <Avatar key={m.id} name={m.name} color={m.avatarColor} src={m.avatarUrl} size="xs" ring />
             ))}
           </div>
           <p className="font-semibold text-text">Minha equipe</p>
@@ -45,7 +45,7 @@ export function TeamWidget({ size }: { size: WidgetSize }) {
         {team.slice(0, 4).map((member) => (
           <div key={member.id} className="flex items-center gap-3">
             <div className="relative">
-              <Avatar name={member.name} color={member.avatarColor} size="sm" />
+              <Avatar name={member.name} color={member.avatarColor} src={member.avatarUrl} size="sm" />
               <span
                 className={cn(
                   'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-surface',

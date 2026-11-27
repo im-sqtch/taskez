@@ -132,6 +132,7 @@ export interface TeamMember {
   name: string
   role: string
   avatarColor: string
+  avatarUrl?: string
   status: 'online' | 'away' | 'offline'
   workload: number
   // Marca a entrada que representa o usuário real logado (não os colegas fictícios)
@@ -250,6 +251,8 @@ export interface User {
   name: string
   email: string
   avatarColor: string
+  // Foto de perfil (URL pública); sem ela, mostram-se as iniciais na cor.
+  avatarUrl?: string
   usageMode: UsageMode
   timezone: string
   // Configurações > Tarefas concluídas: false pergunta (padrão atual), true

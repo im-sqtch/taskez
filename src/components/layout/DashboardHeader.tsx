@@ -24,7 +24,7 @@ export function DashboardHeader({ onCustomize }: { onCustomize: () => void }) {
     <header className="sticky top-0 z-20 flex items-center justify-between bg-base px-5 pt-[calc(env(safe-area-inset-top)+16px)] pb-2">
       <div className="min-w-0">
         <button onClick={() => setWorkspaceSheetOpen(true)} className="flex items-center gap-3">
-          {user && <Avatar name={user.name} color={user.avatarColor} size="md" />}
+          {user && <Avatar name={user.name} color={user.avatarColor} src={user.avatarUrl} size="md" />}
           <div className="text-left">
             <p className="text-xs text-text-muted">
               {greeting()}, {firstName}

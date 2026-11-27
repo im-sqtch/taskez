@@ -97,7 +97,7 @@ export function ProfilePage() {
       </header>
 
       <div className="flex flex-col items-center gap-3 px-5 text-center">
-        <Avatar name={user.name} color={user.avatarColor} size="lg" />
+        <Avatar name={user.name} color={user.avatarColor} src={user.avatarUrl} size="xl" />
         <div>
           <p className="text-lg font-bold text-text">{user.name}</p>
           <p className="text-sm text-text-faint">{user.email}</p>
@@ -133,7 +133,7 @@ export function ProfilePage() {
         <Card className="flex flex-col gap-3">
           {team.map((m) => (
             <div key={m.id} className="flex items-center gap-3">
-              <Avatar name={m.name} color={m.avatarColor} size="sm" />
+              <Avatar name={m.name} color={m.avatarColor} src={m.avatarUrl} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-text">{m.name}</p>
                 <p className="truncate text-xs text-text-faint">{m.role}</p>
@@ -178,7 +178,7 @@ export function ProfilePage() {
           ) : (
             contacts.map(({ contact, user: contactUser }) => (
               <div key={contact.id} className="flex items-center gap-3">
-                <Avatar name={contactUser.name} color={contactUser.avatarColor} size="sm" />
+                <Avatar name={contactUser.name} color={contactUser.avatarColor} src={contactUser.avatarUrl} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-text">{contactUser.name}</p>
                   <p className="truncate text-xs text-text-faint">{contactUser.email}</p>
@@ -215,14 +215,6 @@ export function ProfilePage() {
             <span className="block text-xs text-text-faint">{currentWorkspace?.name}</span>
           </div>
         </div>
-        <ChevronRight size={18} className="text-text-faint" />
-      </button>
-
-      <button
-        onClick={() => navigate('/settings')}
-        className="mx-5 flex items-center justify-between rounded-xl bg-surface p-4 text-left"
-      >
-        <span className="font-semibold text-text">Configurações</span>
         <ChevronRight size={18} className="text-text-faint" />
       </button>
 

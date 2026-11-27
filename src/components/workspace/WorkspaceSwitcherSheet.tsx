@@ -155,6 +155,7 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
                         <Avatar
                           name={member.name}
                           color={member.avatarColor}
+                          src={member.avatarUrl}
                           size="md"
                           className={cn(!selected && 'opacity-50', selected && 'ring-2 ring-accent ring-offset-2 ring-offset-surface-alt')}
                         />

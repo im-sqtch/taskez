@@ -119,7 +119,7 @@ export function Sidebar() {
             collapsed ? 'justify-center' : 'w-full text-left',
           )}
         >
-          {user && <Avatar name={user.name} color={user.avatarColor} size="md" />}
+          {user && <Avatar name={user.name} color={user.avatarColor} src={user.avatarUrl} size="md" />}
           {!collapsed && (
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs text-text-muted">Workspace</p>

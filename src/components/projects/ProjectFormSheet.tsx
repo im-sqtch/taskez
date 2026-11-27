@@ -167,6 +167,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
                     <Avatar
                       name={member.name}
                       color={member.avatarColor}
+                      src={member.avatarUrl}
                       size="md"
                       className={cn(!selected && 'opacity-40', selected && 'ring-2 ring-accent ring-offset-2 ring-offset-surface-alt')}
                     />
