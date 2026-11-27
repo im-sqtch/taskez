@@ -49,7 +49,7 @@ export function TaskRow({ task, active, to }: { task: Task; active?: boolean; to
           )}
           {task.dueDate && (
             <span className={cn('text-[11px] font-medium', overdue ? 'text-danger' : 'text-text-faint')}>
-              {formatDue(task.dueDate, task.dueTime)}
+              {formatDue(task.dueDate, task.dueTime, task.durationMinutes)}
             </span>
           )}
           {task.subtasks.length > 0 && (

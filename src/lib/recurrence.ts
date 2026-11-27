@@ -2,7 +2,7 @@
 // verdade (ler/gravar projetos e tarefas) fica em dataStore.ts; aqui só a
 // matemática de "qual é a próxima data que bate com a regra".
 import { addDays, dateKey, dueDateToLocalDate, keyToDate } from './calendar.ts'
-import type { RecurrenceRule } from '@/types'
+import type { RecurrenceRule, RecurrenceTemplate, Task } from '@/types'
 
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate()
@@ -56,4 +56,50 @@ export function offsetDays(dueDateIso: string, anchorCreatedAtIso: string): numb
 // no mesmo formato ISO usado hoje para `dueDate` nos formulários.
 export function applyOffset(appearanceDate: Date, days: number): string {
   return new Date(dateKey(addDays(appearanceDate, days))).toISOString()
+}
+
+// --- Ocorrências puladas e "só esta" (modelo dos próximos ciclos) ---
+
+export function isSkipped(rule: RecurrenceRule, appearance: Date): boolean {
+  return Boolean(rule.skip?.includes(dateKey(appearance)))
+}
+
+// Regra que o novo ciclo herda: sem o modelo (o novo ciclo já nasce com os
+// valores dele) e sem as ocorrências puladas que já passaram.
+export function ruleForNextCycle(rule: RecurrenceRule, appearance: Date): RecurrenceRule {
+  const key = dateKey(appearance)
+  const skip = (rule.skip ?? []).filter((item) => item > key)
+  const { template: _template, skip: _skip, ...rest } = rule
+  return skip.length ? { ...rest, skip } : rest
+}
+
+// Fotografia dos campos que os próximos ciclos devem repetir.
+export function templateFromTask(task: Task): RecurrenceTemplate {
+  return {
+    title: task.title,
+    description: task.description,
+    priority: task.priority,
+    assigneeIds: task.assigneeIds,
+    subtaskTitles: task.subtasks.map((subtask) => subtask.title),
+    links: task.links,
+    dueTime: task.dueTime,
+    durationMinutes: task.durationMinutes,
+    reminderMinutes: task.reminderMinutes,
+    dueOffset: task.dueDate ? offsetDays(task.dueDate, task.createdAt) : undefined,
+  }
+}
+
+// Campos de um novo ciclo vindos do modelo (todos, inclusive os vazios).
+export function fieldsFromTemplate(template: RecurrenceTemplate, newId: () => string): Pick<Task, 'title' | 'description' | 'priority' | 'assigneeIds' | 'subtasks' | 'links' | 'dueTime' | 'durationMinutes' | 'reminderMinutes'> {
+  return {
+    title: template.title,
+    description: template.description,
+    priority: template.priority,
+    assigneeIds: template.assigneeIds,
+    subtasks: template.subtaskTitles.map((title) => ({ id: newId(), title, done: false })),
+    links: template.links,
+    dueTime: template.dueTime,
+    durationMinutes: template.durationMinutes,
+    reminderMinutes: template.reminderMinutes,
+  }
 }

@@ -197,7 +197,7 @@ export function TaskDetailPage() {
             )}
             {task.dueDate && (
               <span className={cn('text-xs font-semibold', overdue ? 'text-danger' : 'text-text-faint')}>
-                Prazo: {formatDue(task.dueDate, task.dueTime)}
+                Prazo: {formatDue(task.dueDate, task.dueTime, task.durationMinutes)}
               </span>
             )}
             {assignees.map((assignee) => (

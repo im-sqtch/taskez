@@ -1,4 +1,4 @@
-import { CalendarDays, Plus, Repeat } from 'lucide-react'
+import { CalendarDays, Plus, Repeat, SkipForward } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { TaskRow } from '@/components/tasks/TaskRow'
 import { WEEKDAY_LABELS, dateKey, formatFullDate, formatShortMonth, weekGrid } from '@/lib/calendar'
@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils'
 import { formatDue } from '@/lib/utils'
 import { useDataStore } from '@/store/dataStore'
 import type { Task } from '@/types'
-import { isOccurrence, projectColor } from './calendarShared'
+import type { ProjectedTask } from '@/lib/recurrenceProjection'
+import { isOccurrence, projectColor, skipOccurrence } from './calendarShared'
 
 interface TaskListProps {
   tasks: Task[]
@@ -34,17 +35,22 @@ export function CalendarTaskList({ tasks, taskTo, empty, onCreate }: TaskListPro
 function OccurrenceRow({ task, to }: { task: Task; to: string }) {
   const project = useDataStore((s) => s.projects.find((item) => item.id === task.projectId))
   return (
-    <Link to={to} className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-alt" aria-label={`${task.title} (ocorrência futura)`}>
+    <div className="flex items-center gap-1">
+    <Link to={to} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-alt" aria-label={`${task.title} (ocorrência futura)`}>
       <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-dashed border-text-faint text-text-faint" aria-hidden="true"><Repeat size={11} /></span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate text-sm font-medium leading-tight text-text-muted">{task.title}</span>
         <span className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-text-faint">
           {project && <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: projectColor(project) }} />{project.name}</span>}
-          <span>{formatDue(task.dueDate, task.dueTime)}</span>
+          <span>{formatDue(task.dueDate, task.dueTime, task.durationMinutes)}</span>
           <span>Prevista</span>
         </span>
       </span>
     </Link>
+    <button type="button" onClick={() => skipOccurrence(task as ProjectedTask)} aria-label={`Pular esta ocorrência de ${task.title}`} title="Pular esta ocorrência" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:text-accent focus-visible:outline-2 focus-visible:outline-accent">
+      <SkipForward size={15} />
+    </button>
+    </div>
   )
 }
 

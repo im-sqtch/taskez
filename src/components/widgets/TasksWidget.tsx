@@ -69,7 +69,7 @@ export function TasksWidget({ size }: { size: WidgetSize }) {
                 </button>
                 {t.dueDate && (
                   <span className={overdue ? 'text-xs font-semibold text-danger' : 'text-xs text-text-faint'}>
-                    {formatDue(t.dueDate, t.dueTime)}
+                    {formatDue(t.dueDate, t.dueTime, t.durationMinutes)}
                   </span>
                 )}
               </div>

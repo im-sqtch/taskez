@@ -1,13 +1,14 @@
-import { CalendarDays, Check, CircleCheck, ExternalLink, FolderKanban, Pencil, Repeat, RotateCcw, Trash2, X } from 'lucide-react'
+import { Bell, CalendarDays, Check, CircleCheck, ExternalLink, FolderKanban, Pencil, Repeat, RotateCcw, SkipForward, Trash2, X } from 'lucide-react'
 import { PriorityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { dueDateToLocalDate, formatFullDate } from '@/lib/calendar'
+import { dueDateToLocalDate, formatFullDate, formatTimeRange } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
+import type { ProjectedTask } from '@/lib/recurrenceProjection'
 import type { Project, Task } from '@/types'
 import { AnchoredPopover } from './AnchoredPopover'
-import { isOccurrence, projectColor } from './calendarShared'
+import { isOccurrence, projectColor, reminderLabel, skipOccurrence } from './calendarShared'
 
 interface TaskQuickViewProps {
   // A tarefa clicada. Tarefas reais são relidas da store (para refletir
@@ -32,6 +33,10 @@ export function TaskQuickView({ task: clicked, anchor, onClose, onOpenDetails, o
   const toggleTaskStatus = useDataStore((s) => s.toggleTaskStatus)
   const updateTask = useDataStore((s) => s.updateTask)
   const deleteTask = useDataStore((s) => s.deleteTask)
+  function handleSkip() {
+    if (isOccurrence(clicked)) skipOccurrence(clicked as ProjectedTask)
+    onClose()
+  }
   if (!task) return null
   const done = task.status === 'done'
   const recurring = projected || Boolean(task.recurrence ?? project?.recurrence)
@@ -59,9 +64,10 @@ export function TaskQuickView({ task: clicked, anchor, onClose, onOpenDetails, o
         <span className="mt-1.5 h-3 w-3 shrink-0 rounded-[4px]" style={{ backgroundColor: projectColor(project) }} aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <p className={cn('break-words text-base font-semibold text-text', done && 'text-text-faint line-through')}>{task.title}</p>
-          {task.dueDate && <p className="mt-1 flex items-center gap-1.5 text-sm text-text-muted"><CalendarDays size={14} aria-hidden="true" />{formatFullDate(dueDateToLocalDate(task.dueDate))}{task.dueTime ? `, ${task.dueTime}` : ''}</p>}
+          {task.dueDate && <p className="mt-1 flex items-center gap-1.5 text-sm text-text-muted"><CalendarDays size={14} aria-hidden="true" />{formatFullDate(dueDateToLocalDate(task.dueDate))}{task.dueTime ? `, ${formatTimeRange(task.dueTime, task.durationMinutes)}` : ''}</p>}
           <p className="mt-1 flex items-center gap-1.5 text-sm text-text-muted"><FolderKanban size={14} aria-hidden="true" />{project?.name ?? 'Tarefa avulsa'}</p>
           {recurring && <p className="mt-1 flex items-center gap-1.5 text-sm text-text-muted"><Repeat size={14} aria-hidden="true" />Recorrente</p>}
+          {task.dueTime && task.reminderMinutes !== undefined && <p className="mt-1 flex items-center gap-1.5 text-sm text-text-muted"><Bell size={14} aria-hidden="true" />{reminderLabel(task.reminderMinutes)}</p>}
           {task.subtasks.length > 0 && <p className="mt-1 flex items-center gap-1.5 text-sm text-text-muted"><Check size={14} aria-hidden="true" />{task.subtasks.filter((s) => s.done).length}/{task.subtasks.length} subtarefas</p>}
           <div className="mt-3 flex flex-wrap gap-1.5">{!projected && <StatusBadge status={task.status} />}<PriorityBadge priority={task.priority} /></div>
         </div>
@@ -69,7 +75,10 @@ export function TaskQuickView({ task: clicked, anchor, onClose, onOpenDetails, o
       {projected ? (
         <>
           <p className="mt-3 rounded-xl bg-surface-alt px-3 py-2 text-xs text-text-muted">Ocorrência futura de uma tarefa recorrente. Ela vira uma tarefa de verdade quando o ciclo começar.</p>
-          {source && <Button size="sm" fullWidth className="mt-3 whitespace-nowrap" icon={<ExternalLink size={14} />} onClick={() => { onClose(); onOpenDetails(source) }}>Abrir tarefa original</Button>}
+          <div className="mt-3 flex gap-2">
+            <Button variant="secondary" size="sm" className="flex-1 whitespace-nowrap" icon={<SkipForward size={14} />} onClick={handleSkip}>Pular esta</Button>
+            {source && <Button size="sm" className="flex-1 whitespace-nowrap" icon={<ExternalLink size={14} />} onClick={() => { onClose(); onOpenDetails(source) }}>Tarefa original</Button>}
+          </div>
         </>
       ) : (
         <div className="mt-4 flex gap-2">

@@ -1,5 +1,5 @@
-import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, Clock, FolderKanban, Plus, UserX } from 'lucide-react'
-import { useState } from 'react'
+import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, FolderKanban, Plus, Repeat, UserX } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { SubtaskMenu } from '@/components/tasks/SubtaskMenu'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
@@ -10,7 +10,9 @@ import { MentionText } from '@/components/ui/MentionText'
 import { MentionTextArea } from '@/components/ui/MentionTextArea'
 import { RecurrenceField } from '@/components/ui/RecurrenceField'
 import { Sheet } from '@/components/ui/Sheet'
-import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, monthGrid } from '@/lib/calendar'
+import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, minutesToTime, monthGrid, timeToMinutes } from '@/lib/calendar'
+import { isPushSubscribed } from '@/lib/push'
+import { templateFromTask } from '@/lib/recurrence'
 import { cn } from '@/lib/utils'
 import { useDataStore, useWorkspaceProjects, useWorkspaceTeam } from '@/store/dataStore'
 import type { Priority, RecurrenceRule, Task } from '@/types'
@@ -37,6 +39,48 @@ const priorities: { value: Priority; label: string; color: string }[] = [
   { value: 'urgent', label: 'Urgente', color: 'var(--color-danger)' },
 ]
 
+function withoutTemplate(rule: RecurrenceRule): RecurrenceRule {
+  const { template: _template, ...rest } = rule
+  return rest
+}
+
+// Algo que define as próximas ocorrências mudou? (Mudar a cadência em si não
+// pergunta: a regra é sempre da série.)
+function seriesFieldsChanged(task: Task, edit: Partial<Task>): boolean {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+  return !same(task.title, edit.title) || !same(task.description, edit.description) || !same(task.priority, edit.priority)
+    || !same(task.assigneeIds, edit.assigneeIds) || !same(task.links, edit.links) || !same(task.dueDate, edit.dueDate)
+    || !same(task.dueTime, edit.dueTime) || !same(task.durationMinutes, edit.durationMinutes) || !same(task.reminderMinutes, edit.reminderMinutes)
+}
+
+const REMINDER_OPTIONS: { label: string; value: number | null }[] = [
+  { label: 'Nenhum', value: null },
+  { label: 'No horário', value: 0 },
+  { label: '5 min antes', value: 5 },
+  { label: '15 min antes', value: 15 },
+  { label: '30 min antes', value: 30 },
+  { label: '1 h antes', value: 60 },
+  { label: '1 dia antes', value: 1440 },
+]
+
+function TimeInput({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <label className="flex h-13 min-w-0 items-center gap-2 rounded-2xl border border-border bg-surface px-3.5 text-sm text-text transition-colors focus-within:border-accent">
+        <input
+          id={id}
+          type="time"
+          step={300}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', value ? 'text-text' : 'text-text-faint')}
+        />
+      </label>
+    </div>
+  )
+}
+
 export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDueDate, defaultDueTime }: TaskFormSheetProps) {
   const projects = useWorkspaceProjects()
   const team = useWorkspaceTeam()
@@ -58,6 +102,9 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [dueDate, setDueDate] = useState('')
   const [dueTime, setDueTime] = useState('')
+  const [endTime, setEndTime] = useState('')
+  const [reminder, setReminder] = useState<number | null>(null)
+  const [pushAvailable, setPushAvailable] = useState<boolean | null>(null)
   const [subtasks, setSubtasks] = useState<string[]>([])
   const [subtaskInput, setSubtaskInput] = useState('')
   const [editingSubtaskIndex, setEditingSubtaskIndex] = useState<number | null>(null)
@@ -79,7 +126,11 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
     setAssigneeIds(task?.assigneeIds ?? (defaultAssigneeId ? [defaultAssigneeId] : []))
     const initialDate = task?.dueDate?.slice(0, 10) ?? defaultDueDate ?? ''
     setDueDate(initialDate)
-    setDueTime(task ? task.dueTime ?? '' : initialDate ? defaultDueTime ?? '' : '')
+    const initialTime = task ? task.dueTime ?? '' : initialDate ? defaultDueTime ?? '' : ''
+    setDueTime(initialTime)
+    setEndTime(initialTime && task?.durationMinutes ? minutesToTime(timeToMinutes(initialTime) + task.durationMinutes) : '')
+    // Tarefa nova com horário: lembra no horário (dá para trocar ou tirar).
+    setReminder(task ? task.reminderMinutes ?? null : 0)
     setCalendarCursor(initialDate ? keyToDate(initialDate) : new Date())
     setSubtasks(task?.subtasks.map((s) => s.title) ?? [])
     setSubtaskInput('')
@@ -105,8 +156,61 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
     setAssigneeIds((prev) => (prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]))
   }
 
+  // Duração vem do término escolhido (precisa ser depois do início, no mesmo dia).
+  const duration = dueTime && endTime ? timeToMinutes(endTime) - timeToMinutes(dueTime) : 0
+  const endTimeInvalid = Boolean(dueTime && endTime && duration <= 0)
+
+  // O lembrete chega por push: avisa se este aparelho ainda não recebe notificações.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void isPushSubscribed().then((subscribed) => { if (!cancelled) setPushAvailable(subscribed) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [open])
+
+  // Série recorrente com regra própria (a "cabeça" é o ciclo atual, que guarda a regra).
+  const allTasks = useDataStore((s) => s.tasks)
+  const seriesHead = task
+    ? task.recurrence
+      ? task
+      : task.seriesId ? allTasks.find((item) => item.id !== task.id && item.recurrence && (item.seriesId ?? item.id) === task.seriesId) : undefined
+    : undefined
+  const [pendingEdit, setPendingEdit] = useState<Partial<Task> | null>(null)
+
+  function applyEdit(scope: 'this' | 'all') {
+    if (!task || !pendingEdit || !seriesHead) return
+    const edit = pendingEdit
+    if (seriesHead.id === task.id) {
+      const rule = edit.recurrence
+      if (scope === 'all') {
+        updateTask(task.id, { ...edit, recurrence: rule ? withoutTemplate(rule) : undefined })
+      } else {
+        // Guarda como os próximos ciclos devem ser antes de aplicar a edição.
+        const template = task.recurrence?.template ?? templateFromTask(task)
+        updateTask(task.id, { ...edit, recurrence: rule ? { ...rule, template } : undefined })
+      }
+    } else {
+      updateTask(task.id, { ...edit, recurrence: undefined })
+      if (scope === 'all' && seriesHead.recurrence) {
+        updateTask(seriesHead.id, {
+          title: edit.title,
+          description: edit.description,
+          priority: edit.priority,
+          assigneeIds: edit.assigneeIds,
+          links: edit.links,
+          dueTime: edit.dueTime,
+          durationMinutes: edit.durationMinutes,
+          reminderMinutes: edit.reminderMinutes,
+          recurrence: withoutTemplate(seriesHead.recurrence),
+        })
+      }
+    }
+    setPendingEdit(null)
+    onClose()
+  }
+
   function handleSubmit() {
-    if (!title.trim()) return
+    if (!title.trim() || endTimeInvalid) return
     const payload = {
       title: title.trim(),
       description: description.trim() || undefined,
@@ -115,10 +219,18 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
       assigneeIds,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       dueTime: dueDate && dueTime ? dueTime : undefined,
+      durationMinutes: dueDate && dueTime && duration ? duration : undefined,
+      reminderMinutes: dueDate && dueTime && reminder !== null ? reminder : undefined,
       links: withDraft(links, linkDraft),
       recurrence,
     }
     if (task) {
+      // Tarefa de uma série recorrente: pergunta se a edição vale só para esta
+      // ocorrência ou também para as próximas.
+      if (seriesHead && seriesFieldsChanged(task, payload)) {
+        setPendingEdit(payload)
+        return
+      }
       updateTask(task.id, payload)
     } else {
       addTask({
@@ -256,23 +368,34 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
         </div>
 
         {dueDate && (
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel htmlFor="task-due-time">Horário (opcional)</FieldLabel>
-            <div className="flex items-center gap-2">
-              <label className="flex h-13 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-border bg-surface px-3.5 text-sm text-text transition-colors focus-within:border-accent">
-                <Clock size={16} className="shrink-0 text-text-faint" aria-hidden="true" />
-                <input
-                  id="task-due-time"
-                  type="time"
-                  step={300}
-                  value={dueTime}
-                  onChange={(event) => setDueTime(event.target.value)}
-                  className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', dueTime ? 'text-text' : 'text-text-faint')}
-                />
-              </label>
-              {dueTime && <Button variant="ghost" size="sm" onClick={() => setDueTime('')}>Remover</Button>}
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <TimeInput id="task-due-time" label="Começa às (opcional)" value={dueTime} onChange={setDueTime} />
+              {dueTime && <TimeInput id="task-end-time" label="Termina às (opcional)" value={endTime} onChange={setEndTime} />}
             </div>
-            {!dueTime && <p className="text-xs text-text-faint">Sem horário, a tarefa vale para o dia inteiro.</p>}
+            {!dueTime && <p className="-mt-1 text-xs text-text-faint">Sem horário, a tarefa vale para o dia inteiro.</p>}
+            {endTimeInvalid && <p role="alert" className="-mt-1 text-xs font-medium text-danger">O término precisa ser depois do início.</p>}
+            {dueTime && (
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>Lembrete</FieldLabel>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="radiogroup" aria-label="Lembrete">
+                  {REMINDER_OPTIONS.map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      role="radio"
+                      aria-checked={reminder === option.value}
+                      onClick={() => setReminder(option.value)}
+                      className={cn('shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors', reminder === option.value ? 'bg-accent text-white' : 'bg-surface text-text-muted')}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                {reminder !== null && pushAvailable === false && <p className="text-xs text-text-faint">Para receber o lembrete neste aparelho, ative as notificações em Configurações.</p>}
+              </div>
+            )}
+            {dueTime && <Button variant="ghost" size="sm" className="self-start" onClick={() => { setDueTime(''); setEndTime('') }}>Remover horário</Button>}
           </div>
         )}
 
@@ -401,6 +524,19 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
             )
           })}
         </div>
+      </div>
+    </Sheet>
+
+    <Sheet open={Boolean(pendingEdit)} onClose={() => setPendingEdit(null)} title="Editar tarefa recorrente" subtitle="Onde aplicar as alterações?">
+      <div className="flex flex-col gap-2">
+        <button type="button" onClick={() => applyEdit('this')} className="flex items-start gap-3 rounded-2xl bg-surface p-4 text-left transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-accent">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-alt text-text-muted"><CalendarIcon size={16} /></span>
+          <span className="flex flex-col gap-0.5"><span className="text-sm font-semibold text-text">Só esta tarefa</span><span className="text-xs text-text-muted">As próximas ocorrências continuam como antes.</span></span>
+        </button>
+        <button type="button" onClick={() => applyEdit('all')} className="flex items-start gap-3 rounded-2xl bg-surface p-4 text-left transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-accent">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-alt text-text-muted"><Repeat size={16} /></span>
+          <span className="flex flex-col gap-0.5"><span className="text-sm font-semibold text-text">Esta e as próximas</span><span className="text-xs text-text-muted">A mudança vale também para as próximas ocorrências.</span></span>
+        </button>
       </div>
     </Sheet>
 

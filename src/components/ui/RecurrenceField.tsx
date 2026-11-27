@@ -57,6 +57,10 @@ export function RecurrenceField({ value, onChange }: RecurrenceFieldProps) {
 
   function apply() {
     onChange({
+      // Mantém ocorrências puladas e o modelo dos próximos ciclos: aqui só se
+      // edita a cadência.
+      ...(value?.skip?.length ? { skip: value.skip } : {}),
+      ...(value?.template ? { template: value.template } : {}),
       frequency,
       weekdays: frequency === 'weekly' ? weekdays : undefined,
       dayOfMonth: frequency === 'monthly' ? dayOfMonth : undefined,
@@ -84,6 +88,15 @@ export function RecurrenceField({ value, onChange }: RecurrenceFieldProps) {
           <Repeat size={16} className="shrink-0 text-text-faint" />
           <span className={cn('flex-1 truncate', !value && 'text-text-faint')}>{summarize(value)}</span>
         </button>
+        {value?.skip?.length ? (
+          <div className="flex items-center justify-between gap-2 px-1 text-xs text-text-muted">
+            <span className="min-w-0 truncate">
+              {value.skip.length === 1 ? 'Pulando' : `Pulando ${value.skip.length} ocorrências:`}{' '}
+              {value.skip.map((key) => key.slice(8, 10) + '/' + key.slice(5, 7)).join(', ')}
+            </span>
+            <button type="button" className="shrink-0 font-semibold text-accent" onClick={() => onChange({ ...value, skip: undefined })}>Restaurar</button>
+          </div>
+        ) : null}
       </div>
 
       <Sheet
