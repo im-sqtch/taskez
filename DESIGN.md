@@ -137,8 +137,9 @@ Ficam em `src/components/tasks/` (`TaskTables`, `TableCells`, `TableColumnMenu`)
 - Cada coluna tem um tipo: Texto, Número, Dólar, Real, Select, Multi-select, Data, Pessoa, Arquivos, Checkbox e Link. Coluna sem tipo é Texto.
 - Clicar no cabeçalho abre o menu da coluna: renomear, trocar o tipo, editar opções (select), mover para os lados e excluir. Trocar o tipo converte os valores e pede confirmação quando algum se perde.
 - Opções de select usam a cor escolhida pelo usuário misturada à superfície (`color-mix`, 32 %), em chips `rounded-full`.
-- Em leitura, cada célula é uma `CopyableCell`: no desktop, o botão de copiar aparece ao passar o mouse; no celular, segurar o dedo copia. Os dois mostram "Copiado" sobre a célula.
-- No modo edição, as linhas têm setas para subir e descer e o botão de excluir.
+- Os valores são alterados direto na célula, com ou sem o modo edição: clicar abre o campo, o seletor ou alterna o checkbox. O fundo da célula nunca muda, nem ao passar o mouse nem ao digitar.
+- Cada célula fica dentro de uma `CopyableCell`: no desktop, o botão de copiar aparece ao passar o mouse; no celular, segurar o dedo copia. Os dois mostram "Copiado" sobre a célula.
+- O modo edição serve para a estrutura: título, adicionar colunas e linhas, setas para subir e descer linhas e excluir linhas.
 
 ## Arquivos e anexos
 
