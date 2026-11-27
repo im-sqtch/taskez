@@ -766,7 +766,8 @@ interface DataState {
   reorderProjects: (orderedIds: string[]) => void
   addChatMessage: (projectId: string, authorId: string, text: string) => void
   toggleReaction: (target: { chatMessageId: string } | { taskId: string; commentId: string }, emoji: string) => void
-  addFile: (data: Omit<ProjectFile, 'id' | 'createdAt'>) => void
+  // Devolve o id do arquivo registrado.
+  addFile: (data: Omit<ProjectFile, 'id' | 'createdAt'>) => string
   removeFile: (id: string) => void
   linkFileToProject: (fileId: string, projectId: string) => void
   unlinkFileFromProject: (fileId: string, projectId: string) => void
@@ -1696,6 +1697,7 @@ export const useDataStore = create<DataState>()(
             created_at: createdAt,
           }),
         )
+        return id
       },
       // Vai para a lixeira (soft-delete) — o blob no Storage é preservado até
       // a purga definitiva (30 dias), pro download continuar funcionando se
