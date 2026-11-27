@@ -103,7 +103,8 @@ try {
     await page.getByRole('dialog').waitFor({ state: 'detached' })
 
     await page.getByRole('checkbox', { name: 'Música lo-fi' }).check()
-    await page.getByLabel('Faixa lo-fi').selectOption('terminal-rain')
+    // Última faixa da lista: ao terminar, volta para a primeira.
+    await page.getByLabel('Faixa lo-fi').selectOption('last-train-home')
     await page.getByRole('button', { name: 'Iniciar Estudo', exact: true }).click()
     await page.waitForFunction(() => window.focusStore.getState().musicStatus === 'playing' && !window.focusAudioElements[0].paused)
     assert.equal(await page.evaluate(() => window.focusAudioElements.length), 1)
