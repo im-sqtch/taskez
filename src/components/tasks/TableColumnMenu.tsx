@@ -1,5 +1,5 @@
 import {
-  ArrowLeft, ArrowRight, Calendar, ChevronLeft, ChevronRight, CircleCheck, CircleDollarSign, Hash, Link2, List, Paperclip, Plus, Tags, Trash2, Type, User, Wallet, type LucideIcon,
+  ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowRightToLine, CopyPlus, Calendar, ChevronLeft, ChevronRight, CircleCheck, CircleDollarSign, Hash, Link2, List, Paperclip, Plus, Tags, Trash2, Type, User, Wallet, type LucideIcon,
 } from 'lucide-react'
 import { useState } from 'react'
 import { DropdownMenu, MenuItem } from '@/components/ui/DropdownMenu'
@@ -30,11 +30,15 @@ interface TableColumnMenuProps {
   onMove: (delta: -1 | 1) => void
   onDelete: () => void
   onEditOptions: () => void
+  onInsert: (side: -1 | 1) => void
+  onDuplicate: () => void
+  // Alça do arraste (dnd-kit): o próprio cabeçalho é arrastado para os lados.
+  dragHandle?: { ref: (element: HTMLElement | null) => void; props: Record<string, unknown> }
 }
 
 // Cabeçalho da coluna: ao clicar, abre o menu para renomear, trocar o tipo,
 // mover e excluir a coluna.
-export function TableColumnMenu({ column, canMoveLeft, canMoveRight, onRename, onChangeType, onMove, onDelete, onEditOptions }: TableColumnMenuProps) {
+export function TableColumnMenu({ column, canMoveLeft, canMoveRight, onRename, onChangeType, onMove, onDelete, onEditOptions, onInsert, onDuplicate, dragHandle }: TableColumnMenuProps) {
   const type = columnType(column)
   const Icon = COLUMN_ICONS[type]
   return (
@@ -43,14 +47,17 @@ export function TableColumnMenu({ column, canMoveLeft, canMoveRight, onRename, o
       blockTrigger
       renderTrigger={({ open, toggle }) => (
         <button
+          ref={dragHandle?.ref}
+          {...dragHandle?.props}
           type="button"
           onClick={toggle}
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={`Opções da coluna ${column.title || 'sem nome'}`}
-          className="flex min-h-11 w-full items-center gap-1.5 px-2.5 text-left text-xs font-bold text-text hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+          title="Clique para editar · arraste para mover"
+          className="flex min-h-11 w-full cursor-pointer items-center gap-1.5 px-2 text-left text-[13px] font-medium text-text-muted transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-accent lg:min-h-9"
         >
-          <Icon size={13} className="shrink-0 text-text-faint" />
+          <Icon size={14} className="shrink-0 text-text-faint" />
           <span className="min-w-0 flex-1 truncate">{column.title || 'Sem nome'}</span>
         </button>
       )}
@@ -65,6 +72,8 @@ export function TableColumnMenu({ column, canMoveLeft, canMoveRight, onRename, o
           onMove={onMove}
           onDelete={() => { close(); onDelete() }}
           onEditOptions={() => { close(); onEditOptions() }}
+          onInsert={(side) => { close(); onInsert(side) }}
+          onDuplicate={() => { close(); onDuplicate() }}
           onDone={close}
         />
       )}
@@ -72,7 +81,7 @@ export function TableColumnMenu({ column, canMoveLeft, canMoveRight, onRename, o
   )
 }
 
-function ColumnMenuPanel({ column, canMoveLeft, canMoveRight, onRename, onChangeType, onMove, onDelete, onEditOptions, onDone }: TableColumnMenuProps & { onDone: () => void }) {
+function ColumnMenuPanel({ column, canMoveLeft, canMoveRight, onRename, onChangeType, onMove, onDelete, onEditOptions, onInsert, onDuplicate, onDone }: TableColumnMenuProps & { onDone: () => void }) {
   const [view, setView] = useState<'main' | 'type'>('main')
   const type = columnType(column)
   const TypeIcon = COLUMN_ICONS[type]
@@ -105,6 +114,9 @@ function ColumnMenuPanel({ column, canMoveLeft, canMoveRight, onRename, onChange
         onClick={() => setView('type')}
       />
       {(type === 'select' || type === 'multiSelect') && <MenuItem icon={<List size={14} />} label="Editar opções" onClick={onEditOptions} />}
+      <MenuItem icon={<ArrowLeftToLine size={14} />} label="Inserir à esquerda" onClick={() => onInsert(-1)} />
+      <MenuItem icon={<ArrowRightToLine size={14} />} label="Inserir à direita" onClick={() => onInsert(1)} />
+      <MenuItem icon={<CopyPlus size={14} />} label="Duplicar coluna" onClick={onDuplicate} />
       {canMoveLeft && <MenuItem icon={<ArrowLeft size={14} />} label="Mover para a esquerda" onClick={() => onMove(-1)} />}
       {canMoveRight && <MenuItem icon={<ArrowRight size={14} />} label="Mover para a direita" onClick={() => onMove(1)} />}
       <MenuItem icon={<Trash2 size={14} />} label="Excluir coluna" danger onClick={onDelete} />

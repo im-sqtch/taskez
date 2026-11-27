@@ -73,10 +73,10 @@ export function CopyableCell({ text, children }: { text: string; children: React
 
   return (
     <div
-      className="group relative flex min-h-11 min-w-0 cursor-text items-center px-2.5 py-1 [-webkit-touch-callout:none] [@media(hover:none)]:select-none"
+      className="group relative flex h-full min-h-11 min-w-0 cursor-text items-center px-2 py-1 lg:min-h-9 [-webkit-touch-callout:none] [@media(hover:none)]:select-none"
       // Clique em qualquer parte da célula (fora do valor) também começa a edição.
       onClick={(event) => {
-        if (event.target !== event.currentTarget && event.target !== content.current) return
+        if ((event.target as HTMLElement).closest('button, a, input, textarea, label')) return
         content.current?.querySelector<HTMLElement>('button, input, textarea')?.click()
       }}
       onPointerDown={(event) => {
@@ -136,7 +136,7 @@ export function CopyableCell({ text, children }: { text: string; children: React
 export function OptionChip({ option }: { option: TableSelectOption }) {
   return (
     <span
-      className="inline-flex max-w-full shrink-0 items-center truncate rounded-full px-2.5 py-1 text-xs font-semibold text-text"
+      className="inline-flex max-w-full shrink-0 items-center truncate rounded-md px-2 py-0.5 text-[13px] font-medium text-text"
       style={{ backgroundColor: `color-mix(in srgb, ${option.color} 32%, var(--color-surface))` }}
     >
       {option.name}
@@ -329,7 +329,7 @@ function NumberCell({ type, value, label, onChange }: { type: 'number' | 'usd' |
           onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') setDraft(null) }}
           placeholder={type === 'usd' ? '0.00' : '0,00'}
           aria-label={`${label}, linha`}
-          className={cn(inlineInputClass, 'min-w-0 tabular-nums')}
+          className={cn(inlineInputClass, 'min-w-0 text-right tabular-nums')}
         />
       </label>
     )
@@ -339,7 +339,7 @@ function NumberCell({ type, value, label, onChange }: { type: 'number' | 'usd' |
       type="button"
       onClick={() => setDraft(numberDraft(type, value))}
       aria-label={`Editar ${label}${value ? `: ${formatNumber(type, value)}` : ''}`}
-      className="block min-h-5 w-full min-w-0 truncate text-left text-sm leading-5 tabular-nums text-text outline-none focus-visible:outline-2 focus-visible:outline-accent"
+      className="block min-h-5 w-full min-w-0 truncate text-right text-sm leading-5 tabular-nums text-text outline-none focus-visible:outline-2 focus-visible:outline-accent"
     >
       {value && formatNumber(type, value)}
     </button>
@@ -507,7 +507,7 @@ function FilesCell({ value, label, context, wrap, onChange }: { value: string[];
       <button type="button" onClick={() => setOpen(true)} aria-label={`${label}: arquivos`} className={pickerClass}>
         <span className={cn('flex min-w-0 flex-1 gap-1.5', wrap ? 'flex-wrap' : 'overflow-hidden')}>
           {chosen.map((file) => (
-            <span key={file.id} className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full bg-surface-alt px-2.5 py-1 text-xs font-semibold text-text">
+            <span key={file.id} className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-md bg-surface-alt px-2 py-0.5 text-[13px] font-medium text-text">
               <Paperclip size={12} className="shrink-0" />
               <span className="truncate">{file.name}</span>
             </span>
