@@ -154,6 +154,11 @@ try {
     await page.mouse.click(bodyBox.x + bodyBox.width - 50, bodyBox.y + bodyBox.height - 4)
     await page.getByRole('textbox', { name: 'Item, linha' }).waitFor()
     await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Renomear tabela Orçamento' }).click()
+    await page.getByRole('textbox', { name: 'Título opcional da tabela' }).fill('Orçamento 2027')
+    await page.keyboard.press('Enter')
+    assert.equal(lastTable(patches).title, 'Orçamento 2027')
+    await page.getByRole('button', { name: 'Renomear tabela Orçamento 2027' }).waitFor()
     console.log('PASS desktop: clique em qualquer parte da célula')
 
     // Menu do cabeçalho: renomear, mover e trocar o tipo.

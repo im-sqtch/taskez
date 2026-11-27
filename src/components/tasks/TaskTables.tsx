@@ -19,6 +19,7 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
   const team = useDataStore((s) => s.team)
   const allFiles = useDataStore((s) => s.files)
   const [editingTableId, setEditingTableId] = useState<string | null>(null)
+  const [titleEditingId, setTitleEditingId] = useState<string | null>(null)
   const [optionsTarget, setOptionsTarget] = useState<{ tableId: string; columnId: string } | null>(null)
 
   const context: TableContext = {
@@ -130,18 +131,27 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
           <section key={table.id} className="rounded-2xl border border-border bg-surface">
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
               <Table2 size={16} className="shrink-0 text-text-faint" />
-              {isEditing ? (
+              {isEditing || titleEditingId === table.id ? (
                 <input
+                  autoFocus={!isEditing}
                   value={table.title ?? ''}
                   onChange={(event) => updateTable(table.id, (current) => ({ ...current, title: event.target.value }))}
+                  onBlur={() => setTitleEditingId(null)}
+                  onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur() }}
                   placeholder={`Tabela ${index + 1} (título opcional)`}
                   aria-label="Título opcional da tabela"
-                  className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-text outline-none placeholder:font-normal placeholder:text-text-faint"
+                  className="min-h-9 min-w-0 flex-1 bg-transparent text-sm font-semibold text-text outline-none placeholder:font-normal placeholder:text-text-faint"
                 />
               ) : (
-                <p className="min-w-0 flex-1 truncate text-sm font-semibold text-text">
+                // Clicar em qualquer parte do título já permite renomear a tabela.
+                <button
+                  type="button"
+                  onClick={() => setTitleEditingId(table.id)}
+                  aria-label={`Renomear tabela ${table.title?.trim() || index + 1}`}
+                  className="min-h-9 min-w-0 flex-1 cursor-text truncate text-left text-sm font-semibold text-text outline-none focus-visible:outline-2 focus-visible:outline-accent"
+                >
                   {table.title?.trim() || `Tabela ${index + 1}`}
-                </p>
+                </button>
               )}
               {isEditing ? (
                 <button
