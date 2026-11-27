@@ -132,16 +132,17 @@ className="flex h-10 w-10 items-center justify-center rounded-full bg-surface te
 
 ## Tabelas das tarefas
 
-Ficam em `src/components/tasks/` (`TaskTables`, `TableCells`, `TableColumnMenu`), com a lógica pura em `src/lib/taskTables.ts`.
+Inspiradas nas tabelas do Notion. Ficam em `src/components/tasks/` (`TaskTables`, `TableCells`, `TableColumnMenu`), com a lógica pura em `src/lib/taskTables.ts`.
 
-- Cada coluna tem um tipo: Texto, Número, Dólar, Real, Select, Multi-select, Data, Pessoa, Arquivos, Checkbox e Link. Coluna sem tipo é Texto.
-- Clicar no cabeçalho abre o menu da coluna: renomear, trocar o tipo, editar opções (select), mover para os lados e excluir. Trocar o tipo converte os valores e pede confirmação quando algum se perde.
-- Opções de select usam a cor escolhida pelo usuário misturada à superfície (`color-mix`, 32 %), em chips `rounded-full`.
-- Os valores são alterados direto na célula, com ou sem o modo edição: clicar abre o campo, o seletor ou alterna o checkbox. O fundo da célula nunca muda, nem ao passar o mouse nem ao digitar.
-- Cada célula fica dentro de uma `CopyableCell`: no desktop, o botão de copiar aparece ao passar o mouse; no celular, segurar o dedo copia. Os dois mostram "Copiado" sobre a célula.
-- Colunas com largura fixa (`table-fixed`, 176 px): digitar ou passar o mouse nunca muda o tamanho da célula, e o botão de copiar fica sobreposto ao valor. No texto, Shift+Enter pula linha e Enter conclui.
-- "Quebrar texto" (menu da tabela) faz as células crescerem na vertical; desativado, o conteúdo fica numa linha só, cortado com reticências.
-- O modo edição serve para a estrutura: título, adicionar colunas e linhas, setas para subir e descer linhas e excluir linhas.
+- **Visual:** sem caixa em volta e sem borda acima do cabeçalho. Só linhas horizontais e divisórias verticais suaves (`border-border-soft`). O cabeçalho usa ícone do tipo e texto `text-[13px] font-medium text-text-muted`, sem fundo. O título da tabela é um campo `text-base font-bold` que se edita direto, com o menu "…" ao lado (Quebrar texto, Excluir tabela).
+- **Sem modo edição:** tudo se faz direto na tabela.
+  - Clicar em qualquer ponto da célula edita o valor. O fundo da célula nunca muda.
+  - Linhas: a alça (`GripVertical`) aparece à esquerda ao passar o mouse e fica sempre visível no toque. Arrastar reordena; clicar abre o menu (inserir acima/abaixo, duplicar, mover, excluir). "+ Nova linha" fica no fim da tabela.
+  - Colunas: clicar no cabeçalho abre o menu (renomear, tipo, inserir à esquerda/direita, duplicar, mover, excluir); arrastar o cabeçalho reordena; arrastar a borda direita muda a largura (salva na coluna). O "+" no fim do cabeçalho cria uma coluna.
+- Cada coluna tem um tipo: Texto, Número, Dólar, Real, Select, Multi-select, Data, Pessoa, Arquivos, Checkbox e Link. Números ficam alinhados à direita.
+- Chips de select e de arquivos são `rounded-md` (como no Notion, exceção aos badges `rounded-full`), com a cor escolhida misturada à superfície (`color-mix`, 32 %).
+- Colunas com largura fixa (`table-fixed`): digitar ou passar o mouse nunca muda o tamanho da célula. No texto, Shift+Enter pula linha e Enter conclui. "Quebrar texto" faz as células crescerem na vertical.
+- Copiar: no desktop, o botão aparece sobreposto ao valor ao passar o mouse; no celular, segurar o dedo copia. Os dois mostram "Copiado".
 
 ## Arquivos e anexos
 

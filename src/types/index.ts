@@ -36,6 +36,8 @@ export interface TableColumn {
   title: string
   type?: TableColumnType
   options?: TableSelectOption[]
+  // Largura em px escolhida ao arrastar a borda do cabeçalho.
+  width?: number
 }
 
 // Valor de uma célula, conforme o tipo da coluna:
