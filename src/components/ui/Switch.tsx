@@ -10,10 +10,12 @@ interface SwitchProps {
 export function Switch({ checked, onChange, disabled, 'aria-label': ariaLabel }: SwitchProps) {
   return (
     <button
+      type="button"
+      role="switch"
       onClick={onChange}
       disabled={disabled}
       aria-label={ariaLabel}
-      aria-pressed={checked}
+      aria-checked={checked}
       className={cn(
         'h-6 w-11 shrink-0 rounded-full p-0.5 transition-colors disabled:opacity-50',
         checked ? 'bg-accent' : 'bg-surface-alt',
