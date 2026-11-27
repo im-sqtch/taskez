@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { v4 as uuid } from 'uuid'
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import { fireAndForget, setFireAndForgetErrorHandler, supabase } from '@/lib/supabase'
+import { fireAndForget, setFireAndForgetErrorHandler, setWriteQueueUser, supabase } from '@/lib/supabase'
+import { describeWriteError, flushWriteQueue } from '@/lib/writeQueue'
 import { publishTaskComment, subscribeTaskComments } from '@/lib/taskCommentChannel'
 import { getDashboardViewport, useDashboardViewport, type DashboardViewport } from '@/lib/dashboardViewport'
 import { useAuthStore } from '@/store/authStore'
@@ -2322,15 +2323,16 @@ subscribeTaskComments(({ userId, taskId, comment }) => {
   }))
 })
 
-setFireAndForgetErrorHandler(() => {
+// Falhas de rede não chegam aqui: viram pendências (writeQueue) e são
+// reenviadas quando a conexão volta. Aqui só chegam erros do banco, que não se
+// resolvem tentando de novo.
+setFireAndForgetErrorHandler((error) => {
   if (!useAuthStore.getState().currentUserId) return
-  useDataStore
-    .getState()
-    .addNotification(
-      'system.alert',
-      'Uma alteração pode não ter sido salva',
-      'Verifique sua conexão e tente novamente. Se o problema persistir, recarregue o app.',
-    )
+  useDataStore.getState().addNotification('system.alert', 'Uma alteração não foi salva', describeWriteError(error))
+})
+setWriteQueueUser(() => useAuthStore.getState().currentUserId)
+useAuthStore.subscribe?.((auth, previous) => {
+  if (auth.currentUserId && auth.currentUserId !== previous.currentUserId) void flushWriteQueue()
 })
 
 // Hooks derivados: filtram pelo workspace atual no corpo do hook (não dentro do
