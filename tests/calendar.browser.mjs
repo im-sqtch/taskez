@@ -108,14 +108,14 @@ try {
     }
 
     if (!desktop) await page.getByRole('button', { name: 'Filtros do calendário' }).click()
-    await page.getByRole('switch', { name: 'Mostrar concluídas' }).click()
+    await page.getByRole('switch', { name: 'Mostrar tarefas concluídas' }).click()
     await page.waitForURL((url) => url.searchParams.get('completed') === 'false')
     await page.getByText('Entrega concluída', { exact: true }).first().waitFor({ state: 'detached' })
     await page.getByRole('checkbox', { name: 'Projeto teste' }).click()
     await page.waitForURL((url) => url.searchParams.getAll('hide').includes('project-1'))
     await page.getByRole('main').getByText('Tarefa teste', { exact: true }).first().waitFor({ state: 'detached' })
     // Ocultar projetos concluídos e arquivados some com as tarefas deles.
-    await page.getByRole('switch', { name: 'Ocultar projetos concluídos e arquivados' }).click()
+    await page.getByRole('switch', { name: 'Ocultar projetos concluídos' }).click()
     await page.waitForURL((url) => url.searchParams.get('closed') === 'hide')
     await page.getByRole('checkbox', { name: 'Projeto arquivado' }).waitFor({ state: 'detached' })
     await page.getByRole('button', { name: 'Limpar filtros' }).click()

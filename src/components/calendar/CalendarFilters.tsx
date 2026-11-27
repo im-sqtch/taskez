@@ -54,12 +54,12 @@ export function CalendarFilters({ projects, hiddenProjects, onToggleProject, sho
         })}
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-border-soft px-1 pt-3">
-        <span className="text-sm text-text">Mostrar concluídas</span>
-        <Switch checked={showCompleted} onChange={onToggleCompleted} aria-label="Mostrar concluídas" />
+        <span className="text-sm text-text">Mostrar tarefas concluídas</span>
+        <Switch checked={showCompleted} onChange={onToggleCompleted} aria-label="Mostrar tarefas concluídas" />
       </div>
       <div className="-mt-2 flex items-center justify-between gap-3 px-1">
-        <span className="text-sm text-text">Ocultar projetos concluídos e arquivados</span>
-        <Switch checked={hideClosedProjects} onChange={onToggleHideClosedProjects} aria-label="Ocultar projetos concluídos e arquivados" />
+        <span className="text-sm text-text">Ocultar projetos concluídos</span>
+        <Switch checked={hideClosedProjects} onChange={onToggleHideClosedProjects} aria-label="Ocultar projetos concluídos" />
       </div>
       <button
         type="button"
