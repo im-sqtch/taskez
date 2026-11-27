@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Check, Minus, Pencil, Plus, Table2, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { CellEditor, CellView, CopyableCell, type TableContext } from '@/components/tasks/TableCells'
+import { CopyableCell, TableCell, type TableContext } from '@/components/tasks/TableCells'
 import { SelectOptionsSheet, TableColumnMenu } from '@/components/tasks/TableColumnMenu'
 import { DropdownMenu, MenuItem } from '@/components/ui/DropdownMenu'
 import { cellText, columnType, columnTypeLabel, convertColumn, emptyCell, isEmptyCell, moveItem, type TableLookup } from '@/lib/taskTables'
@@ -206,18 +206,14 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
                     <tr key={row.id}>
                       {table.columns.map((column) => (
                         <td key={column.id} className="border-b border-r border-border p-1 align-middle last:border-r-0">
-                          {isEditing ? (
-                            <CellEditor
+                          <CopyableCell text={cellText(column, row.cells[column.id], lookup)}>
+                            <TableCell
                               column={column}
                               value={row.cells[column.id] ?? emptyCell(columnType(column))}
                               context={context}
                               onChange={(value, nextColumn) => setCell(table.id, row.id, column.id, value, nextColumn)}
                             />
-                          ) : (
-                            <CopyableCell text={cellText(column, row.cells[column.id], lookup)}>
-                              <CellView column={column} value={row.cells[column.id]} context={context} />
-                            </CopyableCell>
-                          )}
+                          </CopyableCell>
                         </td>
                       ))}
                       {isEditing && <td className="border-b border-border p-1">

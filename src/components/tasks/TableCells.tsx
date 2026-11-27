@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronDown, Circle, CircleCheck, CircleX, Copy, Paperclip, Plus, Upload, X } from 'lucide-react'
+import { Check, Circle, CircleCheck, CircleX, Copy, ExternalLink, Paperclip, Plus, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { FilePreviewDialog } from '@/components/files/FilePreviewDialog'
 import { FileThumbnail } from '@/components/files/FileThumbnail'
@@ -43,7 +43,7 @@ async function copyText(text: string) {
 
 const LONG_PRESS_MS = 500
 
-// Célula em modo leitura: no desktop mostra o botão de copiar ao passar o
+// Em volta de cada célula: no desktop mostra o botão de copiar ao passar o
 // mouse; no celular, segurar o dedo copia o valor. Nos dois, aparece "Copiado".
 export function CopyableCell({ text, children }: { text: string; children: ReactNode }) {
   const [copied, setCopied] = useState(false)
@@ -75,7 +75,8 @@ export function CopyableCell({ text, children }: { text: string; children: React
       className="group relative flex min-h-9 items-center gap-1 px-1.5 [-webkit-touch-callout:none] [@media(hover:none)]:select-none"
       onPointerDown={(event) => {
         longPressed.current = false
-        if (event.pointerType !== 'touch' || !text) return
+        // Dentro de um campo em digitação, segurar o dedo serve para selecionar texto.
+        if (event.pointerType !== 'touch' || !text || (event.target as HTMLElement).closest('input')) return
         cancelPress()
         press.current = {
           x: event.clientX,
@@ -151,29 +152,6 @@ function PersonChip({ member }: { member: TeamMember }) {
   )
 }
 
-function FileChips({ files }: { files: ProjectFile[] }) {
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
-  return (
-    <>
-      <div className="flex flex-wrap gap-1.5">
-        {files.map((file, index) => (
-          <button
-            key={file.id}
-            type="button"
-            onClick={() => setPreviewIndex(index)}
-            aria-label={`Visualizar ${file.name}`}
-            className="inline-flex max-w-full items-center gap-1 rounded-full bg-surface-alt px-2.5 py-1 text-xs font-semibold text-text hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
-          >
-            <Paperclip size={12} className="shrink-0" />
-            <span className="truncate">{file.name}</span>
-          </button>
-        ))}
-      </div>
-      <FilePreviewDialog files={files} index={previewIndex} onIndexChange={setPreviewIndex} />
-    </>
-  )
-}
-
 function optionsOf(column: TableColumn, value: TableCellValue | undefined) {
   return asList(value).map((id) => column.options?.find((option) => option.id === id)).filter((option): option is TableSelectOption => Boolean(option))
 }
@@ -186,34 +164,7 @@ function filesOf(context: TableContext, value: TableCellValue | undefined) {
   return asList(value).map((id) => context.files.find((file) => file.id === id)).filter((file): file is ProjectFile => Boolean(file))
 }
 
-// Valor da célula em modo leitura.
-export function CellView({ column, value, context }: { column: TableColumn; value: TableCellValue | undefined; context: TableContext }) {
-  const type = columnType(column)
-  const text = asText(value)
-  switch (type) {
-    case 'number':
-    case 'usd':
-    case 'brl':
-      return <span className="block text-sm tabular-nums text-text">{formatNumber(type, text)}</span>
-    case 'select':
-    case 'multiSelect':
-      return <div className="flex flex-wrap gap-1.5">{optionsOf(column, value).map((option) => <OptionChip key={option.id} option={option} />)}</div>
-    case 'date':
-      return <span className="block text-sm tabular-nums text-text">{text && formatDateKey(text)}</span>
-    case 'person':
-      return <div className="flex flex-wrap gap-x-3 gap-y-1.5">{membersOf(context, value).map((member) => <PersonChip key={member.id} member={member} />)}</div>
-    case 'files':
-      return <FileChips files={filesOf(context, value)} />
-    case 'checkbox':
-      return <span className="flex" aria-label={CHECKBOX_LABELS[text] ?? 'Vazio'}><CheckboxIcon value={text} /></span>
-    case 'link':
-      return text ? <a href={toHref(text)} target="_blank" rel="noopener noreferrer" className="block truncate text-sm text-accent hover:underline">{text}</a> : null
-    default:
-      return <span className="block whitespace-pre-wrap text-sm text-text">{text}</span>
-  }
-}
-
-interface CellEditorProps {
+interface TableCellProps {
   column: TableColumn
   value: TableCellValue | undefined
   context: TableContext
@@ -221,78 +172,135 @@ interface CellEditorProps {
   onChange: (value: TableCellValue, nextColumn?: TableColumn) => void
 }
 
-const inputClass = 'w-full min-w-32 rounded-md bg-transparent px-1.5 py-1 text-sm text-text outline-none placeholder:text-text-faint focus:bg-base'
-const pickerClass = 'flex min-h-8 w-full min-w-32 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm text-text hover:bg-base focus-visible:outline-2 focus-visible:outline-accent'
+// O fundo da célula nunca muda (nem ao passar o mouse, nem ao digitar).
+const pickerClass = 'flex min-h-7 w-full min-w-32 items-center gap-1.5 text-left text-sm text-text outline-none focus-visible:outline-2 focus-visible:outline-accent'
 
-// Valor da célula em modo edição.
-export function CellEditor({ column, value, context, onChange }: CellEditorProps) {
+// Célula da tabela: mostra o valor e, ao clicar, já permite alterá-lo (em
+// qualquer modo). Copiar fica por conta da CopyableCell em volta.
+export function TableCell({ column, value, context, onChange }: TableCellProps) {
   const type = columnType(column)
   const label = column.title || 'Coluna'
+  const text = asText(value)
   switch (type) {
     case 'number':
     case 'usd':
     case 'brl':
-      return <NumberEditor key={asText(value)} type={type} value={asText(value)} label={label} onChange={onChange} />
+      return <NumberCell type={type} value={text} label={label} onChange={onChange} />
     case 'select':
     case 'multiSelect':
-      return <SelectEditor column={column} value={value} multiple={type === 'multiSelect'} onChange={onChange} />
+      return <SelectCell column={column} value={value} multiple={type === 'multiSelect'} onChange={onChange} />
     case 'date':
-      return <DateEditor value={asText(value)} label={label} onChange={onChange} />
+      return <DateCell value={text} label={label} onChange={onChange} />
     case 'person':
-      return <PersonEditor value={asList(value)} label={label} context={context} onChange={onChange} />
+      return <PersonCell value={asList(value)} label={label} context={context} onChange={onChange} />
     case 'files':
-      return <FilesEditor value={asList(value)} label={label} context={context} onChange={onChange} />
-    case 'checkbox': {
-      const text = asText(value)
+      return <FilesCell value={asList(value)} label={label} context={context} onChange={onChange} />
+    case 'checkbox':
       return (
         <button
           type="button"
           onClick={() => onChange(nextCheckbox(text))}
           aria-label={`${label}: ${CHECKBOX_LABELS[text] ?? 'vazio'}. Alternar`}
-          className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-base focus-visible:outline-2 focus-visible:outline-accent"
+          className="flex h-7 w-7 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-accent"
         >
           <CheckboxIcon value={text} />
         </button>
       )
-    }
     case 'link':
-      return <input type="url" inputMode="url" value={asText(value)} onChange={(event) => onChange(event.target.value)} placeholder="https://" aria-label={`${label}, linha`} className={inputClass} />
+      return <TextCell value={text} label={label} link onChange={onChange} />
     default:
-      return <input value={asText(value)} onChange={(event) => onChange(event.target.value)} aria-label={`${label}, linha`} className={inputClass} />
+      return <TextCell value={text} label={label} onChange={onChange} />
   }
 }
 
-function NumberEditor({ type, value, label, onChange }: { type: 'number' | 'usd' | 'brl'; value: string; label: string; onChange: (value: string) => void }) {
-  const [draft, setDraft] = useState(() => numberDraft(type, value))
-  const prefix = type === 'usd' ? 'US$' : type === 'brl' ? 'R$' : null
-  function commit() {
-    if (!draft.trim()) {
-      if (value) onChange('')
-      return
-    }
-    const parsed = parseNumber(draft)
-    // Valor que não é número: volta ao último válido.
-    if (parsed === null) setDraft(numberDraft(type, value))
-    else if (parsed !== value) onChange(parsed)
+const inlineInputClass = 'block w-full min-w-32 bg-transparent p-0 text-sm leading-5 text-text outline-none placeholder:text-text-faint'
+
+// Texto e link: mostra o valor; ao clicar, vira campo de digitação no mesmo lugar.
+function TextCell({ value, label, link, onChange }: { value: string; label: string; link?: boolean; onChange: (value: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type={link ? 'url' : 'text'}
+        inputMode={link ? 'url' : undefined}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur() }}
+        placeholder={link ? 'https://' : undefined}
+        aria-label={`${label}, linha`}
+        className={inlineInputClass}
+      />
+    )
   }
   return (
-    <label className="flex min-w-32 items-center gap-1 rounded-md px-1.5 py-1 focus-within:bg-base">
-      {prefix && <span className="text-xs font-semibold text-text-faint">{prefix}</span>}
-      <input
-        value={draft}
-        inputMode="decimal"
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
-        placeholder={type === 'usd' ? '0.00' : '0,00'}
-        aria-label={`${label}, linha`}
-        className="w-full min-w-0 bg-transparent text-sm tabular-nums text-text outline-none placeholder:text-text-faint"
-      />
-    </label>
+    <div className="flex min-h-5 min-w-32 items-center gap-1">
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        aria-label={`Editar ${label}${value ? `: ${value}` : ''}`}
+        className={cn('block min-h-5 min-w-0 flex-1 text-left text-sm leading-5 outline-none focus-visible:outline-2 focus-visible:outline-accent', link ? 'truncate text-accent' : 'whitespace-pre-wrap text-text')}
+      >
+        {value}
+      </button>
+      {link && value && (
+        <a href={toHref(value)} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${value}`} title="Abrir link" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-faint hover:text-accent">
+          <ExternalLink size={13} />
+        </a>
+      )}
+    </div>
   )
 }
 
-function SelectEditor({ column, value, multiple, onChange }: { column: TableColumn; value: TableCellValue | undefined; multiple: boolean; onChange: CellEditorProps['onChange'] }) {
+// Número, dólar e real: mostra formatado; ao clicar, edita o número.
+function NumberCell({ type, value, label, onChange }: { type: 'number' | 'usd' | 'brl'; value: string; label: string; onChange: (value: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const prefix = type === 'usd' ? 'US$' : type === 'brl' ? 'R$' : null
+
+  function commit() {
+    const text = draft ?? ''
+    setDraft(null)
+    if (!text.trim()) {
+      if (value) onChange('')
+      return
+    }
+    const parsed = parseNumber(text)
+    // Valor que não é número: fica o último válido.
+    if (parsed !== null && parsed !== value) onChange(parsed)
+  }
+
+  if (draft !== null) {
+    return (
+      <label className="flex min-w-32 items-center gap-1">
+        {prefix && <span className="text-sm leading-5 text-text-faint">{prefix}</span>}
+        <input
+          autoFocus
+          value={draft}
+          inputMode="decimal"
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') setDraft(null) }}
+          placeholder={type === 'usd' ? '0.00' : '0,00'}
+          aria-label={`${label}, linha`}
+          className={cn(inlineInputClass, 'min-w-0 tabular-nums')}
+        />
+      </label>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setDraft(numberDraft(type, value))}
+      aria-label={`Editar ${label}${value ? `: ${formatNumber(type, value)}` : ''}`}
+      className="block min-h-5 w-full min-w-32 text-left text-sm leading-5 tabular-nums text-text outline-none focus-visible:outline-2 focus-visible:outline-accent"
+    >
+      {value && formatNumber(type, value)}
+    </button>
+  )
+}
+
+function SelectCell({ column, value, multiple, onChange }: { column: TableColumn; value: TableCellValue | undefined; multiple: boolean; onChange: TableCellProps['onChange'] }) {
   const selected = asList(value)
   const chosen = optionsOf(column, value)
   return (
@@ -302,9 +310,8 @@ function SelectEditor({ column, value, multiple, onChange }: { column: TableColu
       renderTrigger={({ open, toggle }) => (
         <button type="button" onClick={toggle} aria-haspopup="menu" aria-expanded={open} aria-label={`${column.title || 'Coluna'}: escolher opção`} className={pickerClass}>
           <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-            {chosen.length > 0 ? chosen.map((option) => <OptionChip key={option.id} option={option} />) : <span className="text-text-faint">Escolher</span>}
+            {chosen.map((option) => <OptionChip key={option.id} option={option} />)}
           </span>
-          <ChevronDown size={14} className="shrink-0 text-text-faint" />
         </button>
       )}
     >
@@ -394,19 +401,19 @@ function OptionPicker({ column, selected, multiple, onPick, onClear }: {
   )
 }
 
-function DateEditor({ value, label, onChange }: { value: string; label: string; onChange: (value: string) => void }) {
+function DateCell({ value, label, onChange }: { value: string; label: string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false)
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} aria-label={`${label}: escolher data`} className={pickerClass}>
-        <span className={cn('flex-1 tabular-nums', !value && 'text-text-faint')}>{value ? formatDateKey(value) : 'Escolher data'}</span>
+        <span className="flex-1 tabular-nums">{value && formatDateKey(value)}</span>
       </button>
       <DatePickerSheet open={open} onClose={() => setOpen(false)} title={label} value={value} onChange={onChange} />
     </>
   )
 }
 
-function PersonEditor({ value, label, context, onChange }: { value: string[]; label: string; context: TableContext; onChange: (value: string[]) => void }) {
+function PersonCell({ value, label, context, onChange }: { value: string[]; label: string; context: TableContext; onChange: (value: string[]) => void }) {
   const chosen = membersOf(context, value)
   return (
     <DropdownMenu
@@ -414,9 +421,8 @@ function PersonEditor({ value, label, context, onChange }: { value: string[]; la
       renderTrigger={({ open, toggle }) => (
         <button type="button" onClick={toggle} aria-haspopup="menu" aria-expanded={open} aria-label={`${label}: escolher pessoas`} className={pickerClass}>
           <span className="flex min-w-0 flex-1 flex-wrap gap-x-3 gap-y-1.5">
-            {chosen.length > 0 ? chosen.map((member) => <PersonChip key={member.id} member={member} />) : <span className="text-text-faint">Escolher</span>}
+            {chosen.map((member) => <PersonChip key={member.id} member={member} />)}
           </span>
-          <ChevronDown size={14} className="shrink-0 text-text-faint" />
         </button>
       )}
     >
@@ -446,15 +452,19 @@ function PersonEditor({ value, label, context, onChange }: { value: string[]; la
   )
 }
 
-function FilesEditor({ value, label, context, onChange }: { value: string[]; label: string; context: TableContext; onChange: (value: string[]) => void }) {
+function FilesCell({ value, label, context, onChange }: { value: string[]; label: string; context: TableContext; onChange: (value: string[]) => void }) {
   const [open, setOpen] = useState(false)
   const chosen = filesOf(context, value)
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-label={`${label}: escolher arquivos`} className={pickerClass}>
-        <Paperclip size={14} className="shrink-0 text-text-faint" />
-        <span className={cn('min-w-0 flex-1 truncate', chosen.length === 0 && 'text-text-faint')}>
-          {chosen.length === 0 ? 'Adicionar arquivo' : chosen.length === 1 ? chosen[0]!.name : `${chosen.length} arquivos`}
+      <button type="button" onClick={() => setOpen(true)} aria-label={`${label}: arquivos`} className={pickerClass}>
+        <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          {chosen.map((file) => (
+            <span key={file.id} className="inline-flex max-w-full items-center gap-1 rounded-full bg-surface-alt px-2.5 py-1 text-xs font-semibold text-text">
+              <Paperclip size={12} className="shrink-0" />
+              <span className="truncate">{file.name}</span>
+            </span>
+          ))}
         </span>
       </button>
       <FilesSheet open={open} onClose={() => setOpen(false)} title={label} value={value} context={context} onChange={onChange} />
@@ -476,6 +486,7 @@ function FilesSheet({ open, onClose, title, value, context, onChange }: {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   // Mantém a lista atual entre envios seguidos (o valor da prop só chega no próximo render).
   const latest = useRef(value)
   useEffect(() => { latest.current = value }, [value])
@@ -514,8 +525,10 @@ function FilesSheet({ open, onClose, title, value, context, onChange }: {
           <div className="flex flex-col gap-2">
             {chosen.map((file) => (
               <div key={file.id} className="flex items-center gap-3 rounded-xl bg-surface p-3">
-                <FileThumbnail file={file} />
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-text">{file.name}</p><p className="text-xs text-text-faint">{formatBytes(file.size)}</p></div>
+                <button type="button" onClick={() => setPreviewIndex(chosen.indexOf(file))} aria-label={`Visualizar ${file.name}`} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-accent">
+                  <FileThumbnail file={file} />
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-text hover:text-accent">{file.name}</p><p className="text-xs text-text-faint">{formatBytes(file.size)}</p></div>
+                </button>
                 <button type="button" onClick={() => onChange(value.filter((id) => id !== file.id))} aria-label={`Remover ${file.name} da célula`} className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-danger"><X size={16} /></button>
               </div>
             ))}
@@ -540,6 +553,7 @@ function FilesSheet({ open, onClose, title, value, context, onChange }: {
           ))}
         </div>
       </div>
+      <FilePreviewDialog files={chosen} index={previewIndex} onIndexChange={setPreviewIndex} />
     </Sheet>
   )
 }
