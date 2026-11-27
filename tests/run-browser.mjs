@@ -13,7 +13,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 
 // commentBadges e lastScreen ficam de fora por enquanto: já falhavam antes
 // destas mudanças e precisam ser revistos.
-const TESTS = ['calendar', 'focusTimers', 'focusYouTube', 'taskRecurrence', 'summaryCarousel', 'desktopScroll', 'offlineQueue', 'recurrenceEdit', 'focusPip']
+const TESTS = ['calendar', 'focusTimers', 'focusYouTube', 'taskRecurrence', 'summaryCarousel', 'desktopScroll', 'offlineQueue', 'recurrenceEdit', 'focusPip', 'profilePhoto']
 const PORT = 5174
 const filter = process.argv[2]
 const selected = TESTS.filter((name) => !filter || name.includes(filter))

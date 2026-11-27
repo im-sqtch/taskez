@@ -81,7 +81,7 @@ export function NotificationsBody({ onNavigate }: NotificationsBodyProps) {
     <div className="flex flex-col gap-2">
       {pendingInvites.map(({ contact, fromUser }) => (
         <div key={contact.id} className="flex items-start gap-3 rounded-2xl bg-accent-soft p-3.5">
-          <Avatar name={fromUser.name} color={fromUser.avatarColor} size="sm" />
+          <Avatar name={fromUser.name} color={fromUser.avatarColor} src={fromUser.avatarUrl} size="sm" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-text">Convite de contato</p>
             <p className="text-sm text-text-muted">{fromUser.name} quer se conectar com você.</p>

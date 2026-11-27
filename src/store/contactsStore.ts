@@ -19,6 +19,7 @@ interface ContactProfile {
   name: string
   email: string
   avatarColor: string
+  avatarUrl?: string
 }
 
 function mapContact(row: ContactRow): Contact {

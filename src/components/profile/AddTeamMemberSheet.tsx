@@ -42,7 +42,7 @@ export function AddTeamMemberSheet({ open, onClose }: AddTeamMemberSheetProps) {
               onClick={() => handleAdd(user)}
               className="flex items-center gap-3 rounded-xl bg-surface p-3 text-left transition-colors hover:bg-surface-hover"
             >
-              <Avatar name={user.name} color={user.avatarColor} size="sm" />
+              <Avatar name={user.name} color={user.avatarColor} src={user.avatarUrl} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-text">{user.name}</p>
                 <p className="truncate text-xs text-text-faint">{user.email}</p>

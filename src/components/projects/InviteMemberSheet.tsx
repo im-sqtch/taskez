@@ -40,7 +40,7 @@ export function InviteMemberSheet({ open, onClose, project }: InviteMemberSheetP
               onClick={() => invite(member.id)}
               className="flex items-center gap-3 rounded-xl bg-surface p-3 text-left transition-colors hover:bg-surface-hover"
             >
-              <Avatar name={member.name} color={member.avatarColor} size="sm" />
+              <Avatar name={member.name} color={member.avatarColor} src={member.avatarUrl} size="sm" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-text">{member.name}</p>
                 <p className="text-xs text-text-faint">{member.role}</p>

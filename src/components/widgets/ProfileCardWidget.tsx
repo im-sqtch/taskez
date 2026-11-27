@@ -27,7 +27,7 @@ export function ProfileCardWidget({ size }: { size: WidgetSize }) {
   return (
     <Card className="transition-colors hover:bg-surface-hover" onClick={() => navigate('/profile')}>
       <div className="flex items-center gap-3.5">
-        <Avatar name={user.name} color={user.avatarColor} size="sm" />
+        <Avatar name={user.name} color={user.avatarColor} src={user.avatarUrl} size="sm" />
         <div className="flex-1">
           <p className="font-semibold text-text">{user.name}</p>
         </div>

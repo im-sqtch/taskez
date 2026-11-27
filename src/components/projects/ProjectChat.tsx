@@ -40,12 +40,12 @@ export function ProjectChat({ projectId }: { projectId: string }) {
   // authorId null = quem escreveu já foi removido da equipe; a mensagem
   // sobrevive (ver migration chat_author on delete set null) com um autor
   // genérico em vez de sumir do histórico.
-  function authorFor(authorId: string | null) {
+  function authorFor(authorId: string | null): { name: string; avatarColor: string; avatarUrl?: string } {
     if (isOwnMessage(authorId) && currentUser) {
-      return { name: currentUser.name, avatarColor: currentUser.avatarColor }
+      return { name: currentUser.name, avatarColor: currentUser.avatarColor, avatarUrl: currentUser.avatarUrl }
     }
     const member = authorId ? team.find((m) => m.id === authorId) : undefined
-    return member ? { name: member.name, avatarColor: member.avatarColor } : { name: 'Ex-membro', avatarColor: '#62667A' }
+    return member ? { name: member.name, avatarColor: member.avatarColor, avatarUrl: member.avatarUrl } : { name: 'Ex-membro', avatarColor: '#62667A' }
   }
 
   function handleSend() {
@@ -65,7 +65,7 @@ export function ProjectChat({ projectId }: { projectId: string }) {
             const author = authorFor(m.authorId)
             return (
               <div key={m.id} className={cn('flex min-w-0 items-end gap-2', own && 'flex-row-reverse')}>
-                <Avatar name={author.name} color={author.avatarColor} size="xs" />
+                <Avatar name={author.name} color={author.avatarColor} src={author.avatarUrl} size="xs" />
                 <div className={cn('flex min-w-0 max-w-[75%] flex-col gap-0.5', own && 'items-end')}>
                   {!own && <span className="px-1 text-[11px] font-medium text-text-faint">{author.name.split(' ')[0]}</span>}
                   <ReactionControl

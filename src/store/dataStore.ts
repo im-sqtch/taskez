@@ -78,6 +78,7 @@ interface TeamMemberRow {
   name: string
   role: string
   avatar_color: string
+  avatar_url: string | null
   status: TeamMember['status']
   workload: number
   linked_user_id: string | null
@@ -157,6 +158,7 @@ function mapTeamMember(row: TeamMemberRow, currentUserId: string | null): TeamMe
     name: row.name,
     role: row.role,
     avatarColor: row.avatar_color,
+    avatarUrl: row.avatar_url ?? undefined,
     status: row.status,
     workload: row.workload,
     linkedUserId: row.linked_user_id ?? undefined,
@@ -731,7 +733,7 @@ interface DataState {
   // Configurações — mantém a entrada "isSelf" em sincronia em todos os
   // workspaces (senão o roster de equipe/atribuição de tarefas mostraria um
   // nome desatualizado mesmo com o header já refletindo o novo).
-  syncSelfProfile: (patch: { name?: string; avatarColor?: string }) => void
+  syncSelfProfile: (patch: { name?: string; avatarColor?: string; avatarUrl?: string }) => void
 
   // Workspaces
   addWorkspace: (name: string, color: string) => string
@@ -1141,6 +1143,7 @@ export const useDataStore = create<DataState>()(
           name: profile?.name ?? 'Você',
           role: 'Organizador(a)',
           avatarColor: profile?.avatarColor ?? '#7C5CFF',
+          avatarUrl: profile?.avatarUrl,
           status: 'online',
           workload: 0,
           linkedUserId: userId,
@@ -1171,6 +1174,7 @@ export const useDataStore = create<DataState>()(
           name: selfMember.name,
           role: selfMember.role,
           avatar_color: selfMember.avatarColor,
+          avatar_url: selfMember.avatarUrl ?? null,
           status: selfMember.status,
           workload: selfMember.workload,
           linked_user_id: userId,
@@ -1226,9 +1230,10 @@ export const useDataStore = create<DataState>()(
         set((state) => ({
           team: state.team.map((m) => (m.isSelf ? { ...m, ...patch } : m)),
         }))
-        const row: Record<string, string> = {}
+        const row: Record<string, string | null> = {}
         if (patch.name !== undefined) row.name = patch.name
         if (patch.avatarColor !== undefined) row.avatar_color = patch.avatarColor
+        if ('avatarUrl' in patch) row.avatar_url = patch.avatarUrl ?? null
         if (Object.keys(row).length > 0) {
           fireAndForget(supabase.from('team_members').update(row).eq('linked_user_id', userId))
         }
@@ -1271,6 +1276,7 @@ export const useDataStore = create<DataState>()(
           name: profile?.name ?? 'Você',
           role: 'Organizador(a)',
           avatarColor: profile?.avatarColor ?? '#7C5CFF',
+          avatarUrl: profile?.avatarUrl,
           status: 'online',
           workload: 0,
           linkedUserId: userId ?? undefined,
@@ -1292,6 +1298,7 @@ export const useDataStore = create<DataState>()(
               name: selfMember.name,
               role: selfMember.role,
               avatar_color: selfMember.avatarColor,
+              avatar_url: selfMember.avatarUrl ?? null,
               status: selfMember.status,
               workload: selfMember.workload,
               linked_user_id: userId,

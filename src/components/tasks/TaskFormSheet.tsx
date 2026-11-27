@@ -327,6 +327,7 @@ export function TaskFormSheet({ open, onClose, task, defaultProjectId, defaultDu
                     <Avatar
                       name={member.name}
                       color={member.avatarColor}
+                      src={member.avatarUrl}
                       size="md"
                       className={cn(selected && 'ring-2 ring-accent ring-offset-2 ring-offset-surface-alt')}
                     />

@@ -205,7 +205,7 @@ export function TaskDetailPage() {
                 key={assignee.id}
                 className="flex items-center gap-1.5 rounded-full bg-surface-alt py-1 pl-1 pr-2.5 text-xs font-semibold text-text-muted"
               >
-                <Avatar name={assignee.name} color={assignee.avatarColor} size="xs" />
+                <Avatar name={assignee.name} color={assignee.avatarColor} src={assignee.avatarUrl} size="xs" />
                 {assignee.name}
               </span>
             ))}
@@ -304,12 +304,12 @@ export function TaskDetailPage() {
           <div className="flex flex-col gap-3">
             {task.comments.map((c) => {
               const member = team.find((m) => m.workspaceId === task.workspaceId && (m.linkedUserId === c.authorId || m.id === c.authorId))
-              const author = c.authorId === currentUser?.id
+              const author: { name: string; avatarColor: string; avatarUrl?: string } = c.authorId === currentUser?.id && currentUser
                 ? currentUser
                 : member ?? { name: 'Autor desconhecido', avatarColor: '#62667A' }
               return (
                 <div key={c.id} className="flex gap-2.5">
-                  <Avatar name={author.name} color={author.avatarColor} size="xs" />
+                  <Avatar name={author.name} color={author.avatarColor} src={author.avatarUrl} size="xs" />
                   <ReactionControl
                     reactions={reactions.filter((reaction) => reaction.taskId === task.id && reaction.commentId === c.id)}
                     currentUserId={userId}

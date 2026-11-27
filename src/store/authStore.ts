@@ -14,6 +14,7 @@ interface ProfileRow {
   name: string
   email: string
   avatar_color: string
+  avatar_url: string | null
   usage_mode: UsageMode
   timezone: string
   auto_complete_projects: boolean
@@ -26,6 +27,7 @@ function mapProfile(row: ProfileRow): User {
     name: row.name,
     email: row.email,
     avatarColor: row.avatar_color,
+    avatarUrl: row.avatar_url ?? undefined,
     usageMode: row.usage_mode,
     timezone: row.timezone,
     autoCompleteProjects: row.auto_complete_projects,
@@ -59,7 +61,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
   logout: () => Promise<void>
   setUsageMode: (mode: UsageMode) => Promise<void>
-  updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor' | 'timezone' | 'autoCompleteProjects'>>) => Promise<void>
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'avatarColor' | 'avatarUrl' | 'timezone' | 'autoCompleteProjects'>>) => Promise<void>
   completeOnboarding: () => void
   // Apaga a conta de verdade (Edge Function delete-account, com service
   // role) — pede a senha atual pra confirmar que é a pessoa mesmo, não só
@@ -141,7 +143,8 @@ export const useAuthStore = create<AuthState>()(
         if (!id) return
         set((state) => ({ profile: state.profile ? { ...state.profile, ...patch } : state.profile }))
         useDataStore.getState().syncSelfProfile(patch)
-        const updates: Record<string, string | boolean> = {}
+        const updates: Record<string, string | boolean | null> = {}
+        if ('avatarUrl' in patch) updates.avatar_url = patch.avatarUrl ?? null
         if (patch.name !== undefined) updates.name = patch.name
         if (patch.avatarColor !== undefined) updates.avatar_color = patch.avatarColor
         if (patch.timezone !== undefined) updates.timezone = patch.timezone

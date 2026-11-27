@@ -290,7 +290,7 @@ export function ProjectDetailPage() {
               <p className="mb-2 text-sm font-semibold text-text">Membros</p>
               <div className="flex -space-x-2">
                 {members.map((m) => (
-                  <Avatar key={m.id} name={m.name} color={m.avatarColor} size="sm" ring />
+                  <Avatar key={m.id} name={m.name} color={m.avatarColor} src={m.avatarUrl} size="sm" ring />
                 ))}
                 {members.length === 0 && <p className="text-sm text-text-faint">Nenhum membro ainda.</p>}
               </div>
@@ -366,7 +366,7 @@ export function ProjectDetailPage() {
               <div className="flex flex-col gap-2">
                 {members.map((m) => (
                   <div key={m.id} className="flex items-center gap-3 rounded-xl bg-surface p-3">
-                    <Avatar name={m.name} color={m.avatarColor} size="sm" />
+                    <Avatar name={m.name} color={m.avatarColor} src={m.avatarUrl} size="sm" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-text">{m.name}</p>
                       <p className="truncate text-xs text-text-faint">{m.role}</p>
