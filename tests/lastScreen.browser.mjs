@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const base = process.env.TEST_BASE_URL || 'http://localhost:5174'
-const browser = await chromium.launch({ channel: 'msedge', headless: true })
+// PLAYWRIGHT_CHANNEL vazio usa o Chromium do próprio Playwright (padrão: Edge).
+const channel = process.env.PLAYWRIGHT_CHANNEL ?? 'msedge'
+const browser = await chromium.launch({ ...(channel ? { channel } : {}), headless: true })
 
 try {
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
