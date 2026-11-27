@@ -40,6 +40,7 @@ export function TableColumnMenu({ column, canMoveLeft, canMoveRight, onRename, o
   return (
     <DropdownMenu
       label={`Coluna ${column.title}`}
+      blockTrigger
       renderTrigger={({ open, toggle }) => (
         <button
           type="button"
@@ -47,7 +48,7 @@ export function TableColumnMenu({ column, canMoveLeft, canMoveRight, onRename, o
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={`Opções da coluna ${column.title || 'sem nome'}`}
-          className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-xs font-bold text-text hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+          className="flex min-h-11 w-full items-center gap-1.5 px-2.5 text-left text-xs font-bold text-text hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
         >
           <Icon size={13} className="shrink-0 text-text-faint" />
           <span className="min-w-0 flex-1 truncate">{column.title || 'Sem nome'}</span>

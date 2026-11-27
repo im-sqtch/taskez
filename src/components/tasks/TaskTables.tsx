@@ -193,7 +193,7 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
                 <thead>
                   <tr>
                     {table.columns.map((column, columnIndex) => (
-                      <th key={column.id} style={{ width: COLUMN_WIDTH }} className="border-b border-r border-border bg-surface-alt p-1.5 last:border-r-0">
+                      <th key={column.id} style={{ width: COLUMN_WIDTH }} className="border-b border-r border-border bg-surface-alt p-0 last:border-r-0">
                         <TableColumnMenu
                           column={column}
                           canMoveLeft={columnIndex > 0}
@@ -220,7 +220,7 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
                   {table.rows.map((row, rowIndex) => (
                     <tr key={row.id}>
                       {table.columns.map((column) => (
-                        <td key={column.id} className={cn('border-b border-r border-border p-1 last:border-r-0', table.wrap ? 'align-top' : 'align-middle')}>
+                        <td key={column.id} className={cn('border-b border-r border-border p-0 last:border-r-0', table.wrap ? 'align-top' : 'align-middle')}>
                           <CopyableCell text={cellText(column, row.cells[column.id], lookup)}>
                             <TableCell
                               column={column}
