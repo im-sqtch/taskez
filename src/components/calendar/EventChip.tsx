@@ -1,6 +1,7 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { Repeat } from 'lucide-react'
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react'
+import { formatTimeRange } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import type { Project, Task } from '@/types'
 import { isOccurrence, justDragged, projectColor } from './calendarShared'
@@ -23,6 +24,7 @@ export function ChipBody({ task, project, layout = 'grid', className, style, ...
   const projected = isOccurrence(task)
   const recurring = projected || Boolean(task.recurrence ?? project?.recurrence)
   const filled = layout === 'timed' || !task.dueTime
+  const tall = layout === 'timed' && Boolean(task.dueTime) && (task.durationMinutes ?? 30) >= 45
   const chipStyle: CSSProperties = projected
     ? { borderColor: color }
     : filled ? { backgroundColor: `color-mix(in srgb, ${color} 24%, var(--color-surface))`, ...(layout === 'timed' ? { borderLeftColor: color } : {}) } : {}
@@ -39,8 +41,26 @@ export function ChipBody({ task, project, layout = 'grid', className, style, ...
       style={{ ...chipStyle, ...style }}
     >
       {layout === 'grid' && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />}
-      {task.dueTime && <span className="shrink-0 tabular-nums text-text-muted">{task.dueTime}</span>}
-      <span className={cn('min-w-0 flex-1 truncate', done && 'line-through')}>{task.title}</span>
+      {tall ? (
+        // Bloco alto na grade de horas: título em cima e o intervalo embaixo.
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className={cn('truncate font-semibold', done && 'line-through')}>{task.title}</span>
+          <span className="truncate tabular-nums text-text-muted">{formatTimeRange(task.dueTime!, task.durationMinutes)}</span>
+        </span>
+      ) : (
+        layout === 'timed' ? (
+          // Bloco curto na grade: título primeiro (a posição já indica a hora).
+          <span className="flex min-w-0 flex-1 gap-1.5 truncate">
+            <span className={cn('truncate font-semibold', done && 'line-through')}>{task.title}</span>
+            <span className="shrink-0 tabular-nums text-text-muted">{task.dueTime}</span>
+          </span>
+        ) : (
+          <>
+            {task.dueTime && <span className="shrink-0 tabular-nums text-text-muted">{task.dueTime}</span>}
+            <span className={cn('min-w-0 flex-1 truncate', done && 'line-through')}>{task.title}</span>
+          </>
+        )
+      )}
       {recurring && <Repeat size={10} className="mt-0.5 shrink-0 text-text-faint" aria-hidden="true" />}
     </span>
   )

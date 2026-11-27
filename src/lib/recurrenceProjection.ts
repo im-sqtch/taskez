@@ -4,12 +4,21 @@
 // em que dias os próximos ciclos vão cair, usando a mesma regra (nextMatch) e o
 // mesmo deslocamento de prazo (offsetDays) da geração.
 import { addDays, dateKey, dueDateToLocalDate, keyToDate, keyToDueDate } from './calendar.ts'
-import { nextMatch, offsetDays } from './recurrence.ts'
+import { fieldsFromTemplate, isSkipped, nextMatch, offsetDays } from './recurrence.ts'
 import type { Project, RecurrenceRule, Task } from '@/types'
 
 export const PROJECTION_DAYS = 60
 
-export type ProjectedTask = Task & { occurrenceOf: string }
+export interface OccurrenceInfo {
+  // Tarefa real de onde a ocorrência vem.
+  occurrenceOf: string
+  // Dia em que o ciclo nasceria ("YYYY-MM-DD") — usado para pular a ocorrência.
+  occurrenceKey: string
+  // Dona da regra: a própria tarefa ou o projeto recorrente.
+  occurrenceSource: { kind: 'task' | 'project'; id: string }
+}
+
+export type ProjectedTask = Task & OccurrenceInfo
 
 const MAX_ITERATIONS = 400
 
@@ -30,17 +39,21 @@ function appearances(rule: RecurrenceRule, anchor: Date, limit: Date): Date[] {
   return result
 }
 
-function occurrence(task: Task, due: Date, cycleKey: string): ProjectedTask {
+function occurrence(task: Task, due: Date, cycleKey: string, source: OccurrenceInfo['occurrenceSource']): ProjectedTask {
+  const template = source.kind === 'task' ? task.recurrence?.template : undefined
   return {
     ...task,
+    ...(template ? fieldsFromTemplate(template, () => crypto.randomUUID()) : {}),
     id: `occ:${task.id}:${cycleKey}`,
     occurrenceOf: task.id,
+    occurrenceKey: cycleKey,
+    occurrenceSource: source,
     dueDate: keyToDueDate(dateKey(due)),
     status: 'todo',
     notFulfilled: false,
     completedAt: undefined,
     comments: [],
-    subtasks: task.subtasks.map((subtask) => ({ ...subtask, done: false })),
+    subtasks: (template ? template.subtaskTitles.map((title, index) => ({ id: `s${index}`, title, done: false })) : task.subtasks.map((subtask) => ({ ...subtask, done: false }))),
   }
 }
 
@@ -56,12 +69,14 @@ export function projectRecurringTasks(tasks: Task[], projects: Project[], today:
   for (const task of tasks) {
     if (!task.recurrence || !task.dueDate) continue
     try {
-      const offset = offsetDays(task.dueDate, task.createdAt)
+      const template = task.recurrence.template
+      const offset = template ? template.dueOffset : offsetDays(task.dueDate, task.createdAt)
+      if (offset === undefined) continue
       for (const appearance of appearances(task.recurrence, localMidnight(task.createdAt), addDays(horizon, Math.max(0, -offset)))) {
         // Ciclos que já "apareceram" são gerados de verdade pela store.
-        if (appearance <= start) continue
+        if (appearance <= start || isSkipped(task.recurrence, appearance)) continue
         const due = addDays(appearance, offset)
-        if (inWindow(due)) result.push(occurrence(task, due, dateKey(appearance)))
+        if (inWindow(due)) result.push(occurrence(task, due, dateKey(appearance), { kind: 'task', id: task.id }))
       }
     } catch (error) {
       console.error(`Falha ao projetar recorrência da tarefa ${task.id}:`, error)
@@ -76,10 +91,10 @@ export function projectRecurringTasks(tasks: Task[], projects: Project[], today:
       const offsets = projectTasks.map((task) => offsetDays(task.dueDate!, project.createdAt))
       const lookBack = Math.max(0, -Math.min(...offsets))
       for (const appearance of appearances(project.recurrence, localMidnight(project.createdAt), addDays(horizon, lookBack))) {
-        if (appearance <= start) continue
+        if (appearance <= start || isSkipped(project.recurrence, appearance)) continue
         projectTasks.forEach((task, index) => {
           const due = addDays(appearance, offsets[index]!)
-          if (inWindow(due)) result.push(occurrence(task, due, dateKey(appearance)))
+          if (inWindow(due)) result.push(occurrence(task, due, dateKey(appearance), { kind: 'project', id: project.id }))
         })
       }
     } catch (error) {

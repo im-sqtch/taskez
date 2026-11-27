@@ -39,6 +39,25 @@ export interface RecurrenceRule {
   dayOfMonth?: number
   // Data (ISO) a partir da qual a série para de gerar novos ciclos.
   endDate?: string
+  // Ocorrências puladas: chave ("YYYY-MM-DD") do dia em que o ciclo nasceria.
+  skip?: string[]
+  // Valores dos próximos ciclos quando a ocorrência atual foi editada com
+  // "só esta" — sem isso, os próximos ciclos copiam a tarefa atual.
+  template?: RecurrenceTemplate
+}
+
+export interface RecurrenceTemplate {
+  title: string
+  description?: string
+  priority: Priority
+  assigneeIds: string[]
+  subtaskTitles: string[]
+  links: string[]
+  dueTime?: string
+  durationMinutes?: number
+  reminderMinutes?: number
+  // Dias entre o nascimento do ciclo e o prazo (ver offsetDays).
+  dueOffset?: number
 }
 
 export interface Task {
@@ -58,6 +77,10 @@ export interface Task {
   dueDate?: string
   // Horário opcional do prazo, "HH:MM" (24h). Sem ele, a tarefa é "de dia inteiro".
   dueTime?: string
+  // Duração a partir de dueTime (o término é dueTime + duração).
+  durationMinutes?: number
+  // Lembrete por push N minutos antes de dueTime (0 = no horário).
+  reminderMinutes?: number
   assigneeIds: string[]
   subtasks: Subtask[]
   tables?: TaskTable[]

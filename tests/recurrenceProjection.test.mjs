@@ -32,3 +32,18 @@ test('tarefa sem prazo ou sem recorrência não gera nada', () => {
   const plain = { ...base, id: 't5', title: 'Normal', dueDate: '2026-11-27T00:00:00.000Z', createdAt: '2026-11-02T12:00:00.000Z' }
   assert.equal(projectRecurringTasks([noDue, plain], [], today).length, 0)
 })
+
+test('ocorrência pulada não aparece', () => {
+  const task = { ...base, id: 't6', title: 'Diária', dueDate: '2026-11-26T00:00:00.000Z', createdAt: '2026-11-26T12:00:00.000Z', recurrence: { frequency: 'daily', endDate: '2026-11-30T00:00:00.000Z', skip: ['2026-11-28'] } }
+  assert.deepEqual(keys(projectRecurringTasks([task], [], today)), ['2026-11-27', '2026-11-29', '2026-11-30'])
+})
+
+test('"só esta": as próximas ocorrências usam o modelo guardado na regra', () => {
+  // A ocorrência atual foi editada (título, horário e prazo 1 dia depois), mas a série continua como antes.
+  const task = { ...base, id: 't7', title: 'Editada só hoje', dueDate: '2026-11-27T00:00:00.000Z', dueTime: '18:00', createdAt: '2026-11-26T12:00:00.000Z',
+    recurrence: { frequency: 'daily', endDate: '2026-11-29T00:00:00.000Z', template: { title: 'Original', priority: 'medium', assigneeIds: [], subtaskTitles: ['Passo'], links: [], dueTime: '09:00', dueOffset: 0 } } }
+  const result = projectRecurringTasks([task], [], today)
+  assert.deepEqual(keys(result), ['2026-11-27', '2026-11-28', '2026-11-29'])
+  assert.ok(result.every((t) => t.title === 'Original' && t.dueTime === '09:00' && t.subtasks[0].title === 'Passo'))
+  assert.deepEqual(result.map((t) => t.occurrenceKey), ['2026-11-27', '2026-11-28', '2026-11-29'])
+})

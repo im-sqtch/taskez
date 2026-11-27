@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/authStore'
 import { WIDGET_CATALOG, WIDGET_TYPES } from '@/lib/widgetCatalog'
 import { NOTIFICATION_EVENTS, type NotificationEvent } from '@/lib/notificationCatalog'
 import { isNotificationEventEnabled } from '@/store/notificationPrefsStore'
-import { applyOffset, dueOccurrence, offsetDays } from '@/lib/recurrence'
+import { applyOffset, dueOccurrence, fieldsFromTemplate, isSkipped, offsetDays, ruleForNextCycle } from '@/lib/recurrence'
 import { dateKey, keyToDate } from '@/lib/calendar'
 import type {
   ChatMessage,
@@ -115,6 +115,8 @@ interface TaskRow {
   priority: Priority
   due_date: string | null
   due_time: string | null
+  duration_minutes: number | null
+  reminder_minutes: number | null
   assignee_ids: string[]
   subtasks: Subtask[]
   tables: TaskTable[]
@@ -292,6 +294,8 @@ function mapTask(row: TaskRow): Task {
     projectId: row.project_id ?? undefined,
     dueDate: row.due_date ?? undefined,
     dueTime: row.due_time ?? undefined,
+    durationMinutes: row.duration_minutes ?? undefined,
+    reminderMinutes: row.reminder_minutes ?? undefined,
     assigneeIds: row.assignee_ids ?? [],
     subtasks: row.subtasks ?? [],
     tables: row.tables ?? [],
@@ -340,6 +344,8 @@ function taskPatchToRow(patch: Partial<Task>): Record<string, unknown> {
   if (patch.dueDate !== undefined) row.due_date = patch.dueDate ?? null
   // Como `recurrence`: o formulário manda a chave com `undefined` para limpar.
   if ('dueTime' in patch) row.due_time = patch.dueTime ?? null
+  if ('durationMinutes' in patch) row.duration_minutes = patch.durationMinutes ?? null
+  if ('reminderMinutes' in patch) row.reminder_minutes = patch.reminderMinutes ?? null
   if (patch.assigneeIds !== undefined) row.assignee_ids = patch.assigneeIds
   if (patch.subtasks !== undefined) row.subtasks = patch.subtasks
   if (patch.tables !== undefined) row.tables = patch.tables ?? []
@@ -397,6 +403,8 @@ async function generateDueRecurrences(userId: string) {
     try {
       const appearance = dueOccurrence(project.recurrence, localMidnightAnchor(project.createdAt), today)
       if (!appearance) continue
+      // Ocorrência pulada pelo usuário: não nasce ciclo novo.
+      if (isSkipped(project.recurrence, appearance)) continue
       // `createdAt` do novo ciclo é a própria data de aparição (não `now()`) —
       // é o que mantém o deslocamento em dias de cada prazo exato e faz o
       // índice único (series_id, created_at) deduplicar gerações concorrentes.
@@ -415,6 +423,7 @@ async function generateDueRecurrences(userId: string) {
         completionAck: false,
         order: orderFor(project.workspaceId),
         seriesId: project.seriesId ?? project.id,
+        recurrence: ruleForNextCycle(project.recurrence, appearance),
       }
       newProjects.push(newProject)
       closedProjectIds.add(project.id)
@@ -461,19 +470,26 @@ async function generateDueRecurrences(userId: string) {
     try {
       const appearance = dueOccurrence(task.recurrence, localMidnightAnchor(task.createdAt), today)
       if (!appearance) continue
+      if (isSkipped(task.recurrence, appearance)) continue
       const cycleCreatedAt = appearance.toISOString()
+      // "Só esta" numa ocorrência anterior: os próximos ciclos usam o modelo
+      // guardado na regra, e não os valores editados da tarefa atual.
+      const template = task.recurrence.template
+      const offset = template ? template.dueOffset : task.dueDate ? offsetDays(task.dueDate, task.createdAt) : undefined
       newTasks.push({
         ...task,
+        ...(template ? fieldsFromTemplate(template, uuid) : {
+          subtasks: task.subtasks.map((s) => ({ ...s, done: false, notFulfilled: false })),
+        }),
         id: uuid(),
         status: 'todo',
         notFulfilled: false,
         completedAt: undefined,
         comments: [],
-        subtasks: task.subtasks.map((s) => ({ ...s, done: false, notFulfilled: false })),
-        dueDate: task.dueDate ? applyOffset(appearance, offsetDays(task.dueDate, task.createdAt)) : undefined,
+        dueDate: offset !== undefined ? applyOffset(appearance, offset) : undefined,
         createdAt: cycleCreatedAt,
         updatedAt: cycleCreatedAt,
-        recurrence: task.recurrence,
+        recurrence: ruleForNextCycle(task.recurrence, appearance),
         seriesId: task.seriesId ?? task.id,
       })
       closedTaskIds.add(task.id)
@@ -533,6 +549,8 @@ async function generateDueRecurrences(userId: string) {
         priority: task.priority,
         due_date: task.dueDate ?? null,
         due_time: task.dueTime ?? null,
+        duration_minutes: task.durationMinutes ?? null,
+        reminder_minutes: task.reminderMinutes ?? null,
         assignee_ids: task.assigneeIds,
         subtasks: task.subtasks,
         comments: task.comments,
@@ -1771,6 +1789,8 @@ export const useDataStore = create<DataState>()(
           projectId: data.projectId,
           dueDate: data.dueDate,
           dueTime: data.dueDate ? data.dueTime : undefined,
+          durationMinutes: data.dueDate && data.dueTime ? data.durationMinutes : undefined,
+          reminderMinutes: data.dueDate && data.dueTime ? data.reminderMinutes : undefined,
           assigneeIds: data.assigneeIds ?? [],
           subtasks: data.subtasks ?? [],
           tables: data.tables ?? [],
@@ -1825,6 +1845,8 @@ export const useDataStore = create<DataState>()(
             project_id: task.projectId ?? null,
             due_date: task.dueDate ?? null,
             due_time: task.dueTime ?? null,
+            duration_minutes: task.durationMinutes ?? null,
+            reminder_minutes: task.reminderMinutes ?? null,
             assignee_ids: task.assigneeIds,
             subtasks: task.subtasks,
             tables: task.tables ?? [],

@@ -105,12 +105,7 @@ export function TimeGrid({ days, todayKey, byDay, projectsById, onCreate, onOpen
           </div>
           {days.map((date) => {
             const key = dateKey(date)
-            const timed = (byDay.get(key) ?? []).filter((task) => task.dueTime)
-            const slots = new Map<number, Task[]>()
-            for (const task of timed) {
-              const slot = Math.floor(timeToMinutes(task.dueTime!) / SLOT_MINUTES)
-              slots.set(slot, [...(slots.get(slot) ?? []), task])
-            }
+            const placed = layoutTimed((byDay.get(key) ?? []).filter((task) => task.dueTime))
             return (
               <DropDay
                 key={key}
@@ -123,20 +118,20 @@ export function TimeGrid({ days, todayKey, byDay, projectsById, onCreate, onOpen
                 {HOURS.map((hour) => (
                   <div key={hour} className="pointer-events-none absolute inset-x-0 border-t border-border-soft/70" style={{ top: hour * HOUR_HEIGHT }} aria-hidden="true" />
                 ))}
-                {[...slots.values()].flatMap((group) => group.map((task, index) => (
+                {placed.map(({ task, start, end, column, columns }) => (
                   <div
                     key={task.id}
                     className="absolute z-10 px-0.5"
                     style={{
-                      top: (timeToMinutes(task.dueTime!) / 60) * HOUR_HEIGHT + 1,
-                      height: (SLOT_MINUTES / 60) * HOUR_HEIGHT - 2,
-                      left: `${(index / group.length) * 100}%`,
-                      width: `${100 / group.length}%`,
+                      top: (start / 60) * HOUR_HEIGHT + 1,
+                      height: (Math.max(MIN_BLOCK_MINUTES, end - start) / 60) * HOUR_HEIGHT - 2,
+                      left: `${(column / columns) * 100}%`,
+                      width: `${100 / columns}%`,
                     }}
                   >
                     <EventChip task={task} project={projectsById.get(task.projectId ?? '')} onOpen={onOpenTask} layout="timed" />
                   </div>
-                )))}
+                ))}
                 {key === todayKey && (
                   <div className="pointer-events-none absolute inset-x-0 z-20 flex items-center" style={{ top: (nowMinutes / 60) * HOUR_HEIGHT }} aria-hidden="true">
                     <span className="-ml-1.5 h-3 w-3 rounded-full bg-danger" />
@@ -150,6 +145,47 @@ export function TimeGrid({ days, todayKey, byDay, projectsById, onCreate, onOpen
       </div>
     </div>
   )
+}
+
+// Bloco mínimo na tela (tarefas curtas continuam clicáveis).
+const MIN_BLOCK_MINUTES = 20
+const DEFAULT_DURATION = 30
+
+interface PlacedTask { task: Task; start: number; end: number; column: number; columns: number }
+
+// Distribui tarefas que se sobrepõem lado a lado, como o Google Agenda: cada
+// grupo de tarefas encavaladas divide a largura em colunas.
+function layoutTimed(tasks: Task[]): PlacedTask[] {
+  const items = tasks
+    .map((task) => {
+      const start = timeToMinutes(task.dueTime!)
+      return { task, start, end: Math.min(24 * 60, start + (task.durationMinutes ?? DEFAULT_DURATION)) }
+    })
+    .sort((a, b) => a.start - b.start || b.end - a.end)
+  const placed: PlacedTask[] = []
+  let cluster: PlacedTask[] = []
+  let columnEnds: number[] = []
+  let clusterEnd = -1
+  const closeCluster = () => {
+    for (const item of cluster) item.columns = columnEnds.length
+    cluster = []
+    columnEnds = []
+  }
+  for (const item of items) {
+    if (item.start >= clusterEnd) closeCluster()
+    const visualEnd = Math.max(item.end, item.start + MIN_BLOCK_MINUTES)
+    let column = columnEnds.findIndex((end) => end <= item.start)
+    if (column === -1) {
+      column = columnEnds.length
+      columnEnds.push(visualEnd)
+    } else columnEnds[column] = visualEnd
+    const entry = { ...item, column, columns: 1 }
+    cluster.push(entry)
+    placed.push(entry)
+    clusterEnd = Math.max(clusterEnd, visualEnd)
+  }
+  closeCluster()
+  return placed
 }
 
 function minutesOfDay(date: Date) {

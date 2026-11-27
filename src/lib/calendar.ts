@@ -127,3 +127,9 @@ export function compareDueTime(a: { dueTime?: string }, b: { dueTime?: string })
   if (!b.dueTime) return 1
   return timeToMinutes(a.dueTime) - timeToMinutes(b.dueTime)
 }
+
+// "14:30" ou "14:30–15:15" quando há duração.
+export function formatTimeRange(time: string, durationMinutes?: number): string {
+  if (!durationMinutes) return time
+  return `${time}–${minutesToTime(timeToMinutes(time) + durationMinutes)}`
+}
