@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { fireAndForget, supabase } from '@/lib/supabase'
+import { isPostgrestQuery, sendWrite } from '@/lib/writeQueue'
 import { useAuthStore } from '@/store/authStore'
 import { FOCUS_TRACKS, nextFocusTrack } from '@/lib/focusMusic'
 import { setFocusAudioListener, syncFocusAudio } from '@/lib/focusAudio'
@@ -256,7 +257,13 @@ const pendingInserts = new Set<string>()
 const writeQueues = new Map<string, Promise<unknown>>()
 
 function enqueueWrite(id: string, run: () => PromiseLike<unknown>) {
-  const next = (writeQueues.get(id) ?? Promise.resolve()).then(run, run)
+  // sendWrite: sem conexão, a escrita vai para a fila de pendências (writeQueue)
+  // e é reenviada quando a rede voltar, em vez de se perder.
+  const send = () => {
+    const query = run()
+    return isPostgrestQuery(query) ? sendWrite(query) : query
+  }
+  const next = (writeQueues.get(id) ?? Promise.resolve()).then(send, send)
   writeQueues.set(id, next)
   fireAndForget(next)
   const cleanup = () => { if (writeQueues.get(id) === next) writeQueues.delete(id) }

@@ -7,6 +7,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TabBar } from '@/components/layout/TabBar'
 import { NotificationsSheet } from '@/components/layout/NotificationsSheet'
 import { SearchOverlay } from '@/components/layout/SearchOverlay'
+import { SyncStatus } from '@/components/layout/SyncStatus'
 import { useDataStore } from '@/store/dataStore'
 import { useUiStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
@@ -125,6 +126,7 @@ export function AppShell() {
 
   return (
     <div className="flex w-full min-w-0 flex-1 overflow-x-clip bg-base lg:h-dvh lg:min-h-0 lg:flex-none lg:overflow-hidden">
+      <SyncStatus />
       <div className="hidden lg:flex">
         <Sidebar />
       </div>
