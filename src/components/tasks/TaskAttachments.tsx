@@ -1,20 +1,17 @@
-import { Download, Paperclip, Plus, Unlink, Upload } from 'lucide-react'
+import { Download, Paperclip, Plus, Unlink, Upload, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { FilePreviewDialog } from '@/components/files/FilePreviewDialog'
 import { FileThumbnail } from '@/components/files/FileThumbnail'
 import { Button } from '@/components/ui/Button'
 import { getFileDownloadUrl } from '@/lib/fileUrls'
-import { formatBytes, formatDate } from '@/lib/utils'
-import { supabase } from '@/lib/supabase'
+import { MAX_ATTACHMENT_SIZE, uploadTaskAttachment } from '@/lib/taskAttachments'
+import { cn, formatBytes, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { useDataStore } from '@/store/dataStore'
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024
-
-export function TaskAttachments({ taskId }: { taskId: string }) {
+export function TaskAttachments({ taskId, inset = true }: { taskId: string; inset?: boolean }) {
   const task = useDataStore((s) => s.tasks.find((item) => item.id === taskId))
   const allFiles = useDataStore((s) => s.files)
-  const addFile = useDataStore((s) => s.addFile)
   const linkFileToTask = useDataStore((s) => s.linkFileToTask)
   const unlinkFileFromTask = useDataStore((s) => s.unlinkFileFromTask)
   const user = useAuthStore((s) => s.currentUser())
@@ -34,31 +31,11 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
     const selected = Array.from(event.target.files ?? [])
     event.target.value = ''
     if (!user || selected.length === 0) return
-    const oversized = selected.find((file) => file.size > MAX_FILE_SIZE)
-    if (oversized) {
-      setError(`"${oversized.name}" ultrapassa o limite de ${formatBytes(MAX_FILE_SIZE)}.`)
-      return
-    }
     setError(null)
     setUploading(true)
     for (const file of selected) {
-      const fileId = crypto.randomUUID()
-      const storagePath = `${activeTask.workspaceId}/${taskId}/${fileId}-${file.name}`
-      const { error: uploadError } = await supabase.storage.from('project-files').upload(storagePath, file)
-      if (uploadError) {
-        setError(`Não foi possível enviar "${file.name}".`)
-        continue
-      }
-      addFile({
-        workspaceId: activeTask.workspaceId,
-        projectIds: [],
-        taskIds: [taskId],
-        name: file.name,
-        size: file.size,
-        type: file.type || 'application/octet-stream',
-        storagePath,
-        uploadedBy: user.id,
-      })
+      const failure = await uploadTaskAttachment(file, { taskId, workspaceId: activeTask.workspaceId, userId: user.id })
+      if (failure) setError(failure)
     }
     setUploading(false)
   }
@@ -75,7 +52,7 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 px-5">
+    <section className={cn('flex flex-col gap-3', inset && 'px-5')}>
       <input ref={inputRef} type="file" multiple onChange={handleFiles} className="hidden" />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-bold text-text"><Paperclip size={16} /> Anexos {attachments.length > 0 && `(${attachments.length})`}</p>
@@ -105,6 +82,35 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
         })}
       </div>}
       <FilePreviewDialog files={attachments} index={previewIndex} onIndexChange={setPreviewIndex} />
+    </section>
+  )
+}
+
+// Anexos escolhidos antes de a tarefa existir (formulário de criação): ficam
+// aqui e são enviados logo depois que a tarefa é criada.
+export function PendingAttachments({ files, onChange }: { files: File[]; onChange: (files: File[]) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <section className="flex flex-col gap-3">
+      <input ref={inputRef} type="file" multiple className="hidden" onChange={(event) => {
+        const selected = Array.from(event.target.files ?? [])
+        event.target.value = ''
+        const oversized = selected.find((file) => file.size > MAX_ATTACHMENT_SIZE)
+        setError(oversized ? `"${oversized.name}" ultrapassa o limite de ${formatBytes(MAX_ATTACHMENT_SIZE)}.` : null)
+        onChange([...files, ...selected.filter((file) => file.size <= MAX_ATTACHMENT_SIZE)])
+      }} />
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-medium text-text-muted"><Paperclip size={16} /> Anexos {files.length > 0 && `(${files.length})`}</p>
+        <Button variant="secondary" size="sm" icon={<Upload size={14} />} onClick={() => inputRef.current?.click()}>Adicionar arquivo</Button>
+      </div>
+      {error && <p role="alert" className="text-xs font-medium text-danger">{error}</p>}
+      {files.map((file, index) => (
+        <div key={`${file.name}-${index}`} className="flex items-center gap-3 rounded-xl bg-surface p-3">
+          <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-text">{file.name}</p><p className="text-xs text-text-faint">{formatBytes(file.size)} · enviado ao criar a tarefa</p></div>
+          <button type="button" onClick={() => onChange(files.filter((_, i) => i !== index))} aria-label={`Remover ${file.name}`} className="flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:text-danger"><X size={16} /></button>
+        </div>
+      ))}
     </section>
   )
 }

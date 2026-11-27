@@ -14,6 +14,8 @@ interface CalendarFiltersProps {
   onToggleProject: (id: string) => void
   showCompleted: boolean
   onToggleCompleted: () => void
+  hideClosedProjects: boolean
+  onToggleHideClosedProjects: () => void
   undatedCount: number
   showUndated: boolean
   onToggleUndated: () => void
@@ -23,7 +25,7 @@ interface CalendarFiltersProps {
 
 // Filtros do calendário: projetos (caixas na cor de cada um), concluídas e a
 // lista de tarefas sem data. Usado na coluna lateral (desktop) e num Sheet (celular).
-export function CalendarFilters({ projects, hiddenProjects, onToggleProject, showCompleted, onToggleCompleted, undatedCount, showUndated, onToggleUndated, hasActiveFilters, onClear }: CalendarFiltersProps) {
+export function CalendarFilters({ projects, hiddenProjects, onToggleProject, showCompleted, onToggleCompleted, hideClosedProjects, onToggleHideClosedProjects, undatedCount, showUndated, onToggleUndated, hasActiveFilters, onClear }: CalendarFiltersProps) {
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -54,6 +56,10 @@ export function CalendarFilters({ projects, hiddenProjects, onToggleProject, sho
       <div className="flex items-center justify-between gap-3 border-t border-border-soft px-1 pt-3">
         <span className="text-sm text-text">Mostrar concluídas</span>
         <Switch checked={showCompleted} onChange={onToggleCompleted} aria-label="Mostrar concluídas" />
+      </div>
+      <div className="-mt-2 flex items-center justify-between gap-3 px-1">
+        <span className="text-sm text-text">Ocultar projetos concluídos e arquivados</span>
+        <Switch checked={hideClosedProjects} onChange={onToggleHideClosedProjects} aria-label="Ocultar projetos concluídos e arquivados" />
       </div>
       <button
         type="button"
