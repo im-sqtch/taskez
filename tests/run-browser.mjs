@@ -29,10 +29,14 @@ const env = {
   VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ?? 'chave-de-teste',
 }
 
-const server = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], { env, stdio: ['ignore', 'pipe', 'inherit'] })
+const server = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], { env, stdio: ['ignore', 'ignore', 'inherit'] })
+// Espera o servidor responder (não dá para confiar no texto do terminal: no
+// CI ele vem com códigos de cor no meio).
 let ready = false
-server.stdout.on('data', (chunk) => { if (String(chunk).includes('Local:')) ready = true })
-for (let i = 0; i < 120 && !ready; i++) await sleep(250)
+for (let i = 0; i < 240 && !ready; i++) {
+  ready = await fetch(env.TEST_BASE_URL).then((response) => response.ok, () => false)
+  if (!ready) await sleep(250)
+}
 if (!ready) {
   server.kill()
   console.error('O servidor Vite não subiu a tempo.')
