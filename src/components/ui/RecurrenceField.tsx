@@ -1,11 +1,12 @@
 import { ChevronLeft, ChevronRight, Repeat } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { FieldLabel } from '@/components/ui/Input'
 import { Sheet } from '@/components/ui/Sheet'
 import { WEEKDAY_LABELS, addMonths, dateKey, formatMonthTitle, keyToDate, monthGrid } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import type { RecurrenceFrequency, RecurrenceRule } from '@/types'
+import { useOnChange } from '@/lib/useOnChange'
 
 interface RecurrenceFieldProps {
   value: RecurrenceRule | undefined
@@ -41,14 +42,14 @@ export function RecurrenceField({ value, onChange }: RecurrenceFieldProps) {
   const [endDate, setEndDate] = useState('')
   const [endCalendarCursor, setEndCalendarCursor] = useState(() => new Date())
 
-  useEffect(() => {
-    if (!open) return
+  useOnChange(open, (isOpen) => {
+    if (!isOpen) return
     setFrequency(value?.frequency ?? 'weekly')
     setWeekdays(value?.weekdays ?? [new Date().getDay()])
     setDayOfMonth(value?.dayOfMonth ?? new Date().getDate())
     setEndDate(value?.endDate ? value.endDate.slice(0, 10) : '')
     setEndCalendarCursor(value?.endDate ? keyToDate(value.endDate.slice(0, 10)) : new Date())
-  }, [open, value])
+  })
 
   function toggleWeekday(day: number) {
     setWeekdays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()))

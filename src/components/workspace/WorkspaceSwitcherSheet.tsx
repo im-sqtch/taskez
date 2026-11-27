@@ -1,5 +1,5 @@
 import { Check, FolderKanban, Layers, LogOut, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Input'
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
 import type { Workspace } from '@/types'
+import { useOnChange } from '@/lib/useOnChange'
 
 interface WorkspaceSwitcherSheetProps {
   open: boolean
@@ -36,9 +37,7 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string>()
 
-  useEffect(() => {
-    if (!open) setView('list')
-  }, [open])
+  useOnChange(open, (isOpen) => { if (!isOpen) setView('list') })
 
   function openCreate() {
     setEditing(undefined)

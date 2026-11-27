@@ -1,5 +1,5 @@
 import { GripVertical, ListTodo } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Sheet } from '@/components/ui/Sheet'
 import { SortableItem, SortableList } from '@/components/ui/SortableList'
@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { reorderItems } from '@/lib/reorder'
 import { useDataStore } from '@/store/dataStore'
 import type { Subtask } from '@/types'
+import { useOnChange } from '@/lib/useOnChange'
 
 interface ReorderSubtasksSheetProps {
   open: boolean
@@ -19,11 +20,9 @@ export function ReorderSubtasksSheet({ open, onClose, taskId }: ReorderSubtasksS
   const reorderSubtasks = useDataStore((s) => s.reorderSubtasks)
   const [draft, setDraft] = useState<Subtask[]>([])
 
-  // Não inclui `subtasks` nas deps: reiniciaria o rascunho a cada movimento
-  // do usuário dentro da sheet (mesma ideia de ReorderTasksSheet).
-  useEffect(() => {
-    if (open) setDraft(subtasks ?? [])
-  }, [open, taskId])
+  // Copia as subtarefas só ao abrir (ou trocar de tarefa): reagir a cada mudança
+  // reiniciaria o rascunho a cada movimento (mesma ideia de ReorderTasksSheet).
+  useOnChange(open ? taskId : null, (openTaskId) => { if (openTaskId !== null) setDraft(subtasks ?? []) })
 
   function reorder(oldIndex: number, newIndex: number) {
     setDraft((prev) => reorderItems(prev, oldIndex, newIndex))

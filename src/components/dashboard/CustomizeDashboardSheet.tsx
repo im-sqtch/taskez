@@ -1,5 +1,5 @@
 import { GripVertical, RotateCcw } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Sheet } from '@/components/ui/Sheet'
 import { Switch } from '@/components/ui/Switch'
@@ -10,6 +10,7 @@ import { useDashboardViewport, type DashboardViewport } from '@/lib/dashboardVie
 import { nextSize, SIZE_LABELS, WIDGET_CATALOG, widgetContentSize } from '@/lib/widgetCatalog'
 import { defaultLayout, useDataStore, useWorkspaceLayout } from '@/store/dataStore'
 import type { DashboardWidget } from '@/types'
+import { useOnChange } from '@/lib/useOnChange'
 
 interface CustomizeDashboardSheetProps {
   open: boolean
@@ -28,9 +29,10 @@ export function CustomizeDashboardSheet({ open, onClose }: CustomizeDashboardShe
   const setLayout = useDataStore((s) => s.setLayout)
   const [draft, setDraft] = useState<DashboardWidget[]>([])
 
-  useEffect(() => {
-    if (open) setDraft(widgetsForViewport(layout.widgets, viewport))
-  }, [open, layout, viewport])
+  // Rascunho copiado ao abrir (ou ao trocar entre celular e desktop com ele aberto).
+  useOnChange(open ? viewport : null, (openViewport) => {
+    if (openViewport !== null) setDraft(widgetsForViewport(layout.widgets, openViewport))
+  })
 
   function reorder(oldIndex: number, newIndex: number) {
     setDraft((prev) => reorderItems(prev, oldIndex, newIndex).map((widget, order) => ({ ...widget, order })))

@@ -34,7 +34,8 @@ export function useMentionAutocomplete({ value, onChange, workspaceId, textareaR
   const entities = useMentionEntities(workspaceId)
   const [mention, setMention] = useState<MentionQuery | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [pendingCaret, setPendingCaret] = useState<number | null>(null)
+  // Posição do cursor a restaurar depois que o texto com a menção for aplicado.
+  const pendingCaretRef = useRef<number | null>(null)
   // Texto exato logo após uma escolha no dropdown. Enquanto nada mudar, o
   // dropdown fica fechado: "@Nome " ainda casa como busca ativa, e sem isso ele
   // reabriria sozinho e o próximo Enter escolheria a menção de novo em vez de
@@ -47,14 +48,15 @@ export function useMentionAutocomplete({ value, onChange, workspaceId, textareaR
 
   // Depois de inserir o nome escolhido, devolve o cursor para logo após a menção.
   useEffect(() => {
-    if (pendingCaret === null) return
+    const caret = pendingCaretRef.current
+    if (caret === null) return
+    pendingCaretRef.current = null
     const el = textareaRef.current
     if (el) {
       el.focus()
-      el.setSelectionRange(pendingCaret, pendingCaret)
+      el.setSelectionRange(caret, caret)
     }
-    setPendingCaret(null)
-  }, [pendingCaret, textareaRef])
+  }, [value, textareaRef])
 
   // Relê a posição do cursor no DOM para saber se ainda estamos dentro de um "@".
   function sync() {
@@ -76,9 +78,9 @@ export function useMentionAutocomplete({ value, onChange, workspaceId, textareaR
   function select(entity: MentionEntity) {
     if (!mention) return
     const result = applyMention(value, mention, entity)
+    pendingCaretRef.current = result.caret
     onChange(result.text)
     setMention(null)
-    setPendingCaret(result.caret)
     justInsertedRef.current = result.text
   }
 

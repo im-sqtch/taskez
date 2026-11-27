@@ -73,13 +73,6 @@ export function LinksField({ links, onChange, draft, onDraftChange }: LinksField
   )
 }
 
-// Junta os links já confirmados com um rascunho ainda não confirmado (se houver
-// texto nele) — usado no submit do formulário para não perder a última linha.
-export function withDraft(links: string[], draft: string): string[] {
-  const trimmed = draft.trim()
-  return trimmed ? [...links, trimmed] : links
-}
-
 // Exibição somente-leitura, usada nas telas de visualização de tarefa e projeto.
 export function LinksList({ links }: { links: string[] }) {
   if (links.length === 0) return null

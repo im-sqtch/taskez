@@ -1,9 +1,10 @@
 import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Field, FieldLabel } from '@/components/ui/Input'
-import { LinksField, withDraft } from '@/components/ui/LinksField'
+import { LinksField } from '@/components/ui/LinksField'
+import { withDraft } from '@/lib/links'
 import { MentionTextArea } from '@/components/ui/MentionTextArea'
 import { RecurrenceField } from '@/components/ui/RecurrenceField'
 import { Sheet } from '@/components/ui/Sheet'
@@ -12,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { useDataStore, useWorkspaceTeam } from '@/store/dataStore'
 import { useAuthStore } from '@/store/authStore'
 import type { Project, RecurrenceRule } from '@/types'
+import { useOnChange } from '@/lib/useOnChange'
 
 function formatShortDate(key: string): string {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(keyToDate(key)).replace('.', '')
@@ -46,8 +48,10 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
   const [dueSheetOpen, setDueSheetOpen] = useState(false)
   const [calendarCursor, setCalendarCursor] = useState(() => new Date())
 
-  useEffect(() => {
-    if (!open) return
+  // Reinicia o formulário ao abrir. Usa `team` do momento da abertura: ele é um
+  // array novo a cada render e não pode reiniciar a seleção com o Sheet aberto.
+  useOnChange(open ? [project?.id, currentUser?.id, defaultAssigneeId].join('|') : null, (openKey) => {
+    if (openKey === null) return
     setName(project?.name ?? '')
     setDescription(project?.description ?? '')
     setColor(project?.color ?? COLORS[0]!)
@@ -59,10 +63,7 @@ export function ProjectFormSheet({ open, onClose, project, onCreated }: ProjectF
     setLinks(project?.links ?? [])
     setLinkDraft('')
     setRecurrence(project?.recurrence)
-    // `team` de propósito fora das deps: useWorkspaceTeam() devolve um array novo a
-    // cada render, e incluí-lo aqui resetaria a seleção do usuário a cada re-render
-    // enquanto o sheet está aberto.
-  }, [open, project, currentUser, defaultAssigneeId])
+  })
 
   function toggleMember(memberId: string) {
     setMemberIds((prev) => (prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]))

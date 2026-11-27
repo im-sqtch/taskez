@@ -1,5 +1,5 @@
 import { GripVertical, ListTodo } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Sheet } from '@/components/ui/Sheet'
 import { SortableItem, SortableList } from '@/components/ui/SortableList'
@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { reorderItems } from '@/lib/reorder'
 import { useDataStore } from '@/store/dataStore'
 import type { Task } from '@/types'
+import { useOnChange } from '@/lib/useOnChange'
 
 interface ReorderTasksSheetProps {
   open: boolean
@@ -18,11 +19,9 @@ export function ReorderTasksSheet({ open, onClose, tasks }: ReorderTasksSheetPro
   const reorderTasks = useDataStore((s) => s.reorderTasks)
   const [draft, setDraft] = useState<Task[]>([])
 
-  // Não inclui `tasks` nas deps: a página pode devolver um array novo a cada
-  // render, o que reiniciaria o rascunho a cada movimento do usuário.
-  useEffect(() => {
-    if (open) setDraft(tasks)
-  }, [open])
+  // Copia a lista só ao abrir: a página pode devolver um array novo a cada
+  // render, e reagir a ele reiniciaria o rascunho a cada movimento do usuário.
+  useOnChange(open, (isOpen) => { if (isOpen) setDraft(tasks) })
 
   function reorder(oldIndex: number, newIndex: number) {
     setDraft((prev) => reorderItems(prev, oldIndex, newIndex))

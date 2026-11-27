@@ -1,10 +1,11 @@
 import { Check, File, FileText, Image, Paperclip } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn, formatBytes, formatDate } from '@/lib/utils'
 import { useDataStore } from '@/store/dataStore'
+import { useOnChange } from '@/lib/useOnChange'
 
 function iconFor(type: string) {
   if (type.startsWith('image/')) return Image
@@ -25,9 +26,7 @@ export function FindFileSheet({ open, onClose, projectId, excludeFileIds }: Find
   const linkFileToProject = useDataStore((s) => s.linkFileToProject)
   const [selected, setSelected] = useState<string[]>([])
 
-  useEffect(() => {
-    if (open) setSelected([])
-  }, [open])
+  useOnChange(open, (isOpen) => { if (isOpen) setSelected([]) })
 
   const candidates = allFiles
     .filter((f) => f.workspaceId === project?.workspaceId && !excludeFileIds.includes(f.id))
