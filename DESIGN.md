@@ -139,6 +139,8 @@ Ficam em `src/components/tasks/` (`TaskTables`, `TableCells`, `TableColumnMenu`)
 - Opções de select usam a cor escolhida pelo usuário misturada à superfície (`color-mix`, 32 %), em chips `rounded-full`.
 - Os valores são alterados direto na célula, com ou sem o modo edição: clicar abre o campo, o seletor ou alterna o checkbox. O fundo da célula nunca muda, nem ao passar o mouse nem ao digitar.
 - Cada célula fica dentro de uma `CopyableCell`: no desktop, o botão de copiar aparece ao passar o mouse; no celular, segurar o dedo copia. Os dois mostram "Copiado" sobre a célula.
+- Colunas com largura fixa (`table-fixed`, 176 px): digitar ou passar o mouse nunca muda o tamanho da célula, e o botão de copiar fica sobreposto ao valor. No texto, Shift+Enter pula linha e Enter conclui.
+- "Quebrar texto" (menu da tabela) faz as células crescerem na vertical; desativado, o conteúdo fica numa linha só, cortado com reticências.
 - O modo edição serve para a estrutura: título, adicionar colunas e linhas, setas para subir e descer linhas e excluir linhas.
 
 ## Arquivos e anexos

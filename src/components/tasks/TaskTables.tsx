@@ -1,12 +1,17 @@
-import { ArrowDown, ArrowUp, Check, Minus, Pencil, Plus, Table2, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Minus, Pencil, Plus, Table2, Trash2, WrapText } from 'lucide-react'
 import { useState } from 'react'
 import { CopyableCell, TableCell, type TableContext } from '@/components/tasks/TableCells'
 import { SelectOptionsSheet, TableColumnMenu } from '@/components/tasks/TableColumnMenu'
 import { DropdownMenu, MenuItem } from '@/components/ui/DropdownMenu'
 import { cellText, columnType, columnTypeLabel, convertColumn, emptyCell, isEmptyCell, moveItem, type TableLookup } from '@/lib/taskTables'
+import { cn } from '@/lib/utils'
 import { confirmAction } from '@/store/confirmStore'
 import { useDataStore } from '@/store/dataStore'
 import type { TableCellValue, TableColumn, TableColumnType, TaskTable } from '@/types'
+
+// Largura fixa (px) de cada coluna e da coluna de ações do modo edição.
+const COLUMN_WIDTH = 176
+const ACTIONS_WIDTH = 112
 
 export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTable[] }) {
   const updateTask = useDataStore((s) => s.updateTask)
@@ -167,6 +172,12 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
                   {(close) => (
                     <>
                       <MenuItem icon={<Pencil size={14} />} label="Editar tabela" onClick={() => { close(); setEditingTableId(table.id) }} />
+                      <MenuItem
+                        icon={<WrapText size={14} />}
+                        label={table.wrap ? 'Quebrar texto: ativado' : 'Quebrar texto: desativado'}
+                        selected={Boolean(table.wrap)}
+                        onClick={() => updateTable(table.id, (current) => ({ ...current, wrap: !current.wrap }))}
+                      />
                       <MenuItem icon={<Trash2 size={14} />} label="Excluir tabela" danger onClick={() => { close(); deleteTable(table) }} />
                     </>
                   )}
@@ -174,11 +185,15 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
               )}
             </div>
             <div className="overflow-x-auto rounded-b-2xl">
-              <table className="min-w-full border-collapse text-left text-sm">
+              {/* Largura fixa por coluna: digitar ou passar o mouse não muda o tamanho das células. */}
+              <table
+                className="min-w-full table-fixed border-collapse text-left text-sm"
+                style={{ width: table.columns.length * COLUMN_WIDTH + (isEditing ? ACTIONS_WIDTH : 0) }}
+              >
                 <thead>
                   <tr>
                     {table.columns.map((column, columnIndex) => (
-                      <th key={column.id} className="min-w-36 border-b border-r border-border bg-surface-alt p-1.5 last:border-r-0">
+                      <th key={column.id} style={{ width: COLUMN_WIDTH }} className="border-b border-r border-border bg-surface-alt p-1.5 last:border-r-0">
                         <TableColumnMenu
                           column={column}
                           canMoveLeft={columnIndex > 0}
@@ -194,7 +209,7 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
                         />
                       </th>
                     ))}
-                    {isEditing && <th className="w-10 border-b border-border bg-surface-alt p-1">
+                    {isEditing && <th style={{ width: ACTIONS_WIDTH }} className="border-b border-border bg-surface-alt p-1">
                       <button onClick={() => addColumn(table)} aria-label="Adicionar coluna" className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-surface hover:text-accent">
                         <Plus size={15} />
                       </button>
@@ -205,13 +220,14 @@ export function TaskTables({ taskId, tables }: { taskId: string; tables: TaskTab
                   {table.rows.map((row, rowIndex) => (
                     <tr key={row.id}>
                       {table.columns.map((column) => (
-                        <td key={column.id} className="border-b border-r border-border p-1 align-middle last:border-r-0">
+                        <td key={column.id} className={cn('border-b border-r border-border p-1 last:border-r-0', table.wrap ? 'align-top' : 'align-middle')}>
                           <CopyableCell text={cellText(column, row.cells[column.id], lookup)}>
                             <TableCell
                               column={column}
                               value={row.cells[column.id] ?? emptyCell(columnType(column))}
                               context={context}
                               onChange={(value, nextColumn) => setCell(table.id, row.id, column.id, value, nextColumn)}
+                              wrap={Boolean(table.wrap)}
                             />
                           </CopyableCell>
                         </td>

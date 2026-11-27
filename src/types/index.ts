@@ -47,6 +47,8 @@ export type TableCellValue = string | string[]
 export interface TaskTable {
   id: string
   title?: string
+  // Quebrar texto nas células: crescem na vertical em vez de cortar o conteúdo.
+  wrap?: boolean
   columns: TableColumn[]
   rows: { id: string; cells: Record<string, TableCellValue> }[]
 }
