@@ -97,7 +97,11 @@ try {
     await page.goto(`${base}${path}?test=scroll`)
     const header = page.locator('header').first()
     await header.waitFor()
+    // Espera a carga terminar: um re-render depois disso podia descartar o
+    // conteúdo extra e deixar a página curta demais para rolar 400px (instável no CI).
+    await page.waitForLoadState('networkidle')
     await page.evaluate(extendContent)
+    await page.waitForFunction(() => document.documentElement.scrollHeight - innerHeight >= 400)
     const before = await header.boundingBox()
     await page.evaluate(() => window.scrollTo(0, 400))
     const after = await header.boundingBox()
