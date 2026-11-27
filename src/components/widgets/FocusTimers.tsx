@@ -138,7 +138,7 @@ function FocusMusic() {
       {enabled && open && <div className="mt-2 flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-text-muted">Fonte da música</span>
-          <div role="radiogroup" aria-label="Fonte da música" className="flex gap-1 rounded-full bg-surface p-1">
+          <div role="radiogroup" aria-label="Fonte da música" className="flex gap-2">
             {([['lofi', 'Lo-fi do TaskEz'], ['youtube', 'Link do YouTube']] as const).map(([value, label]) => (
               <button
                 key={value}
@@ -146,7 +146,7 @@ function FocusMusic() {
                 role="radio"
                 aria-checked={source === value}
                 onClick={() => setSource(value)}
-                className={cn('h-9 min-w-0 flex-1 truncate rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-accent', source === value ? 'bg-accent text-white' : 'text-text-muted hover:text-text')}
+                className={cn('h-9 min-w-0 flex-1 truncate rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-accent', source === value ? 'bg-accent text-white' : 'bg-surface-alt text-text-muted hover:bg-surface-hover hover:text-text')}
               >
                 {label}
               </button>
