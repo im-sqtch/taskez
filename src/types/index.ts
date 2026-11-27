@@ -21,11 +21,34 @@ export interface Comment {
   createdAt: string
 }
 
+// Tipo de valor de uma coluna de tabela. Colunas antigas, sem `type`, são texto.
+export type TableColumnType = 'text' | 'number' | 'usd' | 'brl' | 'select' | 'multiSelect' | 'date' | 'person' | 'files' | 'checkbox' | 'link'
+
+// Opção de uma coluna select/multi-select; `color` é uma cor escolhida pelo usuário.
+export interface TableSelectOption {
+  id: string
+  name: string
+  color: string
+}
+
+export interface TableColumn {
+  id: string
+  title: string
+  type?: TableColumnType
+  options?: TableSelectOption[]
+}
+
+// Valor de uma célula, conforme o tipo da coluna:
+// texto e link: o texto; número, dólar e real: o número em formato canônico ("1234.5");
+// select: id da opção; multi-select, pessoa e arquivos: lista de ids;
+// data: "AAAA-MM-DD"; checkbox: '' (vazio), 'done' (concluído) ou 'failed' (não cumprido).
+export type TableCellValue = string | string[]
+
 export interface TaskTable {
   id: string
   title?: string
-  columns: { id: string; title: string }[]
-  rows: { id: string; cells: Record<string, string> }[]
+  columns: TableColumn[]
+  rows: { id: string; cells: Record<string, TableCellValue> }[]
 }
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'

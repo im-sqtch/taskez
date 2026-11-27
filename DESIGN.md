@@ -130,6 +130,16 @@ className="flex h-10 w-10 items-center justify-center rounded-full bg-surface te
 - **Card de projeto:** ícone colorido `h-10 w-10 rounded-xl text-white` com a cor do projeto, título `font-semibold`, percentual em `text-xs font-semibold text-text-muted` e `ProgressBar`.
 - **Widgets do painel:** usam `Card`, com ícone num quadrado `h-9 w-9 rounded-lg bg-accent-soft text-accent`, título `font-semibold` e número em destaque `text-lg font-bold`.
 
+## Tabelas das tarefas
+
+Ficam em `src/components/tasks/` (`TaskTables`, `TableCells`, `TableColumnMenu`), com a lógica pura em `src/lib/taskTables.ts`.
+
+- Cada coluna tem um tipo: Texto, Número, Dólar, Real, Select, Multi-select, Data, Pessoa, Arquivos, Checkbox e Link. Coluna sem tipo é Texto.
+- Clicar no cabeçalho abre o menu da coluna: renomear, trocar o tipo, editar opções (select), mover para os lados e excluir. Trocar o tipo converte os valores e pede confirmação quando algum se perde.
+- Opções de select usam a cor escolhida pelo usuário misturada à superfície (`color-mix`, 32 %), em chips `rounded-full`.
+- Em leitura, cada célula é uma `CopyableCell`: no desktop, o botão de copiar aparece ao passar o mouse; no celular, segurar o dedo copia. Os dois mostram "Copiado" sobre a célula.
+- No modo edição, as linhas têm setas para subir e descer e o botão de excluir.
+
 ## Arquivos e anexos
 
 - O quadradinho do arquivo em listas é o `FileThumbnail` (`src/components/files/`): miniatura real para imagens e ícone do tipo para o resto, em `h-11 w-11 rounded-lg bg-surface-alt`.
